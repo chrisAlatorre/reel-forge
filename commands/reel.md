@@ -1,216 +1,317 @@
 ---
-description: Convierte fotos y videos del usuario en TikToks/Reels verticales, de punta a punta - detecta fuentes, valida metadatos, investiga tendencias, analiza el material con agentes en paralelo y entrega varios conceptos con variantes.
-argument-hint: "[tema o descripción libre] [--auto] [--rapido] [--fechas AAAA-MM-DD..AAAA-MM-DD] [--lugar \"Ciudad\"] [--sin-tendencias]"
+description: Turns the user's photos and videos into vertical TikToks/Reels end to end - detects sources, validates metadata, researches trends, analyzes the material with parallel agents, and delivers several concepts with variants.
+argument-hint: "[free-form topic or description] [--lang es|en|...] [--auto] [--fast] [--dates YYYY-MM-DD..YYYY-MM-DD] [--place \"City\"] [--source PATH] [--no-trends]"
 ---
 
-# /reel — recap vertical de punta a punta
+# /reel — vertical recap, end to end
 
-Argumentos recibidos: `$ARGUMENTS`
+Arguments received: `$ARGUMENTS`
 
-Tu trabajo es entregar **varios conceptos de video vertical 1080x1920, con variantes cada uno**, a partir del material que el usuario ya tiene. Eres **autónomo por defecto**: investigas, decides y renderizas. Preguntas solo lo imprescindible, agrupado, **una sola vez**.
+Your job is to deliver **several vertical 1080x1920 concepts, each with variants**, from material the
+user already has. You are **autonomous by default**: you research, you decide, you render. You ask
+only what is unavoidable, grouped, **once**.
 
-## Banderas
+## Flags
 
-| Bandera | Efecto |
+| Flag | Effect |
 |---|---|
-| `--auto` | Cero preguntas. Asumes todo con las reglas de "Cuando no puedas preguntar" y avisas al final qué asumiste. |
-| `--rapido` | Menos agentes (ver tabla de escalado), 2 conceptos x 2 variantes, sin investigación profunda de tendencias. |
-| `--fechas A..B` | Rango de fechas ya dado; no lo preguntas. |
-| `--lugar "X"` | Lugar o lugares ya dados; no los preguntas. |
-| `--sin-tendencias` | Te saltas el paso 4 y usas los formatos base de `referencias/conceptos.md`. |
-| `--fuente RUTA` | Fuerza una carpeta o biblioteca concreta y omite la detección. |
+| `--lang TAG` | Language of the on-screen text and the narration (`es`, `en`, `es-MX`, `en-US`, `pt-BR`…). Overrides the config for this run. |
+| `--auto` | Zero questions. You assume everything with the "When you can't ask" rules and report what you assumed at the end. |
+| `--fast` | Fewer agents (see the scaling table), 2 concepts x 2 variants, no deep trend research. |
+| `--dates A..B` | Date range already given; don't ask for it. |
+| `--place "X"` | Place or places already given; don't ask for them. |
+| `--no-trends` | Skip step 4 and use the base formats from `skills/reel-forge/references/concepts.md`. |
+| `--source PATH` | Force a specific folder or library and skip detection. |
 
-Todo lo demás en `$ARGUMENTS` es el **tema** en lenguaje natural ("viaje a la playa", "un día en la oficina", "mi perro", "la cosecha").
+Everything else in `$ARGUMENTS` is the **topic**, in plain language ("beach trip", "a day at the
+office", "my dog", "the harvest").
 
-## Skills y agentes
+## Skills and agents
 
-Skills del plugin (se invocan como `reel-forge:<nombre>`):
+Plugin skills (invoked as `reel-forge:<name>`):
 
-| Skill | Para qué |
+| Skill | What for |
 |---|---|
-| `reel-forge` | El orquestador: las reglas de selección, el reparto de agentes y el detalle de cada fase en `referencias/` |
-| `fuentes-material` | Detectar e inventariar bibliotecas y carpetas, leer metadatos y validar fechas |
-| `motor-video` | El motor: spec JSON → MP4 9:16, efectos, textos, looks, música y mezcla |
-| `video-360` | Reencuadre de material 360 (Insta360 y similares) a 9:16 |
-| `voces` | Narración con TTS local y la voz de CapCut |
+| `reel-forge` | The orchestrator: selection rules, agent allocation and the detail of each phase in `references/` |
+| `sources` | Detecting and inventorying libraries and folders, reading metadata and validating dates |
+| `video-engine` | The engine: JSON spec → 9:16 MP4, effects, text, looks, music and mixing |
+| `video-360` | Reframing 360 material (Insta360 and friends) to 9:16 |
+| `voices` | Narration with local TTS and the CapCut voice |
 
-No hay skill de tendencias ni de retoque de fotos: las tendencias las investiga el agente
-`investigador-tendencias` (detalle en `skills/reel-forge/referencias/tendencias.md`) y el plugin **no
-retoca personas** — el único tratamiento de imagen es el `look` del render.
+There is no trends skill and no photo-retouching skill: trends are researched by the
+`trend-researcher` agent (detail in `skills/reel-forge/references/trends.md`) and the plugin **does
+not retouch people** — the only image treatment is the render's `look`.
 
-Agentes que lanzas en paralelo (`reel-forge:<nombre>`):
+Agents you launch in parallel (`reel-forge:<name>`):
 
-| Agente | Qué hace | Cuándo |
+| Agent | What it does | When |
 |---|---|---|
-| `curador-fotos` | Revisa un lote de fotos: descarta gestos a medias, ojos cerrados, repetidas, tickets y capturas; marca las buenas con calidad de 1 a 10 | Paso 5, 1 por día o por lote de ~150 |
-| `analista-video` | Ve un video en tiras de cuadros, transcribe y devuelve tramos con `inicio_s`/`fin_s` | Paso 5, 1 por video (o por 3-4 cortos) |
-| `explorador-360` | Saca encuadres 9:16 de un equirectangular: hojas, yaw/pitch y keys verificadas con render | Paso 5, 1 por clip 360 |
-| `investigador-tendencias` | Busca en la web formatos y sonidos del momento para el tema, con fuente y fecha | Paso 4, 1-3 agentes |
-| `director-creativo` | Propone **un** concepto desde un ángulo asignado, con estructura segundo a segundo | Paso 6, 4-8 en paralelo |
-| `editor-en-jefe` | Lee todos los conceptos juntos, elige buscando variedad y dice qué ajustar | Paso 6, siempre 1 |
-| `constructor-video` | Construye una variante: escribe `build.py` y el spec, renderiza y revisa su tira de cuadros | Paso 7, 2 por concepto |
-| `revisor-critico` | Compara las variantes del concepto entre sí, verifica con mediciones y **corrige** re-renderizando | Paso 8, 1 por concepto |
+| `photo-curator` | Reviews a batch of photos: drops half-formed expressions, closed eyes, repeats, receipts and screenshots; rates the good ones 1 to 10 | Step 5, 1 per day or per ~150 |
+| `clip-analyst` | Watches a video as frame strips, transcribes, and returns ranges with `start_s`/`end_s` | Step 5, 1 per video (or per 3-4 short ones) |
+| `360-scout` | Pulls 9:16 framings out of an equirectangular: sheets, yaw/pitch, and keys verified by rendering | Step 5, 1 per 360 clip |
+| `trend-researcher` | Searches the web for current formats and sounds for the topic **in the output language's market**, with source and date | Step 4, 1-3 agents |
+| `creative-director` | Proposes **one** concept from an assigned angle, with second-by-second structure | Step 6, 4-8 in parallel |
+| `chief-editor` | Reads every concept together, picks for variety and says what to fix | Step 6, always 1 |
+| `video-builder` | Builds one variant: writes `build.py` and the spec, renders, and reviews its own frame strip | Step 7, 2 per concept |
+| `critic-reviewer` | Compares the concept's variants against each other, verifies with measurements and **fixes** by re-rendering | Step 8, 1 per concept |
 
-Con material abundante, los pasos 5, 7 y 8 se pueden correr con los workflows del plugin, que guardan
-en disco lo que devuelve cada agente y permiten retomar una corrida interrumpida:
-`workflows/catalogo.js` (paso 5) y `workflows/construir.js` (pasos 7 y 8).
+With plenty of material, steps 5, 7 and 8 can be run through the plugin's workflows, which write what
+each agent returns to disk and let an interrupted run resume: `workflows/catalog.js` (step 5) and
+`workflows/build.js` (steps 7 and 8).
 
-### Escalado de agentes
+### Agent scaling
 
-Cuenta el material **después** de filtrar por fechas y lugares:
+Count the material **after** filtering by dates and places:
 
 ```
-lotes_fotos  = techo(n_fotos / 150)      # o uno por día, lo que dé más lotes
-lotes_clips  = techo(n_clips / 4)
-lotes_360    = n_clips_360               # siempre uno por clip
-agentes_catalogo = min(lotes_fotos + lotes_clips + lotes_360, TOPE)
+photo_batches = ceil(n_photos / 150)      # or one per day, whichever gives more batches
+clip_batches  = ceil(n_clips / 4)
+batches_360   = n_360_clips               # always one per clip
+catalog_agents = min(photo_batches + clip_batches + batches_360, CAP)
 ```
 
-| Modo | TOPE catálogo | Tendencias | Directores | Construcción |
+| Mode | Catalog CAP | Trends | Directors | Build |
 |---|---|---|---|---|
-| normal | 10 | 2 | 4-8 + 1 editor en jefe | 3 conceptos x 2 constructores |
-| `--rapido` | 4 | 0-1 | 3 + 1 editor en jefe | 2 conceptos x 2 constructores |
-| menos de 30 piezas | 2 | 1 | 3 + 1 editor en jefe | 2 conceptos x 2 constructores |
+| normal | 10 | 2 | 4-8 + 1 chief editor | 3 concepts x 2 builders |
+| `--fast` | 4 | 0-1 | 3 + 1 chief editor | 2 concepts x 2 builders |
+| under 30 pieces | 2 | 1 | 3 + 1 chief editor | 2 concepts x 2 builders |
 
-**Tope práctico: ~10 agentes a la vez.** La máquina además está decodificando video, y `ffmpeg` ya usa
-varios núcleos por su cuenta: más agentes no van más rápido, van más lento. Con 4 conceptos, la
-construcción va en dos oleadas. Si un lote tarda más de ~10 min, córtalo en dos en vez de esperar.
-La tabla completa y sus porqués están en `docs/paralelismo.md`.
+**Practical cap: ~10 agents at a time.** The machine is also decoding video, and `ffmpeg` already
+uses several cores on its own: more agents is slower, not faster. With 4 concepts, the build runs in
+two waves. If a batch takes more than ~10 min, split it in two instead of waiting. The full table and
+the reasoning are in `docs/parallelism.md`.
 
 ---
 
-## Paso 1 — Detectar fuentes (automático, sin preguntar todavía)
+## Step 0 — Output language (before anything else)
 
-Corre la detección **antes** de hablar con el usuario, para que las preguntas ya lleven opciones reales.
+Resolve the language of the **on-screen text and the narration**, in this order:
 
-Invoca `reel-forge:fuentes-material` (o, si no está disponible, haz la detección a mano con lo de abajo) y busca:
+1. `--lang` in `$ARGUMENTS`.
+2. `$REEL_FORGE_LANG`.
+3. The `"lang"` field in `~/.config/reel-forge/config.json`.
+4. Nothing set → **ask once**, inside the grouped question of step 2, offering the two most likely
+   options (the language the user is writing in, and English) plus "other". With `--auto` and nothing
+   configured, use the language the user wrote the request in and say so.
 
-1. **Biblioteca nativa del sistema**
-   - **macOS:** Apple Photos. Requiere `osxphotos` (`uv tool install osxphotos`). La biblioteca vive normalmente en `~/Pictures/Photos Library.photoslibrary`, o donde apunte `REEL_FORGE_PHOTOS_LIBRARY`. **Esto es exclusivo de macOS.**
-   - **Otros sistemas / sin osxphotos:** no hay biblioteca nativa que leer. Camino alternativo: carpetas con EXIF (punto 2). Dilo explícitamente, no lo simules.
-2. **Carpetas** — revisa las que existan: `~/Pictures`, `~/Movies` (o `~/Videos`), `~/Desktop`, `~/Downloads`, y cualquier volumen montado con `DCIM/` (tarjetas SD, teléfono conectado).
-3. **Nube o app de cámaras 360** — Insta360 Studio y similares (**app de escritorio, macOS o Windows**). En macOS, las miniaturas de la nube suelen estar bajo `~/Library/Application Support/Insta360/`; los originales `.insv` hay que bajarlos desde la app. Alternativa sin la app: archivos `.insv`/`.insp` ya copiados a disco, que la skill `reel-forge:video-360` puede procesar directo.
-4. **Cámaras de acción y drones** — patrones de nombre: `GX######.MP4`, `GOPR####` (GoPro), `DJI_####` (drone), `DJI_*_D.MP4` (D-Log). Busca en carpetas y volúmenes del punto 2.
-5. **Configuración del usuario** — si existe `~/.config/reel-forge/config.json`, sus rutas mandan sobre todo lo anterior. Variables de entorno: `REEL_FORGE_FUENTES` (lista separada por `:`), `REEL_FORGE_SALIDA`, `REEL_FORGE_TALLER`.
+When the answer comes from the user, **write it to `~/.config/reel-forge/config.json`** (create the
+file if needed, preserving any other keys) so it never has to be asked again:
 
-Salida de este paso: una tabla corta con fuente, cantidad de fotos/videos, rango de fechas y si los originales están **locales o en nube** (los de nube hay que bajarlos y eso tarda).
+```json
+{ "lang": "en-US" }
+```
 
-## Paso 2 — Las preguntas (máximo 4, en UN solo mensaje)
+Use a BCP-47 tag. The region matters: `es-MX` and `es-ES` are different trend markets, and so are
+`en-US` and `en-GB`. If the user gives a bare language, keep it bare rather than inventing a region.
 
-Si hay `--auto`, sáltate esto entero. Si no, manda **un** mensaje con lo que falte, ya con opciones numeradas para que conteste con números:
+From here on, that tag governs: the captions, the narration script, the voice you pick, the hashtags,
+and the market the trend research targets. It does **not** govern the language you speak to the user
+in — that stays whatever they are writing in — nor the file names or the JSON keys.
 
-1. **Fuentes** — "Encontré A, B y C. ¿Uso las tres o solo alguna?" (si solo hay una fuente, no preguntes: úsala).
-2. **Rango de fechas y/o lugares** — propón tú los candidatos que viste: "el material se agrupa en tres bloques: 3-9 de marzo, 14 de abril y 2-6 de junio. ¿Cuál?". Si `--fechas` o `--lugar` vinieron en los argumentos, no preguntes.
-3. **Tema y tendencias** — "¿Investigo tendencias actuales? ¿De qué tema: viajes, día en el trabajo, mascotas, campo, comida, deporte, otro?". Si el tema ya venía en `$ARGUMENTS`, solo confirma el tema dentro de otra pregunta, no gastes una entera.
-4. **Incoherencias de metadatos** — solo si el paso 3 encontró algo (ver abajo). Se pregunta junto con las demás, no después.
+## Step 1 — Detect sources (automatic, no questions yet)
 
-Reglas: nada de preguntas de estilo, duración, música o formato — eso lo decides tú y lo presentas como conceptos distintos. No preguntes dos veces. Si el usuario contesta a medias, asume el resto y sigue.
+Run detection **before** talking to the user, so the questions already carry real options.
 
-**Cuando no puedas preguntar** (`--auto`, o el usuario no responde): usa todas las fuentes locales, toma el bloque de fechas más grande y reciente, tema = el más obvio por lugares y contenido, tendencias = sí.
+Invoke `reel-forge:sources` (or, if unavailable, do the detection by hand with what follows) and look
+for:
 
-## Paso 3 — Validar metadatos y avisar de incoherencias
+1. **The system's native library**
+   - **macOS:** Apple Photos. `sources/scripts/inventory.py --source photos` reads the library's
+     own database read-only; **it needs no extra tool**, only Full Disk Access for the terminal.
+     The library normally lives at `~/Pictures/Photos Library.photoslibrary`, or wherever
+     `REEL_FORGE_LIBRARY` points. **This is macOS-only.**
+     `osxphotos` is needed **only** to download originals that live in iCloud (step 8).
+   - **Other systems:** there is no native library to read. Fallback: folders with EXIF (point 2).
+     Say so explicitly, don't fake it.
+2. **Folders** — check whichever exist: `~/Pictures`, `~/Movies` (or `~/Videos`), `~/Desktop`,
+   `~/Downloads`, and any mounted volume with a `DCIM/` directory (SD cards, a connected phone).
+3. **360 camera cloud or app** — Insta360 Studio and similar (**desktop app, macOS or Windows**). On
+   macOS the cloud thumbnails usually sit under `~/Library/Application Support/Insta360/`; the `.insv`
+   originals have to be downloaded from the app. Without the app: `.insv`/`.insp` files already copied
+   to disk, which the `reel-forge:video-360` skill can process directly.
+4. **Action cameras and drones** — name patterns: `GX######.MP4`, `GOPR####` (GoPro), `DJI_####`
+   (drone), `DJI_*_D.MP4` (D-Log). Look inside the folders and volumes from point 2.
+5. **User configuration** — if `~/.config/reel-forge/config.json` exists, its paths win over
+   everything above. Environment variables: `REEL_FORGE_SOURCES` (colon-separated list),
+   `REEL_FORGE_HOME`, `REEL_FORGE_OUTPUT`, `REEL_FORGE_WORKSPACE`.
 
-Antes de analizar nada, revisa fecha, hora y ubicación de cada pieza (`exiftool`, `ffprobe`, o los campos de la biblioteca). Busca específicamente:
+Output of this step: a short table with source, photo/video counts, date range, and whether the
+originals are **local or in the cloud** (cloud ones have to be downloaded, and that takes time).
 
-- **Fecha imposible o de fábrica**: 1970, 2000-01-01, o años antes del resto del lote. Típico de cámara externa (acción, 360, drone, réflex) a la que nunca le pusieron la hora. Se detecta porque un grupo entero de archivos comparte un desfase constante.
-- **Desfase de zona horaria**: la hora del nombre del archivo no coincide con la hora de la biblioteca. Puede meter un día entero de diferencia y hacer que un texto en pantalla diga la fecha equivocada. Compara siempre contra el resto del material del mismo día.
-- **Sin ubicación**: cámaras externas casi nunca traen GPS. Se puede inferir por cercanía temporal con una foto del teléfono que sí la tenga (±30 min).
-- **Sin EXIF**: archivos que pasaron por WhatsApp o mensajería. Solo queda la fecha del sistema de archivos, que no es confiable.
-- **Duplicados y ráfagas**: agrúpalos; la ráfaga se trata como una sola escena de la que se escoge la mejor toma.
+## Step 2 — The questions (at most 4, in ONE message)
 
-Cuando encuentres algo, **avísalo en la pregunta agrupada del paso 2** con números concretos y una propuesta:
+With `--auto`, skip this entirely. Otherwise send **one** message with whatever is missing, with
+numbered options so the user can answer with numbers:
 
-> Encontré 48 archivos de una cámara externa fechados en 2015; por cercanía deberían ser del 14-16 de abril (desfase de −9 años 1 mes 3 días). ¿Los corrijo con ese desfase, uso otra fecha o los dejo fuera?
+1. **Sources** — "I found A, B and C. All three or just one?" (if there is only one source, don't
+   ask: use it).
+2. **Date range and/or places** — propose the candidates you saw: "the material clusters into three
+   blocks: March 3-9, April 14 and June 2-6. Which one?". If `--dates` or `--place` came in the
+   arguments, don't ask.
+3. **Topic, trends and output language** — "Should I research current trends? What topic: travel, a
+   day at work, pets, countryside, food, sport, other?" and, if step 0 did not resolve it, "what
+   language should the on-screen text and the voice be in?". If the topic already came in
+   `$ARGUMENTS`, just confirm it inside another question, don't spend a whole one on it.
+4. **Metadata inconsistencies** — only if step 3 found something (see below). Asked together with the
+   rest, not afterwards.
 
-Si el usuario acepta corregir, **no toques los originales**: escribe la corrección en un manifiesto del proyecto (`fechas.json` en la carpeta de taller) y que todo el resto del flujo lea de ahí. Solo si el usuario lo pide explícitamente se reescribe EXIF, y siempre sobre copias.
+Rules: no questions about style, duration, music or format — you decide those and present them as
+different concepts. Don't ask twice. If the user answers partially, assume the rest and carry on.
 
-Con `--auto`: aplica el desfase inferido cuando la evidencia sea fuerte (grupo completo con desfase constante y solapamiento claro con material fechado bien); si no, deja esas piezas fuera y repórtalo.
+**When you can't ask** (`--auto`, or the user doesn't answer): use every local source, take the
+largest and most recent date block, topic = the obvious one from places and content, trends = yes,
+language = whatever the user wrote the request in.
 
-## Paso 4 — Tendencias (en paralelo con el paso 5)
+## Step 3 — Validate metadata and flag inconsistencies
 
-Salvo `--sin-tendencias`, lanza `investigador-tendencias` (1-3 agentes según el escalado) con el tema confirmado. Lo que tiene que volver, con fecha y fuente:
+Before analyzing anything, check date, time and location of every piece (`exiftool`, `ffprobe`, or the
+library's own fields). Look specifically for:
 
-- Formatos vigentes para ese tema y su duración óptima.
-- Sonidos concretos: título, artista, **BPM medido** (no estimado), y si están en tendencia en el país del usuario.
-- Estilos de texto y de narración que están funcionando, y los que ya se ven viejos.
+- **Impossible or factory dates**: 1970, 2000-01-01, or years outside the rest of the batch. Typical
+  of an external camera (action, 360, drone, DSLR) whose clock was never set. You spot it because a
+  whole group of files shares a constant offset.
+- **Time-zone drift**: the time in the file name doesn't match the library's time. It can shift a
+  whole day and make an on-screen caption show the wrong date. Always compare against the rest of the
+  same day's material.
+- **No location**: external cameras almost never carry GPS. It can be inferred from temporal proximity
+  to a phone photo that does have it (±30 min).
+- **No EXIF**: files that went through a messaging app. Only the filesystem date is left, and that is
+  not trustworthy.
+- **Duplicates and bursts**: group them; a burst is treated as one scene from which you pick the best
+  take.
 
-**Nunca inventes canciones "en tendencia" ni BPM.** Si el agente no lo pudo medir, el concepto va sin corte al beat. Detalle completo en `/reel-tendencias`.
+When you find something, **flag it inside the grouped question of step 2** with concrete numbers and
+a proposal:
 
-## Paso 5 — Análisis del material (agentes en paralelo)
+> I found 48 files from an external camera dated 2015; by proximity they should be April 14-16
+> (offset of −9 years 1 month 3 days). Should I correct them with that offset, use another date, or
+> leave them out?
 
-Reparte el material según la fórmula de escalado.
+If the user agrees to correct, **don't touch the originals**: write the correction into a project
+manifest (`dates.json` in the workspace folder) and have the rest of the flow read from there. EXIF is
+only rewritten if the user explicitly asks, and always on copies.
 
-- `curador-fotos` por lotes de fotos: devuelve, por foto, si sirve y por qué no si no sirve (gesto a medias, ojos cerrados, cara cortada, movida, repetida). Con ráfagas, elige **una** y descarta el resto.
-- `analista-video` por lotes de clips: tira de cuadros + transcripción del audio, y devuelve momentos con `inicio_s`, `fin_s`, qué pasa, qué se oye y qué tan fuerte es como gancho. Un clip largo casi siempre tiene 10 s buenos y el resto relleno; el catálogo es lo que evita usar el pedazo malo.
-- Material 360: el catálogo va por **dirección** (yaw/pitch), no solo por tiempo — el mismo segundo tiene varias tomas posibles. Lo hace `explorador-360`, uno por clip. Ver `reel-forge:video-360`.
+With `--auto`: apply the inferred offset when the evidence is strong (a whole group with a constant
+offset and clear overlap with correctly dated material); otherwise leave those pieces out and report it.
 
-Todos los agentes escriben a un catálogo común en la carpeta de taller. **La ventana `inicio_s`/`fin_s` del catálogo manda**: quien la ignore acaba usando un cuadro que no es el que se catalogó.
+## Step 4 — Trends (in parallel with step 5)
 
-## Paso 6 — Conceptos (directores + editor en jefe)
+Unless `--no-trends`, launch `trend-researcher` (1-3 agents per the scaling table) with the confirmed
+topic **and the output language tag**. What has to come back, with date and source:
 
-Dos pasos, y el orden importa.
+- Current formats for that topic and their optimal duration.
+- Concrete sounds: title, artist, **measured BPM** (not estimated), and whether they are trending in
+  the market of the chosen language and region.
+- Text and narration styles that are working, and the ones that already look dated.
 
-**6a. Directores.** Lanza de **4 a 8 `director-creativo` en paralelo**, cada uno con el catálogo
-completo, las tendencias y **un ángulo distinto y explícito** que tú le asignas: documental narrado,
-puro sonido real, guía con precios, gag visual, POV, lista con remate, contador de bloques. No se ven
-entre sí: la variedad sale de los ángulos que repartas, no de pedirles "algo distinto". Cada uno
-devuelve **un solo concepto** con:
+The market follows the language: `es-MX` means Mexican Spanish TikTok, `en-US` means US English
+TikTok. Those are different sound charts, different hooks and different caption styles. The report has
+to state which market it looked at, so nobody assumes the wrong one.
 
-- Gancho del primer segundo (la toma más fuerte va primero).
-- Estructura segundo a segundo, con un mini gancho cada 3-5 s.
-- Duración objetivo y si corta al beat o al sonido real.
-- Si lleva narración, música, o solo audio diegético.
-- Qué momentos del catálogo usa, **por id**, y la proporción de cortes con y sin el sujeto.
+**Never invent "trending" songs or BPM.** If the agent couldn't measure it, the concept ships without
+beat cutting. Full detail in `/reel-trends`.
 
-**6b. Editor en jefe.** Un solo `editor-en-jefe` los lee todos juntos y elige **3** (2 con `--rapido`)
-buscando variedad real, descarta los repetidos y los débiles, y dice exactamente qué ajustar en cada
-uno antes de construirlo. Es el único punto del flujo donde alguien ve todas las propuestas a la vez;
-dos editores en jefe se contradicen y se pierde la variedad.
+## Step 5 — Material analysis (parallel agents)
 
-Un concepto que use un id que no existe en el catálogo es un defecto grave: no se construye.
+Split the material per the scaling formula.
 
-Tú confirmas la selección en una línea y sigues. **No le pidas al usuario que elija concepto**: elegir
-es mucho más fácil viendo los videos.
+- `photo-curator` per photo batch: returns, per photo, whether it works and why not if it doesn't
+  (half-formed expression, closed eyes, cropped face, motion blur, repeat). With bursts, it picks
+  **one** and drops the rest.
+- `clip-analyst` per clip batch: frame strip + audio transcription, returning moments with `start_s`,
+  `end_s`, what happens, what you hear and how strong it is as a hook. A long clip almost always has
+  10 good seconds and the rest is filler; the catalog is what keeps the bad piece out.
+- 360 material: the catalog is by **direction** (yaw/pitch), not only by time — the same second has
+  several possible framings. `360-scout` does it, one per clip. See `reel-forge:video-360`.
 
-## Paso 7 — Variantes
+Every agent writes into a shared catalog in the workspace folder. **The catalog's
+`start_s`/`end_s` window is binding**: whoever ignores it ends up using a frame that is not the one
+that was cataloged.
 
-Por concepto, **2 variantes** con un `constructor-video` cada una. Las variantes cambian algo que se note: duración, con o sin voz, orden del gancho, música contra sonido real. Cada constructor:
+## Step 6 — Concepts (directors + chief editor)
 
-1. Escribe su `build.py`, que genera el spec JSON y renderiza con el motor de `reel-forge:motor-video`
-   (`uv run "$CLAUDE_PLUGIN_ROOT/skills/motor-video/scripts/render.py" spec.json`). El `build.py` tiene
-   que reconstruirlo todo desde cero, sin depender de temporales.
-2. Saca su propia tira de cuadros y **la mira**: texto legible, que no tape caras, recortes que no corten cabezas, datos y fechas correctos.
-3. Deja el proyecto reproducible: un script que reconstruye todo desde cero, no un spec suelto que apunta a temporales.
+Two steps, and the order matters.
 
-Reglas transversales que todo constructor respeta:
+**6a. Directors.** Launch **4 to 8 `creative-director` in parallel**, each with the full catalog, the
+trends, and **a different, explicit angle** that you assign: narrated documentary, pure natural sound,
+guide with prices, visual gag, POV, list with a payoff, block counter. They can't see each other: the
+variety comes from the angles you hand out, not from asking them for "something different". Each one
+returns **a single concept** with:
 
-- **Que no salga la misma persona en todos los cortes.** Mezcla paisaje, detalle, comida, gente, momentos sin nadie. Un video donde el autor sale en cada corte se lee como narcisista.
-- Zona segura vertical: 150 px arriba, 480 px abajo (ahí van los botones de la app), 180 px a la derecha.
-- Cortes secos con punch-in. Nada de fundidos cruzados, barridos ni glitch RGB.
-- Grano casi invisible.
-- **Música con copyright: nunca incrustada en la versión para subir.** Se entregan dos archivos: el limpio y uno `-preview` con la canción solo para revisar. La canción real se pone en la app, que además hace que cuente para la tendencia.
-- Ningún texto con dato (fecha, lugar, precio) que no hayas verificado contra los metadatos o contra una fuente.
+- A first-second hook (the strongest shot goes first).
+- Second-by-second structure, with a mini hook every 3-5 s.
+- Target duration and whether it cuts to the beat or to natural sound.
+- Whether it carries narration, music, or only diegetic audio.
+- Which catalog moments it uses, **by id**, and the ratio of cuts with and without the subject.
 
-## Paso 8 — Verificar y entregar
+**6b. Chief editor.** A single `chief-editor` reads them all together and picks **3** (2 with
+`--fast`) looking for real variety, drops the repeats and the weak ones, and says exactly what to fix
+in each before it gets built. It is the only point in the flow where somebody sees every proposal at
+once; two chief editors contradict each other and the variety is lost.
 
-Un `revisor-critico` por concepto compara **entre** variantes, no solo dentro de cada una: mismo cuadro con distinto tratamiento, `look` distinto por descuido, la misma toma repetida en dos cortes. Checklist técnico:
+A concept that uses an id that isn't in the catalog is a serious defect: it doesn't get built.
 
-- Cuadros negros, silencios largos y picos de audio (el pico final debe quedar por debajo de −0.5 dBTP).
-- La pista de audio dura exactamente lo que dura el video (si la canción se acaba antes, los últimos segundos salen mudos y nada avisa).
-- Una tira de cuadros por variante, mirada de verdad.
-- Cuenta a mano en cuántos cortes sale la persona principal.
+You confirm the selection in one line and move on. **Don't ask the user to pick a concept**: picking
+is far easier once you can watch the videos.
 
-Entrega en `~/Videos/reel-forge/<proyecto>/` (o `REEL_FORGE_SALIDA`):
+## Step 7 — Variants
 
-- MP4 1080x1920 limpios, con compresión suficiente para que pesen menos de ~30 MB.
-- Copias ligeras de 720p para mandar por mensajería.
-- Un solo `README.md` por proyecto: qué es cada variante, qué sonido ponerle en la app, los hashtags sugeridos (3-5) y, si hay narración sin voz incrustada, el guion con los segundos.
+Per concept, **2 variants**, one `video-builder` each. The variants change something you can notice:
+duration, with or without voice, hook order, music versus natural sound. Each builder:
 
-Cierra con un resumen de 5-8 líneas: qué conceptos hay, en qué se diferencian, qué asumiste y qué falta por decidir. Nada de relleno.
+1. Writes its `build.py`, which generates the JSON spec and renders with the `reel-forge:video-engine`
+   engine (`uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/render.py" spec.json`). The
+   `build.py` has to rebuild everything from scratch, with no dependency on temporaries.
+2. Pulls its own frame strip and **looks at it**: text readable, not covering faces, crops that don't
+   cut off heads, facts and dates correct.
+3. Leaves the project reproducible: a script that rebuilds everything from scratch, not a loose spec
+   pointing at temporaries.
 
-## Si algo falla
+Cross-cutting rules every builder respects:
 
-- **No hay material en el rango**: dilo y propón el rango contiguo que sí tiene material. No amplíes por tu cuenta sin avisar.
-- **Originales en la nube**: baja solo los elegidos, después de la curaduría, nunca toda la biblioteca.
-- **Poco espacio en disco**: `/reel-fuentes` lo reporta. Si hay menos de ~20 GB libres, trabaja con proxys de baja resolución y avisa.
-- **Un agente se atora**: no lo esperes indefinidamente. Sigue con lo que hay y anota en el README qué quedó sin catalogar.
+- **The same person must not be in every cut.** Mix landscape, detail, food, people, moments with
+  nobody in them. A video where the author is in every cut reads as vain.
+- Vertical safe area: 150 px at the top, 480 px at the bottom (that's where the app's buttons are),
+  180 px on the right.
+- Hard cuts with punch-in. No cross-fades, wipes or RGB glitch.
+- Grain almost invisible.
+- **Copyrighted music: never embedded in the version you upload.** Two files ship: the clean one and
+  a `-preview` with the song, just to review. The real song goes on in the app, which also makes it
+  count toward the trend.
+- All on-screen text and narration in the resolved output language, and no factual caption (date,
+  place, price) that you haven't verified against the metadata or a source.
+
+## Step 8 — Verify and deliver
+
+One `critic-reviewer` per concept compares **across** variants, not just within each one: the same
+frame with a different treatment, a `look` that drifted by accident, the same shot repeated in two
+cuts. Technical checklist:
+
+- Black frames, long silences and audio peaks (the final peak must sit below −0.5 dBTP).
+- The audio track lasts exactly as long as the video (if the song ends early, the last seconds are
+  silent and nothing warns you).
+- One frame strip per variant, actually looked at.
+- Count by hand how many cuts the main person appears in.
+
+Delivery goes to `<root>/<project>/deliveries/<version>/`, where `<root>` is `REEL_FORGE_HOME` if set,
+and otherwise `~/Movies/reel-forge` on macOS, `~/Videos/reel-forge` on Linux and
+`%USERPROFILE%\Videos\reel-forge` on Windows:
+
+- Clean 1080x1920 MP4s, compressed enough to stay under ~30 MB.
+- Light 720p copies for sending over chat.
+- A single `README.md` per concept: what each variant is, which sound to add in the app, the suggested
+  hashtags (3-5, in the output language) and, if there is narration without an embedded voice, the
+  script with its timings.
+
+Close with a 5-8 line summary: which concepts there are, how they differ, what you assumed and what is
+still to be decided. No filler.
+
+## If something fails
+
+- **No material in the range**: say so and propose the adjacent range that does have material. Don't
+  widen it on your own without saying so.
+- **Originals in the cloud**: download only the chosen ones, after curation, never the whole library.
+- **Low disk space**: `/reel-sources` reports it. Under ~20 GB free, work with low-resolution proxies
+  and say so.
+- **An agent stalls**: don't wait for it indefinitely. Carry on with what you have and note in the
+  README what was left uncataloged.

@@ -1,243 +1,288 @@
 # Reel Forge
 
-Plugin de [Claude Code](https://claude.com/claude-code) que convierte tu biblioteca de fotos y videos
-en TikToks/Reels/Shorts verticales (1080x1920). Todo corre local: el material no sale de tu máquina.
+A [Claude Code](https://claude.com/claude-code) plugin that turns your photo and video library into
+vertical TikToks/Reels/Shorts (1080x1920). Everything runs locally: your material never leaves your
+machine.
 
-No es un exportador de plantillas. El plugin **mira tu material** cuadro por cuadro, lo cataloga con
-varios agentes en paralelo, investiga qué formatos y sonidos están funcionando ahora, propone
-conceptos distintos entre sí y renderiza **dos variantes de cada concepto** para que compares.
+This is not a template exporter. The plugin **looks at your material** frame by frame, catalogs it
+with several agents in parallel, researches which formats and sounds are working right now, proposes
+concepts that differ from each other, and renders **two variants of every concept** so you can
+compare.
 
-## Qué hace
+## What it does
 
-1. **Fuentes.** Encuentra tu material: Apple Photos en macOS, o cualquier carpeta en cualquier sistema.
-   Reporta cuántas piezas hay, de qué fechas, y si los originales están en disco o solo en la nube.
-2. **Criba barata.** Descarta capturas, documentos, tickets, borrosas y duplicados antes de gastar
-   agentes en ellos.
-3. **Catálogo con agentes en paralelo.** Cada agente recibe un lote, **lo mira de verdad** (hojas de
-   contacto, tiras de cuadros, recortes de cara, transcripción del audio) y devuelve *momentos*: de
-   un video de 40 s salen 3-6 s usables, con inicio y fin en segundos.
-4. **Tendencias.** Un agente investiga en la web formatos, ganchos, estilos y sonidos con **BPM
-   medido**, cada cosa con su fuente y su fecha. Nunca inventa canciones "en tendencia".
-5. **Conceptos.** Varios directores creativos proponen, cada uno desde su ángulo, un concepto con
-   gancho y estructura segundo a segundo; un editor en jefe elige los mejores buscando variedad y
-   dice qué ajustar antes de construirlos.
-6. **Construcción.** Dos constructores por concepto arman dos variantes distintas: spec JSON → render
-   9:16 con cortes al beat, punch-ins, textos en zona segura, mezcla de audio y narración opcional.
-7. **Revisión.** Un revisor por concepto, que ve sus variantes juntas, busca fallas concretas —cuadros negros, huecos de audio,
-   textos encimados, datos equivocados, material repetido— y las corrige re-renderizando.
-8. **Entrega.** Versión limpia de 1080p (sin música con copyright), un preview con la canción solo
-   para que la escuches, una copia de 720p para el teléfono y un README por concepto.
+1. **Sources.** Finds your material: Apple Photos on macOS, or any folder on any OS. Reports how many
+   pieces there are, from which dates, and whether the originals are on disk or only in the cloud.
+2. **Cheap sift.** Drops screenshots, documents, receipts, blurry shots and duplicates before spending
+   agents on them.
+3. **Catalog with parallel agents.** Each agent gets a batch, **actually looks at it** (contact
+   sheets, frame strips, face crops, audio transcription) and returns *moments*: a 40 s clip yields
+   3-6 usable seconds, with start and end in seconds.
+4. **Trends.** An agent researches formats, hooks, styles and sounds with **measured BPM**, each one
+   with its source and date, **for the market of the language you picked**. It never invents
+   "trending" songs.
+5. **Concepts.** Several creative directors each propose, from their own angle, a concept with a hook
+   and a second-by-second structure; a chief editor picks the best ones looking for variety and says
+   what to fix before building them.
+6. **Build.** Two builders per concept assemble two different variants: JSON spec → 9:16 render with
+   beat cuts, punch-ins, text inside the safe area, audio mix and optional narration.
+7. **Review.** One reviewer per concept, seeing its variants side by side, hunts concrete defects —
+   black frames, audio gaps, overlapping text, wrong facts, repeated material — and fixes them by
+   re-rendering.
+8. **Delivery.** A clean 1080p version (no copyrighted music), a preview with the song just so you can
+   hear it, a 720p copy for your phone and a README per concept.
 
-## Demo en 5 pasos
+## Five-step demo
 
 ```text
-# 1. Instala el plugin (dentro de Claude Code)
+# 1. Install the plugin (inside Claude Code)
 /plugin marketplace add chrisAlatorre/reel-forge
 /plugin install reel-forge@reel-forge
 ```
 
 ```bash
-# 2. Verifica las dos dependencias obligatorias
+# 2. Check the two required dependencies
 ffmpeg -version | head -1 && uv --version
 ```
 
 ```text
-# 3. Mira qué material tienes y en qué estado
-/reel-fuentes --fechas 2026-04-10..2026-04-18
+# 3. See what material you have and in what shape
+/reel-sources --dates 2026-04-10..2026-04-18
 
-# 4. Arranca el flujo completo
-/reel el fin de semana en la costa, 30 segundos, con narración
+# 4. Start the full run
+/reel the weekend on the coast, 30 seconds, with narration --lang en
 
-# 5. Claude pregunta una sola vez (material, si sales tú, plataforma, idioma),
-#    cataloga, propone conceptos y te entrega dos variantes de cada uno en
-#    ~/Movies/reel-forge/<proyecto>/entregas/v1/   (macOS; ~/Videos/... en Linux)
+# 5. Claude asks once (material, whether you appear, platform, language),
+#    catalogs, proposes concepts and delivers two variants of each in
+#    ~/Movies/reel-forge/<project>/deliveries/v1/   (macOS; ~/Videos/... on Linux)
 ```
 
-Si tu material no está en Apple Photos, dilo en lenguaje natural (`/reel algo con los videos de
-~/Videos/costa`) o fíjalo de una vez:
+If your material is not in Apple Photos, say so in plain language (`/reel something with the dog
+clips in ~/Videos/max`) or pin it once and for all:
 
 ```bash
-export REEL_FORGE_FUENTES="$HOME/Pictures/costa:$HOME/Videos/costa"
+export REEL_FORGE_SOURCES="$HOME/Pictures/coast:$HOME/Videos/coast"
 ```
 
-## Requisitos
+## On-screen language
 
-| Requisito | Para qué | Obligatorio |
+The plugin separates **its own language** (it talks to you in whatever language you write in) from
+the **output language**: the on-screen text, the captions and the narration of the video itself.
+That one is explicit, because it also decides which market the trend research looks at and which
+voices are offered.
+
+| How to set it | Example | Scope |
 |---|---|---|
-| Claude Code | Ejecuta el plugin | Sí |
-| `ffmpeg` y `ffprobe` (con `libx264` y `libfreetype`) | Todo el render, el análisis y la verificación | Sí |
-| [`uv`](https://docs.astral.sh/uv/) | Corre los scripts de Python; instala sus dependencias solo | Sí |
-| Python 3.10-3.12 | Lo baja `uv` si no lo tienes | Sí (vía `uv`) |
-| Material en una carpeta | Fuente universal, cualquier sistema operativo | Una de las dos |
-| macOS + Apple Photos + [`osxphotos`](https://github.com/RhetTbull/osxphotos) | Leer tu biblioteca de Fotos: favoritas, caras, lugares, miniaturas locales | Una de las dos |
-| ~20 GB libres de disco | Proxys, cuadros y modelos descargados | Recomendado |
-| CapCut (macOS) | Voz de narración de la app, generada a clics | Opcional |
-| Insta360 Studio (macOS, Windows) | Stitch de calidad de archivos `.insv` | Opcional |
-| Modelo TTS local (se baja solo, ~4 GB) | Narración sin servicios de paga | Opcional |
+| `--lang` flag | `/reel the trip --lang en` | this run only |
+| `REEL_FORGE_LANG` env var | `export REEL_FORGE_LANG=es-MX` | this shell |
+| `"lang"` in `~/.config/reel-forge/config.json` | `{"lang": "en-US"}` | remembered everywhere |
 
-**Lo que solo existe en macOS:** leer Apple Photos con `osxphotos`, la voz del sistema (`say`),
-manejar CapCut a clics y automatizar Insta360 Studio. En Linux y Windows el plugin funciona completo
-con el **camino alternativo**: material desde carpeta, metadatos por EXIF, fuentes empaquetadas y
-narración con el TTS local (o entrega sin voz, para ponérsela en la app del teléfono).
-Detalles en [`docs/instalacion.md`](docs/instalacion.md).
+The value is a BCP-47 tag: `en`, `es`, or with a region when the region matters — `es-MX`, `en-US`,
+`pt-BR`. The region is what tells the trend researcher whether to look at TikTok in Mexican Spanish
+or TikTok in US English; those are different markets with different sounds.
 
-## Instalación
+**The first time**, if nothing is configured, Claude asks once and saves the answer to
+`~/.config/reel-forge/config.json`. After that it never asks again unless you pass `--lang` or run
+`/reel-voice --lang <tag>`.
 
-El repo es a la vez el plugin y su marketplace, así que la instalación son dos pasos: dar de alta el
-marketplace y luego instalar el plugin.
+What follows the language: the on-screen captions, the narration script, the TTS voice (the voice
+list is filtered to voices that actually speak it), the hashtags, and the market the trend research
+targets. What does **not**: the file names, the JSON keys of the catalog and the specs, and this
+documentation.
 
-Dentro de Claude Code:
+## Requirements
+
+| Requirement | What for | Required |
+|---|---|---|
+| Claude Code | Runs the plugin | Yes |
+| `ffmpeg` and `ffprobe` (with `libx264` and `libfreetype`) | All rendering, analysis and verification | Yes |
+| [`uv`](https://docs.astral.sh/uv/) | Runs the Python scripts; installs their dependencies by itself | Yes |
+| Python 3.10-3.12 | `uv` downloads it if you don't have it | Yes (via `uv`) |
+| Material in a folder | Universal source, any OS | One of the two |
+| macOS + Apple Photos | Reading your Photos library: favorites, faces, places, local thumbnails. Read straight from the library's database, **no extra tool** | One of the two |
+| [`osxphotos`](https://github.com/RhetTbull/osxphotos) | Only to **download** the originals of the chosen material from iCloud (`uv tool install osxphotos`) | Optional |
+| ~20 GB free disk | Proxies, frames and downloaded models | Recommended |
+| CapCut (macOS) | The app's narrator voice, driven by clicks | Optional |
+| Insta360 Studio (macOS, Windows) | Quality stitching of `.insv` files | Optional |
+| Local TTS model (downloads itself, ~4 GB) | Narration without paid services | Optional |
+
+**macOS-only paths:** reading Apple Photos, the system voice (`say`), driving CapCut
+by clicks and automating Insta360 Studio. On Linux and Windows the plugin works end to end through the
+**fallback path**: material from a folder, metadata from EXIF, bundled fonts and narration with the
+local TTS (or delivery without voice, so you add it in the phone app).
+Details in [`docs/installation.md`](docs/installation.md).
+
+## Installation
+
+The repo is both the plugin and its marketplace, so installing takes two steps: register the
+marketplace, then install the plugin.
+
+Inside Claude Code:
 
 ```text
 /plugin marketplace add chrisAlatorre/reel-forge
 /plugin install reel-forge@reel-forge
 ```
 
-Desde la terminal, lo mismo:
+From the terminal, the same thing:
 
 ```bash
 claude plugin marketplace add chrisAlatorre/reel-forge
 claude plugin install reel-forge@reel-forge
 ```
 
-Para desarrollarlo en local, el marketplace es la carpeta clonada:
+To develop it locally, the marketplace is the cloned folder:
 
 ```bash
 git clone https://github.com/chrisAlatorre/reel-forge.git
-claude plugin marketplace add ./reel-forge          # ruta local, no repo remoto
+claude plugin marketplace add ./reel-forge          # local path, not the remote repo
 claude plugin install reel-forge@reel-forge
 ```
 
-Comprueba que quedó bien:
+Check that it landed:
 
 ```bash
-claude plugin validate ./reel-forge --strict   # manifiestos, skills y agentes
+claude plugin validate ./reel-forge --strict   # manifests, skills and agents
 claude plugin list                             # reel-forge@reel-forge, enabled
-claude plugin details reel-forge               # 9 skills, 8 agentes
+claude plugin details reel-forge               # 9 skills, 8 agents
 ```
 
-`claude plugin install` acepta `-s user` (default, todos tus proyectos), `-s project` (compartido por
-git) y `-s local` (solo esta máquina). Pasos por sistema operativo y verificación de cada dependencia
-en [`docs/instalacion.md`](docs/instalacion.md).
+`claude plugin install` accepts `-s user` (default, all your projects), `-s project` (shared through
+git) and `-s local` (this machine only). Per-OS steps and dependency checks in
+[`docs/installation.md`](docs/installation.md).
 
-## Uso
+### Updating
+
+```bash
+claude plugin marketplace update reel-forge    # pull the new manifest
+claude plugin update reel-forge                # install the new version
+```
+
+Claude Code checks the marketplace when it starts and tells you in the `/plugin` screen when an
+installed plugin has a newer version; it does not upgrade on its own. `claude plugin update` with no
+argument updates everything you have installed. What changed in each version is in
+[`CHANGELOG.md`](CHANGELOG.md), and the plugin also tells you at the start of a `/reel` run when the
+config file it reads was written by an older version.
+
+## Usage
 
 ```text
-/reel <lo que quieres>
+/reel <what you want>
 ```
 
-Ejemplos:
+Examples:
 
 ```text
-/reel un recap del fin de semana en la playa, 25 segundos, sin voz
-/reel algo gracioso con los videos del perro de ~/Videos/max
-/reel el viaje de junio --auto --fechas 2026-06-03..2026-06-12
+/reel a recap of the weekend at the beach, 25 seconds, no voice
+/reel something funny with the dog clips in ~/Videos/max
+/reel the June trip --auto --dates 2026-06-03..2026-06-12 --lang en
 ```
 
-El comando pregunta **una sola vez, al principio y todo junto**: qué material, si apareces tú y
-cuánto, si hay personas que no deban salir, plataforma y duración, idioma y si quieres narración, y
-qué no debe aparecer. Con `--auto` toma los defaults y te dice cuáles tomó. Con `--rapido` baja la
-resolución del análisis para entregar antes.
+The command asks **once, up front and all together**: which material, whether you appear and how
+much, whether anyone must be kept out, platform and duration, output language and whether you want
+narration, and what must not show up. With `--auto` it takes the defaults and tells you which ones.
+With `--fast` it drops the analysis resolution to deliver sooner.
 
-| Comando | Qué hace |
+| Command | What it does |
 |---|---|
-| `/reel` | Flujo completo, de fuentes a entrega |
-| `/reel-fuentes` | Inventaria y diagnostica el material disponible, sin editar nada |
-| `/reel-tendencias <tema>` | Investiga formatos y sonidos vigentes y mide el BPM de los candidatos |
-| `/reel-voz` | Configura y prueba las voces de narración, y fija tu preferida |
+| `/reel` | Full run, from sources to delivery |
+| `/reel-sources` | Inventories and diagnoses the available material, edits nothing |
+| `/reel-trends <topic>` | Researches current formats and sounds and measures the BPM of the candidates |
+| `/reel-voice` | Configures and tests the narration voices, and pins your favorite |
 
-## Mapa de skills y agentes
+## Map of skills and agents
 
-**Skills** (`skills/`): conocimiento que Claude carga cuando le toca esa fase.
+**Skills** (`skills/`): knowledge Claude loads when it reaches that phase.
 
-| Skill | Para qué |
+| Skill | What for |
 |---|---|
-| `reel-forge` | Orquestador: el flujo de 9 fases, las reglas de selección y dónde se guarda todo. Su detalle está en `skills/reel-forge/referencias/` |
-| `fuentes-material` | Encontrar e inventariar material (Apple Photos u otra carpeta), metadatos y miniaturas |
-| `motor-video` | Motor de render: spec JSON → 1080x1920, efectos, textos y zona segura |
-| `video-360` | Reencuadre de equirectangulares y `.insv` a 9:16 con cámara virtual y keyframes |
-| `voces` | Narración: TTS local, voz de CapCut y cómo pegarla a un video ya renderizado |
+| `reel-forge` | Orchestrator: the 9-phase flow, the selection rules and where everything is saved. The detail lives in `skills/reel-forge/references/` |
+| `sources` | Finding and inventorying material (Apple Photos or any folder), metadata and thumbnails |
+| `video-engine` | Render engine: JSON spec → 1080x1920, effects, text and safe area |
+| `video-360` | Reframing equirectangular and `.insv` footage to 9:16 with a virtual camera and keyframes |
+| `voices` | Narration: local TTS, the CapCut voice, and how to glue it onto an already rendered video |
 
-**Agentes** (`agents/`): subagentes que corren en paralelo, cada uno con su propio contexto.
+**Agents** (`agents/`): subagents that run in parallel, each with its own context.
 
-| Agente | Cuántos | Qué hace |
+| Agent | How many | What it does |
 |---|---|---|
-| `curador-fotos` | 1 por día o por ~150 fotos | Revisa un lote de fotos y devuelve los momentos que sirven, con calidad de 1 a 10 |
-| `analista-video` | 1 por video (o por 3-4 cortos) | Ve el video en tiras de cuadros, transcribe y devuelve tramos con inicio y fin |
-| `explorador-360` | 1 por clip | Encuentra los encuadres útiles por yaw/pitch y deja las keys de cámara listas |
-| `investigador-tendencias` | 1-3 | Busca formatos, ganchos y sonidos vigentes, y cita fuente y fecha |
-| `director-creativo` | 4-8 | Cada uno propone **un** concepto fuerte desde un ángulo distinto, con estructura segundo a segundo |
-| `editor-en-jefe` | 1 | Elige los mejores conceptos buscando variedad, descarta los repetidos y dice qué ajustar |
-| `constructor-video` | 2 por concepto | Escribe el armador y el spec de su variante, la renderiza y deja el README de entrega del concepto |
-| `revisor-critico` | 1 por concepto | Compara las variantes entre sí, busca fallas concretas mirando cuadros y escuchando, y las **corrige** re-renderizando |
+| `photo-curator` | 1 per day or per ~150 photos | Reviews a batch of photos and returns the moments that work, rated 1 to 10 |
+| `clip-analyst` | 1 per video (or per 3-4 short ones) | Watches the video as frame strips, transcribes, and returns ranges with start and end |
+| `360-scout` | 1 per clip | Finds the usable framings by yaw/pitch and leaves the camera keys ready |
+| `trend-researcher` | 1-3 | Looks for current formats, hooks and sounds in the target language's market, citing source and date |
+| `creative-director` | 4-8 | Each proposes **one** strong concept from a different angle, with second-by-second structure |
+| `chief-editor` | 1 | Picks the best concepts looking for variety, drops the repeats and says what to fix |
+| `video-builder` | 2 per concept | Writes the builder script and the spec for its variant, renders it, and leaves the concept's delivery README |
+| `critic-reviewer` | 1 per concept | Compares the variants against each other, hunts concrete defects by looking and listening, and **fixes** them by re-rendering |
 
-Al instalar el plugin se invocan con el nombre del plugin por delante: `reel-forge:curador-fotos`,
-`reel-forge:director-creativo`, etc. El detalle de cada uno está en `docs/agentes.md`.
+Once the plugin is installed they are invoked with the plugin name in front:
+`reel-forge:photo-curator`, `reel-forge:creative-director`, and so on. The detail of each one is in
+`docs/agents.md`.
 
-**Workflows** (`workflows/`): `catalogo.js` reparte fotos, videos y clips 360 entre N agentes;
-`construir.js` construye cada concepto con sus constructores y su revisor. Los dos guardan en disco lo
-que cada agente devuelve antes de seguir, así que una corrida interrumpida se retoma sin repetir
-trabajo.
+**Workflows** (`workflows/`): `catalog.js` splits photos, videos and 360 clips across N agents;
+`build.js` builds each concept with its builders and its reviewer. Both write what each agent returns
+to disk before moving on, so an interrupted run resumes without repeating work.
 
-El **número de agentes** sale de cuánto material hay y de cuánto tiempo tienes; la tabla y sus topes
-están en [`docs/arquitectura.md`](docs/arquitectura.md).
+The **agent count** comes from how much material there is and how much time you have; the table and
+its caps are in [`docs/architecture.md`](docs/architecture.md).
 
-## Limitaciones honestas
+## Honest limitations
 
-- **No sube nada ni publica.** El plugin entrega archivos; subirlos lo haces tú.
-- **La música con copyright no se incrusta.** La versión limpia sale sin canción y aparte se genera un
-  `-preview` solo para que la escuches. En la app le pones el sonido oficial, y así además cuenta para
-  la tendencia.
-- **Apple Photos solo en macOS.** En otros sistemas pierdes favoritas, caras y lugares de la base de
-  Fotos; el plugin cae a EXIF y a detección propia, que es más pobre.
-- **Los originales en iCloud hay que bajarlos.** Con la biblioteca optimizada solo tienes miniaturas:
-  se cataloga con ellas y se baja en alta únicamente lo elegido, y eso tarda.
-- **CapCut e Insta360 Studio se manejan a clics.** Son apps de terceros, sin API: una actualización
-  puede romper el flujo. Siempre hay camino alternativo sin ellas.
-- **El stitch de `.insv` sin Insta360 Studio es aproximado.** La costura en objetos cercanos no queda
-  igual; para calidad final exporta el 360 plano desde Studio y reencuádralo aquí.
-- **El render es local y tarda.** Un video de 30 s puede tomar de 3 a 10 minutos contando proxys,
-  análisis y verificación.
-- **La voz sintética suena a voz sintética.** El TTS local rinde bien en español neutro, pero para una
-  voz realmente buena necesitas un servicio de paga con tu propia cuenta.
-- **Alfabetos no latinos necesitan fuentes del sistema.** Tailandés, chino y árabe requieren fuentes
-  con esos glifos y, para las marcas de vocal, Pillow compilado con raqm.
-- **Las tendencias caducan.** Lo que se investigue hoy puede no servir en un mes: se vuelven a buscar
-  en cada corrida, no se guardan como verdad.
-- **No clona voces de personas reales** ni genera material que suplante a nadie.
+- **It uploads and publishes nothing.** The plugin hands you files; posting them is on you.
+- **Copyrighted music is never embedded.** The clean version ships without the song and a separate
+  `-preview` is generated just so you can hear it. You add the official sound in the app, which also
+  makes the video count toward that trend.
+- **Apple Photos is macOS only.** On other systems you lose favorites, faces and place names from the
+  Photos database; the plugin falls back to EXIF and its own detection, which is poorer.
+- **Originals in iCloud have to be downloaded.** With an optimized library you only have thumbnails:
+  the catalog is built from those and only the chosen material is downloaded in full, which takes time.
+- **CapCut and Insta360 Studio are driven by clicks.** They are third-party apps with no API: an
+  update can break the flow. There is always a fallback path without them.
+- **Stitching `.insv` without Insta360 Studio is approximate.** The seam on nearby objects is not the
+  same; for a final delivery, export the flat 360 from Studio and reframe it here.
+- **Rendering is local and slow.** A 30 s video can take 3 to 10 minutes counting proxies, analysis
+  and verification.
+- **Synthetic voice sounds synthetic.** The local TTS does well in neutral Spanish and in English,
+  but a genuinely good voice needs a paid service on your own account.
+- **Non-Latin scripts need system fonts.** Thai, Chinese and Arabic need fonts with those glyphs and,
+  for vowel marks, Pillow built with raqm.
+- **Trends expire.** What gets researched today may be useless in a month: they are re-researched on
+  every run, never stored as truth.
+- **It does not clone real people's voices**, nor generate material that impersonates anyone.
 
-## Qué necesita permiso tuyo
+## What needs your permission
 
-| Permiso | Cuándo se pide | Para qué | Si lo niegas |
+| Permission | When it's asked | What for | If you deny it |
 |---|---|---|---|
-| Fotos (macOS: *Privacidad y seguridad → Fotos*) | Al leer la biblioteca con `osxphotos` | Inventario, favoritas, caras, lugares | Usa una carpeta con tus archivos |
-| Acceso a disco completo (macOS) | Al leer la base de datos y las miniaturas de Fotos | Hojas de contacto sin bajar originales | Exporta tú el material a una carpeta |
-| Descarga desde iCloud | Al bajar los originales de lo elegido | Renderizar en alta resolución | Se renderiza con miniaturas, con menos calidad |
-| Automatización y Accesibilidad (macOS) | Al manejar CapCut o Insta360 Studio | Voz de narración y stitch 360 | TTS local o entrega sin voz; 360 con stitch aproximado |
-| Acceso a la red | Al investigar tendencias y bajar previews de 30 s | Formatos, sonidos y BPM reales | Le dices tú el formato y la música (`--sin-tendencias`) |
-| Escritura en la carpeta de salida | Al catalogar y renderizar | Guardar taller, proxys y entregas | Nada corre |
-| Ejecutar `ffmpeg`, `uv` y los scripts del plugin | En cada fase | Todo el procesamiento | Nada corre |
+| Photos (macOS: *Privacy & Security → Photos*) | Downloading originals with `osxphotos` | Full-resolution originals that only live in iCloud | Render from the local thumbnails |
+| Full Disk Access (macOS) | Reading the Photos database and thumbnails | Contact sheets without downloading originals | Export the material to a folder yourself |
+| iCloud download | Downloading the originals of the chosen material | Rendering at full resolution | Renders from thumbnails, at lower quality |
+| Automation and Accessibility (macOS) | Driving CapCut or Insta360 Studio | Narration voice and 360 stitching | Local TTS or delivery without voice; 360 with approximate stitching |
+| Network access | Researching trends and downloading 30 s previews | Real formats, sounds and BPM | You pick the format and the music yourself (`--no-trends`) |
+| Writing to the output folder | Cataloging and rendering | Saving workspace, proxies and deliveries | Nothing runs |
+| Running `ffmpeg`, `uv` and the plugin's scripts | Every phase | All the processing | Nothing runs |
 
-El plugin **no** pide contraseñas, tokens ni cuentas. Todo el procesamiento de imagen, video y audio
-es local; lo único que sale a internet son las búsquedas de tendencias y los previews de 30 s.
+The plugin asks for **no** passwords, tokens or accounts. All image, video and audio processing is
+local; the only things that reach the internet are the trend searches and the 30 s previews.
 
-Antes de publicar o borrar cualquier cosa, el plugin se detiene y te pregunta.
+Before publishing or deleting anything, the plugin stops and asks.
 
-## Documentación
+## Documentation
 
-- [`docs/arquitectura.md`](docs/arquitectura.md) — el flujo completo de las 9 fases y qué se pasa entre ellas.
-- [`docs/paralelismo.md`](docs/paralelismo.md) — cuántos agentes lanzar y qué **no** se paraleliza.
-- [`docs/agentes.md`](docs/agentes.md) — los ocho agentes, sus contratos y cómo escalar cada uno.
-- [`docs/instalacion.md`](docs/instalacion.md) — instalación por sistema operativo y verificación.
-- [`docs/estado.md`](docs/estado.md) — qué está probado de verdad, qué es teórico y qué sigue.
-- `skills/reel-forge/referencias/` — el detalle de cada fase, que Claude lee cuando llega a ella.
+- [`docs/architecture.md`](docs/architecture.md) — the full 9-phase flow and what gets handed between phases.
+- [`docs/parallelism.md`](docs/parallelism.md) — how many agents to launch and what is **not** parallelized.
+- [`docs/agents.md`](docs/agents.md) — the eight agents, their contracts and how to scale each one.
+- [`docs/installation.md`](docs/installation.md) — per-OS installation, updates and dependency checks.
+- [`docs/configuration.md`](docs/configuration.md) — environment variables, the config file and the output language.
+- [`docs/updating.md`](docs/updating.md) — publishing a version, how it reaches people who already installed it, versioning and changelog.
+- [`docs/status.md`](docs/status.md) — what is actually tested, what is theoretical and what comes next.
+- `skills/reel-forge/references/` — the detail of each phase, which Claude reads when it gets there.
 
-## Licencia
+## License
 
-MIT. Ver [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](LICENSE).
 
-**El repo no distribuye fuentes, música ni efectos de sonido.** Las tipografías (Montserrat e
-Instrument Serif, SIL OFL 1.1), el mapa base (Natural Earth, dominio público) y el modelo de
-segmentación (Apache-2.0) los baja `skills/motor-video/scripts/tipografias.py` a
-`$REEL_FORGE_CACHE`, cada uno con su licencia al lado. Los efectos de sonido los pones tú en
-`$REEL_FORGE_ASSETS/sfx/`.
+**The repo ships no fonts, music or sound effects.** The typefaces (Montserrat and Instrument Serif,
+SIL OFL 1.1), the base map (Natural Earth, public domain) and the segmentation model (Apache-2.0) are
+downloaded by `skills/video-engine/scripts/resources.py` into `$REEL_FORGE_CACHE`, each with its
+license alongside. Sound effects are yours to put in `$REEL_FORGE_ASSETS/sfx/`.

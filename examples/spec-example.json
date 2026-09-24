@@ -1,0 +1,256 @@
+{
+  "_read_this": [
+    "Example spec for the reel-forge engine. It is valid JSON; swap the fictional paths below for yours and it renders:",
+    "    uv run \"$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/render.py\" spec-example.json",
+    "JSON allows no comments, so the comments live in keys starting with an underscore.",
+    "The engine only reads the keys it knows, so you can leave your _notes in working specs.",
+    "The paths are FICTIONAL: swap them for yours before rendering.",
+    "Output: 1080x1920 at 30 fps. Internally it works at 1350x2400 so it can zoom without losing sharpness.",
+    "All on-screen copy is written in the run's output language; the engine translates nothing."
+  ],
+
+  "out": "~/Movies/reel-forge/example-trip/deliveries/v1/day-one/day-one-A.mp4",
+  "_out": "This is the CLEAN version: it carries only the `audio` tracks, without the copyrighted song. A relative path hangs off $REEL_FORGE_OUTPUT.",
+
+  "fps": 30,
+  "crf": 22,
+  "_crf": "22 leaves 35 s of 1080x1920 at ~27 MB with no visible difference. The old default (18) left it at 50-80 MB.",
+
+  "look": "film",
+  "_look": "film (warm, lifted blacks), teal (teal & orange) or clean (no curve). Careful: film kills the whites, and a white temple or a pale wall in the hook comes out grey.",
+
+  "grain": 0.008,
+  "_grain": "Film grain, in luminance only. The engine caps it at 0.012; above that it looks dirty, not filmic.",
+
+  "fade_out": 0.4,
+  "audio_fade_out": 1.2,
+  "_audio_fade_out": "Seconds of audio tail at the end. Set it to 0 if the video is a loop: otherwise you hear the seam.",
+
+  "bpm": 123.0,
+  "beat0": 0.0,
+  "_bpm": "With bpm set, a segment can last `beats` instead of `dur`. Timings are computed on an absolute grid, so the cuts don't accumulate drift. Measure the BPM for real (librosa over the song's preview); don't assume it.",
+
+  "preview_audio": {
+    "src": "~/Movies/reel-forge/example-trip/workspace/trends/song-preview.m4a",
+    "offset": 8.5,
+    "gain": 1.0,
+    "_note": "This ALSO generates day-one-A-preview.mp4 with the song, just so the user can hear it. The song is NEVER embedded in the version that gets uploaded: in the app you add the official sound, and that also makes it count toward the trend.",
+    "_duration": "Music store previews last 30 s. If the video runs longer, build a looped bed first (acrossfade) and normalize it, or the last seconds come out silent with no warning from the render."
+  },
+
+  "audio": [
+    {
+      "src": "~/Movies/reel-forge/example-trip/workspace/concepts/day-one/common/ambience.wav",
+      "at": 0.0,
+      "gain": 0.28,
+      "_note": "Scene ambience, low. The engine does NOT carry over the clips' audio: if you want diegetic sound (a river, a laugh, running water), it gets assembled separately into one continuous WAV and comes in here as a single track at at 0."
+    },
+    {
+      "src": "~/Movies/reel-forge/example-trip/workspace/concepts/day-one/common/voice/l0.wav",
+      "at": 0.35,
+      "gain": 1.0,
+      "_note": "Narration, one track per sentence, with the exact second in `at`. The script lives separately: see examples/voice-script.md."
+    },
+    {
+      "src": "~/Movies/reel-forge/example-trip/workspace/concepts/day-one/common/voice/l1.wav",
+      "at": 6.20,
+      "gain": 1.0
+    },
+    {
+      "src": "$REEL_FORGE_ASSETS/sfx/shutter.mp3",
+      "at": 12.10,
+      "gain": 0.5,
+      "dur": 0.6,
+      "_path": "The engine expands `~` AND environment variables, so $REEL_FORGE_ASSETS works here (its default is $REEL_FORGE_CACHE/assets). The full variable list is in docs/configuration.md.",
+      "_note": "A short SFX. With `dur` it gets trimmed and given fades. A shutter on the freezes, a soft pop on the captions, a riser before a reveal. Never the same whoosh on every cut."
+    }
+  ],
+  "_audio": "All of these tracks DO go in the clean version. They get mixed with a limiter at the end; even so, measure the result with loudnorm and keep the peak below -0.5 dBTP.",
+
+  "segments": [
+    {
+      "_1": "PHOTO WITH KEN BURNS. The hook: the strongest shot goes first, 65 % of people leave within 3 s.",
+      "src": "~/Movies/reel-forge/example-trip/workspace/material/photo-overlook.jpg",
+      "beats": 4,
+      "focus": [0.62, 0.40],
+      "_focus": "The point (0-1) that ends up centred when cropping to 9:16. Mandatory on landscape photos: leave it in the middle and the subject walks out of frame.",
+      "kb": 0.06,
+      "_kb": "A slow zoom across the whole segment (Ken Burns). 0.04-0.08 feels alive without being seasick.",
+      "punch": 0.10,
+      "_punch": "A snap zoom on entry that settles in ~0.2 s. It's what makes a hard cut feel edited in 2026, with no transitions.",
+      "flash": true,
+      "_flash": "A 2-3 frame white flash. Only on the drop, once or twice per video."
+    },
+    {
+      "_2": "VIDEO IN SLOW MOTION.",
+      "src": "~/Movies/reel-forge/example-trip/workspace/material/VID_0042.MOV",
+      "start": 12.4,
+      "dur": 2.6,
+      "speed": 0.5,
+      "_speed": "0.5 with a 60 fps clip gives REAL slow motion, without interpolating or repeating frames. With a 30 fps clip it stutters: check the source's fps first.",
+      "focus": [0.5, 0.45],
+      "_start": "`start` is the second in the original clip, and it has to fall inside the catalog's start_s/end_s window. If you step outside, pull a strip and look at what's there."
+    },
+    {
+      "_3": "PHOTO WITH TEXT BEHIND THE SUBJECT.",
+      "src": "~/Movies/reel-forge/example-trip/workspace/material/photo-square.jpg",
+      "beats": 3,
+      "focus": [0.5, 0.38],
+      "behind": {
+        "text": "DAY ONE",
+        "size": 250,
+        "y": 0.16,
+        "style": "bold",
+        "at": 0.0,
+        "_note": "It only works if the head or torso covers part of the text: pick a photo where the subject is large and set `y` at their head height. Once or twice per video, no more."
+      }
+    },
+    {
+      "_4": "360 SEGMENT (a virtual camera over the equirectangular).",
+      "src": "~/Movies/reel-forge/example-trip/workspace/material/VID_0107.insv",
+      "start": 5.10,
+      "dur": 4.0,
+      "r360": {
+        "_note": "Instead of this object you can put the path of a keys.json. The `t` values are the segment's, not the clip's.",
+        "stab": "visual",
+        "mode": "heading",
+        "level": "auto",
+        "blur": 0.35,
+        "keys": [
+          { "t": 0.0, "yaw": 296, "pitch": 12, "fov": 124 },
+          { "t": 1.4, "yaw": 320, "pitch": 4, "fov": 96, "ease": "smooth" },
+          { "t": 1.9, "yaw": 346, "pitch": -3, "fov": 70, "ease": "whip" },
+          { "t": 4.0, "yaw": 352, "pitch": -3, "fov": 66, "ease": "out", "punch": 0.2 }
+        ],
+        "_keys": [
+          "yaw 0 = front, + to the right. It does NOT wrap: to go from 236 to -14 the short way, write 346.",
+          "pitch + is up. fov is horizontal, in degrees. `ease` says how you ARRIVE at that key: smooth, linear, in, out, whip, cut or spline.",
+          "A 0.3-0.4 s whip between two directions adds motion blur automatically, based on the speed.",
+          "`\"planet\": true` gives a tiny planet, BUT don't use it if the person filming is within 2-3 m of the lens: the stereographic projection deforms their face in any direction and rotating the planet doesn't fix it. A rectilinear push like this one works better (fov 124 -> 70).",
+          "Land the movement on the SUBJECT of the scene, not on whoever is holding the camera."
+        ]
+      }
+    },
+    {
+      "_5": "VIDEO WITH FEW FPS (the walking effect).",
+      "src": "~/Movies/reel-forge/example-trip/workspace/material/VID_0051.MOV",
+      "start": 3.0,
+      "beats": 4,
+      "stutter": 6,
+      "_stutter": "Repeats each frame N times. 6 over 30 fps leaves 5 fps: it reads as intent, not as a fault."
+    },
+    {
+      "_6": "FREEZE WITH A CUTOUT AND CARDS (character intro).",
+      "src": "~/Movies/reel-forge/example-trip/workspace/material/photo-portrait.jpg",
+      "dur": 3.0,
+      "focus": [0.5, 0.35],
+      "freeze": true,
+      "cutout": {
+        "y": 0.62,
+        "lines": ["23 days", "4 cities", "1 backpack"],
+        "_note": "Freezes, dims the background, cuts the subject out with a white outline and brings the cards in. The cards have to talk about the cut-out subject; if they talk about something else, the effect reads backwards. Pair it with a shutter and a pop."
+      }
+    },
+    {
+      "_7": "THE ROUTE MAP. This segment carries no `src`.",
+      "dur": 5,
+      "map": {
+        "bbox": [-10.0, 25.0, 30.0, 56.0],
+        "_bbox": "[lon0, lon1, lat0, lat1]. The engine extends the latitude on its own so that in 9:16 the whole route fits at the start, and then it zooms into the last stop.",
+        "stops": [
+          [-3.70, 40.42, "City A"],
+          [2.35, 48.86, "City B"],
+          [12.50, 41.90, "City C"],
+          [23.73, 37.98, "City D"]
+        ],
+        "_stops": "[lon, lat, \"Name\"], in travel order. The labels arrange themselves around each point so they don't overlap. The names are copy: write them in the output language."
+      }
+    },
+    {
+      "_8": "A LANDSCAPE PHOTO THAT GENUINELY CANNOT BE CROPPED.",
+      "src": "~/Movies/reel-forge/example-trip/workspace/material/photo-panorama.jpg",
+      "beats": 2,
+      "fit": "blur",
+      "_fit": "`blur` leaves it whole between two blurred bands. Use it sparingly: in 9:16 the photo ends up small, and two of these in a row read as the same shot repeated. Usually `focus` and filling the frame is better."
+    },
+    {
+      "_9": "THE CLOSE.",
+      "src": "~/Movies/reel-forge/example-trip/workspace/material/photo-close.jpg",
+      "beats": 4,
+      "focus": [0.48, 0.42],
+      "kb": 0.04,
+      "drift": [0.02, 0.0],
+      "_drift": "A slow x/y displacement across the segment, as a fraction of the frame. Adds movement without zoom."
+    }
+  ],
+
+  "captions": [
+    {
+      "_style": "clean — white sans with a soft shadow, no thick outline. The default for subtitles.",
+      "t0": 0.1, "t1": 2.0,
+      "text": "nobody tells you this\nabout the first day",
+      "style": "clean",
+      "pos": "upper",
+      "size": 58,
+      "_wrap": "A manual \\n is NOT enough: the engine still wraps by width inside each line (at size 56-58 about 22 characters fit). Look at the rendered frame and count the lines.",
+      "_pos": "top, topleft, upper, center, low, lowleft, lowright. In a vertical close-up, `low` lands right on the mouth: use `upper`."
+    },
+    {
+      "_style": "pin — a fixed place label with a red pin. It does not wrap: one short line.",
+      "t0": 0.1, "t1": 4.5,
+      "text": "Day 1 · City A",
+      "style": "pin",
+      "pos": "topleft"
+    },
+    {
+      "_style": "serif — a thin italic with a dark halo, cinematic.",
+      "t0": 2.2, "t1": 4.4,
+      "text": "six in the morning",
+      "style": "serif",
+      "pos": "center"
+    },
+    {
+      "_style": "box — the app's classic card. `color` changes the background; the ink picks itself by luminance.",
+      "t0": 5.0, "t1": 8.0,
+      "text": "Entry: 120 MXN",
+      "style": "box",
+      "pos": "lowleft",
+      "color": [255, 255, 255],
+      "dy": -128,
+      "_dxdy": "dx/dy move the piece in pixels. A negative dy lifts a price line ABOVE the stamp; below it is the app's button zone."
+    },
+    {
+      "_style": "yellow — a thick yellow key word, the route-guide look.",
+      "t0": 15.2, "t1": 17.6,
+      "text": "FOUR CITIES",
+      "style": "yellow",
+      "pos": "low"
+    },
+    {
+      "_style": "bold — Montserrat with a thick outline. Legible over anything, but it already looks dated: use it only if you really have to.",
+      "t0": 12.2, "t1": 14.8,
+      "text": "and this is only the start",
+      "style": "bold",
+      "pos": "low",
+      "size": 62
+    },
+    {
+      "_words": "With words: true the text comes out word by word, in groups of 2-3, spread by letter count across the t0-t1 window. For narration subtitles.",
+      "t0": 18.6, "t1": 22.6,
+      "text": "save the route, part two is already shot",
+      "style": "clean",
+      "pos": "low",
+      "words": true,
+      "size": 56
+    }
+  ],
+
+  "_safe_area": "150 px at the top (the search bar), 480 px at the bottom (the caption bar and the footer), 180 px on the right (like, comment, share). Captions are centred on the screen with a symmetric margin; anything outside that gets covered by the interface.",
+  "_before_delivering": [
+    "A frame strip of the render: ffmpeg -i out.mp4 -vf \"fps=2,scale=216:384,tile=12x6\" -frames:v 1 strip.jpg",
+    "blackdetect=d=0.08:pix_th=0.12  (black frames from a badly placed cut)",
+    "silencedetect=n=-45dB:d=0.25    (audio gaps)",
+    "loudnorm=print_format=summary   (peak below -0.5 dBTP)",
+    "ffprobe -select_streams a:0 -show_entries stream=duration  (the audio has to last as long as the video)"
+  ]
+}
