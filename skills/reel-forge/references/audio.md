@@ -56,7 +56,9 @@ ffprobe -v error -select_streams a -show_entries stream=index,codec_type -of csv
   `x-preview.mp4` with the song, just for the user to hear. The official sound is added in the app.
 - A public 30 s preview for measuring BPM and for the preview file. See `trends.md`.
 - **Videos over ~29 s need a looped bed**, or the music runs out and the ending goes silent with nothing
-  warning you. `acrossfade=d=1.5` between the preview and a shifted copy, `atrim` to the exact length,
+  warning you. Now that the length comes from the story, that is most of them: build the loop by
+  default and check the last second, which is exactly where a video that "ends abruptly" gives
+  itself away. `acrossfade=d=1.5` between the preview and a shifted copy, `atrim` to the exact length,
   `loudnorm I=-22` (a bed, under the natural audio which sits at -16) and gain 1.0 over the normalized
   bed — at gain 0.30 over the raw preview the music is inaudible.
 - The bed is made **once, in `common/`**.
@@ -73,51 +75,102 @@ turns into noise.
 
 When: in the documentary/storytime format and in lists. In a photo dump it gets in the way.
 
-**Generic TTS with echo sounds like "a cheap mic, far from the mic" and was rejected in production.**
-Use a modern neural voice, dry, with no added echo:
+### Who reads it
 
-- `skills/voices/scripts/voice.py` generates `l0.wav, l1.wav… + durations.json` (48 kHz, silence
-  trimmed, gentle high-pass, two-pass normalization to -16 LUFS). That is **the contract**: any other
-  voice source has to deliver the same thing so the engine consumes it unchanged.
-- **The voice speaks the output language.** Filter the engine's voice catalog by the language tag before
-  offering anything, and write the script in that language. A Spanish voice reading an English script,
-  or the other way round, is the first thing anybody notices.
+**Not whoever the caller felt like.** `skills/voices/scripts/resolve_voice.py` decides and says why:
+
+1. what the user asked for, or pinned in `~/.config/reel-forge/voice.json`;
+2. **CapCut's Valentino at 1.4x** when the output language is Spanish and CapCut is installed — the
+   default, because it is the voice this side of the platform actually sounds like;
+3. a local engine (`qwen` on Apple Silicon, `piper` elsewhere) as the **fallback**.
+
+Branch 3 on a Spanish video is not a neutral choice: it does not sound like the trend, so the
+variant's README carries the sentence the resolver returns ("Narrated with the local voice (qwen),
+not with Valentino: …"). The scripts print it; do not deliver without it.
+
+`skills/voices/scripts/voice.py` generates `l0.wav, l1.wav… + durations.json` (48 kHz, silence
+trimmed, gentle high-pass, two-pass normalization to -16 LUFS). That is **the contract**: any other
+voice source, the app path included, leaves the same three things so the engine consumes it
+unchanged.
+
+**Generic TTS with echo sounds like "a cheap mic, far from the mic" and was rejected in production.**
+Dry, no added echo, ever.
+
 - Use a model with a clear commercial-use license and **designed synthetic voices**, not cloned ones.
-- **Never clone a real person's voice** (actors, celebrities, the platform's voice). Don't describe one
-  so the model imitates it either.
+- **Never clone a real person's voice** (actors, celebrities, the platform's voice). Don't describe
+  one so the model imitates it either.
 - Write a new voice's description **in the target language**: asking in English for a Spanish voice
   brings in a foreign accent. Try 3-4 seeds and keep the best.
-- Don't stretch the voice to slow it down: it introduces artifacts. For pauses, use commas and periods
-  in the script. Numbers spelled out as words.
-- If the user wants commercial-service quality, that needs their account and their key: ask them for it,
-  don't sign them up.
+- Don't stretch the voice to slow it down: it introduces artifacts. For pauses, use commas and
+  periods in the script. Numbers spelled out as words.
+- If the user wants commercial-service quality, that needs their account and their key: ask them for
+  it, don't sign them up.
 
-### Viral narrator voice from an editing app — **macOS only, and fragile**
+### The narration is what sets the length
 
-Some desktop apps write their text-to-speech WAV **straight into the project folder**, before exporting
-anything. If the concept calls for that exact voice and the plugin ships the matching automation script,
-drive the app by clicks and leave the same contract (`l0.wav… + durations.json`). What you need to know:
+The script is written for the story — an opening, a middle that develops it, a landing — and the
+video lasts however long that takes. `resolve_voice.py --estimate-file voice-script.json` gives the
+seconds before anything is synthesized, so the concept can be planned against a real length instead
+of a template's 15 s. Once the WAVs exist, `durations.json` is the truth and the grid is rebuilt
+around it. Never trim the last line or speed the voice up to hit a length nobody chose on purpose:
+that is exactly the video that feels cut off.
 
-- **It's screen-coordinate automation.** There is no API. Any app update moves the buttons and you have
-  to recalibrate. Treat it as an optional path, never as a dependency.
-- **A heavily used project stops generating**, silently: the dialog appears, closes, and no file shows
-  up. One long batch, one new project. If it starts failing, create another and carry on.
+### Subtitles come from the voice, not from an estimate
+
+If a segment carries narration, its captions are placed from
+`skills/voices/scripts/wordmarks.py`'s `words.json`: every word with the second it is spoken, in the
+video's timeline, transcribed from the WAV that will actually be heard. `narrate.py` writes it
+automatically. The rule, checked with **0.25 s** of tolerance, runs both ways:
+
+- a caption may not appear before its word is spoken, nor linger after it;
+- if the voice **names something concrete**, that image is on screen while it is named. A line about
+  the market over a shot of the beach is the same mistake as a late caption.
+
+With no narration, the text is tied to the cut and to what is on screen. And a subtitle for audio
+nobody hears — the clip's own voice under music or TTS — is always wrong; see `editing.md`.
+
+### Valentino, and what it costs
+
+The app path is **macOS only and fragile**: it is screen-coordinate automation, there is no API, and
+a CapCut update moves the buttons. What you need to know before depending on it:
+
+- **A heavily used project stops generating**, silently: the dialog appears, closes, and no file
+  shows up. One long batch, one new project. The script detects it, retries once with a fresh
+  project and, if that fails too, exits non-zero with what to do — never half a folder pretending to
+  be finished.
 - Never type text by simulating keystrokes: spaces and accents get eaten. Copy to the clipboard and
   paste.
-- The trend's speed is applied **outside** the app, with `atempo` (which preserves pitch).
-- **The fallback path, and the one you should prefer:** generate with the plugin's local TTS. If not
-  even that works, deliver the video **without voice** plus a `voice-script.txt` with each line's entry
-  second, so the user can add it in the app with two taps.
+- The 1.4x is applied **outside** the app, with `atempo` (which preserves pitch).
+- **If it breaks**, the local voice takes over and the README says so; if not even that works,
+  deliver the video **without voice** plus the `voice-script` with each line's entry second, so the
+  user adds it in the app with two taps.
 
 ### Gluing narration onto an already rendered video
 
-`skills/voices/scripts/narrate.py` reads a `voice-script.txt` (`<second>  <text>` per line), generates
-or takes the WAVs and mixes them onto the MP4:
+`skills/voices/scripts/narrate.py` reads the `voice-script` (validated against
+`schemas/voice-script.schema.json`), generates or reuses the WAVs and mixes them onto the MP4
+without re-rendering it:
 
 ```bash
-uv run "$CLAUDE_PLUGIN_ROOT/skills/voices/scripts/narrate.py" voice-script.txt video.mp4 video-narrated.mp4
+uv run "$CLAUDE_PLUGIN_ROOT/skills/voices/scripts/narrate.py" voice-script.json --parse-only
+uv run "$CLAUDE_PLUGIN_ROOT/skills/voices/scripts/narrate.py" voice-script.json video.mp4 out.mp4
 ```
 
-A real trap: in the `amix`, **don't use `duration=first`**. If the video comes in with no audio track,
-the first input is the first voice line and the mix gets cut at 3 s. Take the longest and trim it to the
-video's length.
+It ducks the video's own audio under each line marked `duck: true` (`duck_db`, with a `duck_pad_s`
+ramp), keyed by the voice itself so the music comes back up in the gaps.
+
+A real trap: in the `amix`, **don't use `duration=first`**. If the video comes in with no audio
+track, the first input is the first voice line and the mix gets cut at 3 s. Take the longest, pad it
+to the video's length and trim there.
+
+## Spoken viral audios
+
+A trending song needs a BPM; a spoken meme audio needs its phrases.
+`skills/voices/scripts/sound_map.py` writes a `sound-map.json` with every phrase's start and end,
+the pause after it and which one is the **punchline**. Cut on `cut_grid` (the phrase starts), never
+inside a phrase, put the best shot on the punchline and breathe in the pauses.
+
+Like the music preview, that audio is fetched **to measure it**: `"embed_in_clean": false`. The file
+that gets uploaded carries no trending audio — only the local `-preview` does — and the user
+attaches the real sound in the app at publish time, which is what makes the video count toward the
+trend.

@@ -59,38 +59,62 @@ or a 2:1 equirectangular), **it isn't yours**: hand it to `360-scout` and say so
 Write `<working_folder>/catalog/catalog-<batch>.json` (one agent, one batch, one file) and reply in 5-8 lines: duration, how many ranges,
 which is the best and why.
 
+The shape is `${CLAUDE_PLUGIN_ROOT}/schemas/catalog-item.schema.json` — read it there, and **validate
+before you answer**: `uv run "${CLAUDE_PLUGIN_ROOT}/schemas/validate.py" <your file> --type catalog-item`.
+The block below is an illustration of a filled-in file, not a second copy of the contract: where the two
+disagree, the schema wins.
+
 ```json
 {
-  "file": "~/Movies/trip/VID_0042.MOV",
-  "duration_s": 96.4,
-  "fps": 59.94,
-  "slowmo_possible": true,
-  "audio": {"present": true, "useful": true, "lang": "es", "reason": "there's a line that works as a hook"},
-  "ranges": [
+  "batch": "video-2",
+  "agent": "clip-analyst",
+  "items": [
     {
-      "id": "v-042-a",
+      "id": "d14-042a",
+      "path": "~/Movies/trip/VID_0042.MOV",
+      "type": "video",
+      "date": "2026-05-14T11:03:40-06:00",
       "start_s": 12.40,
       "end_s": 14.10,
-      "what_happens": "the wave breaks just as she turns to the camera",
-      "subject": true,
-      "people": 2,
-      "framing": {"vertical_ok": true, "focus": [0.46, 0.40], "crop": "centred on the subject"},
-      "quality": 8,
-      "suggested_use": "hook",
-      "audio": {"peak_s": 13.62, "text": "no way!", "usable": true},
-      "suggested_speed": 0.5,
-      "warnings": ["from 14.2 s someone walks into the foreground"]
+      "duration_s": 96.4,
+      "fps": 59.94,
+      "description": "the wave breaks exactly as she turns to the camera; 60 fps, so half speed is available",
+      "quality": 4,
+      "hook": 5,
+      "subject_present": true,
+      "audio": "usable: at 13.62 she says a line that works as a hook, no wind over it",
+      "framing": "horizontal",
+      "focus": {"x": 0.46, "y": 0.40},
+      "sheet": "workspace/sheets/v042-strip.jpg#7",
+      "tags": ["water", "people", "motion"],
+      "notes": "from 14.2 s someone walks into the foreground: do not extend the window"
+    },
+    {
+      "id": "d14-042b",
+      "path": "~/Movies/trip/VID_0042.MOV",
+      "type": "video",
+      "start_s": 0.0,
+      "end_s": 12.40,
+      "use": false,
+      "reason": "walking, hunting for the framing"
     }
   ],
-  "dropped": [
-    {"start_s": 0.0, "end_s": 12.4, "reason": "walking, hunting for the framing"},
-    {"start_s": 14.2, "end_s": 96.4, "reason": "static shot, no action, wind noise"}
-  ],
-  "warnings": ["the clip is HDR: it needs tone mapping before mixing with SDR photos"]
+  "summary": "One 96 s clip: 1.7 usable seconds at the wave and a long static tail with wind noise.",
+  "struck_me": ["the line at 13.6 s", "the clip is HDR and will need tone mapping"],
+  "gaps": ["nothing in this batch can close a video: every range ends mid-movement"]
 }
 ```
 
-Rules: ids `v-<clip>-<letter>`, times in seconds with 2 decimals **relative to the start of the file**,
-`quality` an integer 1-10, `suggested_use` one of `hook`, `build`, `payoff`, `b-roll`, `transition`. A
-range without a concrete `what_happens` is not a range: delete it. If the whole video is useless,
-return `ranges: []` and say why; that is a useful answer too.
+Rules: one item per usable **window**, never one per file; `start_s`/`end_s` in seconds with 2 decimals,
+relative to the start of the source file. Ids follow the project convention (`d14-042a`, `d14-042b`… for
+the windows of the same clip). `quality` and `hook` are integers **1 to 5**, and most material is a 2 or
+a 3. What you drop stays as an item with `use: false` and a `reason` — **nothing is deleted**. Put
+anything the builder needs (real slow motion available, HDR, a stranger entering) in `notes`, where it
+gets read.
+
+**Say which windows can CLOSE a video.** A close needs an image that settles: the movement finishes
+inside the window, the last frame is not mid-pan or mid-gesture, and there is at least ~1.5 s of it. Say
+so in `description` ("the pan ends and the shot holds for 2 s"). Videos have been delivered ending on a
+cut with motion still in it, and the reason is always the same: nobody knew which window could end one.
+A window without a concrete description is not a window: drop it. If the whole video is useless, return
+no usable items and say why in `summary`; that is a useful answer too.

@@ -25,13 +25,108 @@ what you answered.
 | `home` | Project root. Same meaning as `REEL_FORGE_HOME`. |
 | `platform` | `tiktok`, `reels` or `shorts`. Only changes defaults, never the render. |
 
-The chosen narration voice lives separately, in `~/.config/reel-forge/voice.json`, because `/reel-voice`
-writes it on its own.
+### The rest of the folder
+
+`config.json` is what you answered once. Three other files in the same folder are written by the
+plugin as it goes, and they are the only things it keeps between runs:
+
+| File | Written by | What it holds |
+|---|---|---|
+| `voice.json` | `/reel-voice` | the chosen narration voice |
+| `preferences.json` | `preferences.py` | what you have corrected: rules, how much you want to appear, voices, language, formats that worked |
+| `history.json` | `history.py` | which variant you published and the numbers you reported for it |
+
+All three are yours: `0600`, in a `0700` folder, never uploaded, never synced. Deleting one only
+costs the plugin its memory of that subject. `preferences.py` refuses to store paths, file names,
+library UUIDs, email addresses, phone numbers or anything credential-shaped, so those files stay
+small, readable and safe to look at. The full story is in the
+[`sources` skill](../skills/sources/SKILL.md#preferences-that-learn).
+
+Face embeddings are **not** kept here: they are biometric data and they stay in the project's
+`workspace/`, which can be deleted at any time.
+
+### What `preferences.json` holds
+
+One file, written only by `preferences.py`, read at the start of every run by `preferences.py brief`.
+
+| Key | Values | What it decides |
+|---|---|---|
+| `language` | BCP-47 (`es-MX`, `en-US`) | the language of the narration and the on-screen text |
+| `presence` | `none` `rare` `low` `medium` `high` | how often the subject is on screen |
+| `voice` | free text | **the default narration voice.** Any other voice has to be named and justified in the variant's README |
+| `length` | `short` `medium` `long` `dynamic` | `dynamic` means the concept decides how long the video runs |
+| `pace` | `slow` `medium` `fast` | how fast the cuts come |
+| `captions` | `on` `off` `sparse` | on-screen text |
+| `narration` | `on` `off` `sometimes` | whether there is a voice at all |
+| `voices.preferred` / `voices.rejected` | lists | voices that worked and voices that did not |
+| `formats.worked` / `formats.failed` | lists | by hand, or from `history.py bias --apply` |
+| `music.preferred` / `music.rejected` | lists | sounds to reach for and sounds to drop |
+| `rules` | `add-rule` / `rm-rule` | everything else, one sentence each, `avoid` `never` `prefer` `always` |
+
+The plugin writes here **only** in four moments: the first run's language answer, the first run's
+voice choice, the instant the user corrects something, and `history.py bias --apply` once there are
+enough published posts to have a verdict. It never writes a preference it merely inferred. The full
+rules are in the [`sources` skill](../skills/sources/SKILL.md#the-four-moments-the-orchestrator-writes-here).
+
+### An example of what a filled file looks like
+
+A user who says, over a couple of runs, "use that TikTok voice, the CapCut one", "don't put me in
+every shot", "when I do appear, only use the ones I starred", "no posed shots", "nothing with
+receipts or work screens on it", and "some of these should be longer" ends up with this, and it takes
+six commands:
+
+```bash
+S="$CLAUDE_PLUGIN_ROOT/skills/sources/scripts"
+uv run "$S/preferences.py" set voice "CapCut Valentino"
+uv run "$S/preferences.py" set length dynamic
+uv run "$S/preferences.py" set presence low
+uv run "$S/preferences.py" add-rule "don't show the subject in every cut" --kind never --topic person
+uv run "$S/preferences.py" add-rule "shots of the subject come from their favourites only" \
+    --kind always --topic person
+uv run "$S/preferences.py" add-rule "no posed or forced-looking shots" --kind never --topic pose
+uv run "$S/preferences.py" add-rule "no receipts, screenshots or work screens" --kind never --topic topic
+```
+
+and `preferences.py brief`, which goes into every agent that decides anything, then prints:
+
+```
+Viewer preferences: presence=low
+Default narration voice: CapCut Valentino. Use it whenever the video is narrated and the language
+matches; if you use another one, say which and why in the variant README.
+Length: the concept decides. Do not cut a story short to hit a template length, and do not pad a
+short idea to fill one.
+Never do this (the user said so):
+- don't show the subject in every cut
+- no posed or forced-looking shots
+- no receipts, screenshots or work screens
+Do this when you can:
+- shots of the subject come from their favourites only
+```
+
+Those are one person's answers, not defaults: the file starts empty on a new machine and fills up
+from what its user actually says. Nothing in it is a path, a file name or an identifier —
+`preferences.py` refuses those, which is why the example is phrased as rules an editor can apply to
+any photo.
+
+### What `history.json` holds
+
+One entry per published video: the project it came from, which variant, the platform, the format, the
+duration, the hook, **how it closed** (`payoff`, `callback`, `reveal`, `punchline`, `open-loop`,
+`abrupt`), the voice, the sound, and whatever numbers the user later reports. `history.py bias` turns
+those into weights per format, per length band and per close, which is how a run knows both what to
+propose and how long this account's videos actually want to be. Nothing is scraped: the numbers are
+the ones the user says out loud.
 
 ## Environment variables
 
 Every variable starts with `REEL_FORGE_`. An environment variable wins over the config file; a command
 flag wins over both.
+
+### Where the settings live
+
+| Variable | Default | What it does |
+|---|---|---|
+| `REEL_FORGE_CONFIG_DIR` | `~/.config/reel-forge` | The folder holding every per-user file: `config.json`, `voice.json`, `preferences.json` and `history.json`. Useful for a second profile, or for trying things without touching your real preferences. `REEL_FORGE_CONFIG` is read as an older spelling of the same thing. |
 
 ### Language
 
@@ -79,9 +174,11 @@ for one run.
 |---|---|---|
 | `REEL_FORGE_360_SCRIPTS` | the sibling `video-360` skill | Where the render engine imports `reframe360.py` from |
 | `REEL_FORGE_PHOTO_SCRIPTS` | unset | An optional external photo engine. If it is there, the person mask gets constrained with its Pose silhouette so the model doesn't take animal fur for human hair. Without it the mask still works. |
-| `REEL_FORGE_CASCADE` | the one bundled with OpenCV | Path of an alternative face-detection XML for `sheets.py faces` |
+| `REEL_FORGE_CASCADE` | the one bundled with OpenCV | Path of an alternative face-detection XML for `sheets.py faces` and for `people.py --backend haar` |
+| `REEL_FORGE_YUNET` | `$REEL_FORGE_MODELS/face_detection_yunet_2023mar.onnx` | Face-detection model for `people.py`. Point it at your own copy on a machine with no network. |
+| `REEL_FORGE_SFACE` | `$REEL_FORGE_MODELS/face_recognition_sface_2021dec.onnx` | Face-recognition model for `people.py`: without it faces can be found but not grouped or matched. |
 | `REEL_FORGE_PROXY_CRF` | `20` | x264 quality of the 360 equirect proxy. Lower is bigger: at `16` the proxy came out larger than the 8K original. `--crf` on `reframe360.py proxy` overrides it. |
-| `REEL_FORGE_CAPCUT_VOICE` | a generic description | The name of the CapCut voice, only used in messages and diagnostics |
+| `REEL_FORGE_CAPCUT_VOICE` | a generic description | The name of the CapCut voice, only used in messages and diagnostics. It does not choose the voice: which voice a run narrates with comes from `voice` in `preferences.json`, and inside CapCut the voice is picked by a calibrated click. |
 | `CAPCUT_DRAFTS` | `~/Movies/CapCut/User Data/Projects/com.lveditor.draft` | CapCut's drafts folder (macOS) |
 | `OSXPHOTOS` | found on the PATH | Path of the `osxphotos` binary |
 

@@ -6,8 +6,10 @@ machine.
 
 This is not a template exporter. The plugin **looks at your material** frame by frame, catalogs it
 with several agents in parallel, researches which formats and sounds are working right now, proposes
-concepts that differ from each other, and renders **two variants of every concept** so you can
-compare.
+concepts that differ from each other, and renders **several variants of every concept** so you can
+compare. Each video is built as a story with an opening, a development and an ending that lands, and
+**its length comes from that story**, not from a house default: a gag runs 12 s and a narrated guide
+runs 60 s, in the same round.
 
 ## What it does
 
@@ -24,13 +26,23 @@ compare.
 5. **Concepts.** Several creative directors each propose, from their own angle, a concept with a hook
    and a second-by-second structure; a chief editor picks the best ones looking for variety and says
    what to fix before building them.
-6. **Build.** Two builders per concept assemble two different variants: JSON spec → 9:16 render with
-   beat cuts, punch-ins, text inside the safe area, audio mix and optional narration.
-7. **Review.** One reviewer per concept, seeing its variants side by side, hunts concrete defects —
-   black frames, audio gaps, overlapping text, wrong facts, repeated material — and fixes them by
-   re-rendering.
-8. **Delivery.** A clean 1080p version (no copyrighted music), a preview with the song just so you can
-   hear it, a 720p copy for your phone and a README per concept.
+6. **Story.** A story doctor takes each chosen concept apart into opening → development → **ending**,
+   says what is missing for the arc to close, and sets **the seconds each variant needs**, defended
+   beat by beat. Its blocking corrections are applied before anything renders.
+7. **Build.** One builder per variant: JSON spec → 9:16 render with beat cuts, punch-ins, text inside
+   the safe area, audio mix and narration. When there is narration the **voice is generated first** and
+   the captions are derived from it word by word, so the text lands on the word being said.
+8. **Review.** Two agents on the same files: the story doctor asks whether each variant develops and
+   **lands or just stops**, the reviewer hunts concrete defects — black frames, audio gaps, overlapping
+   text, captions out of sync, wrong facts, repeated material. Both fix by re-rendering.
+9. **Delivery.** A clean 1080p version (no copyrighted music), a preview with the song just so you can
+   hear it, a 720p copy for your phone and a README per concept — with each variant's duration and why
+   it runs that long. **Nothing reaches the delivery folder without passing `verify.py`**; what cannot
+   be made to pass is stated in the README instead of shipped quietly.
+
+An interrupted run (a closed laptop, a dead session) is **picked up, not restarted**: every agent
+writes its progress to disk as it goes, and re-running the same command skips whatever is already
+finished.
 
 ## Five-step demo
 
@@ -53,7 +65,7 @@ ffmpeg -version | head -1 && uv --version
 /reel the weekend on the coast, 30 seconds, with narration --lang en
 
 # 5. Claude asks once (material, whether you appear, platform, language),
-#    catalogs, proposes concepts and delivers two variants of each in
+#    catalogs, proposes concepts and delivers several variants of each in
 #    ~/Movies/reel-forge/<project>/deliveries/v1/   (macOS; ~/Videos/... on Linux)
 ```
 
@@ -144,7 +156,7 @@ Check that it landed:
 ```bash
 claude plugin validate ./reel-forge --strict   # manifests, skills and agents
 claude plugin list                             # reel-forge@reel-forge, enabled
-claude plugin details reel-forge               # 9 skills, 8 agents
+claude plugin details reel-forge               # the skills and the 9 agents
 ```
 
 `claude plugin install` accepts `-s user` (default, all your projects), `-s project` (shared through
@@ -206,13 +218,14 @@ With `--fast` it drops the analysis resolution to deliver sooner.
 
 | Agent | How many | What it does |
 |---|---|---|
-| `photo-curator` | 1 per day or per ~150 photos | Reviews a batch of photos and returns the moments that work, rated 1 to 10 |
+| `photo-curator` | 1 per day or per ~150 photos | Reviews a batch of photos and returns the moments that work, each rated for quality and for hook |
 | `clip-analyst` | 1 per video (or per 3-4 short ones) | Watches the video as frame strips, transcribes, and returns ranges with start and end |
 | `360-scout` | 1 per clip | Finds the usable framings by yaw/pitch and leaves the camera keys ready |
 | `trend-researcher` | 1-3 | Looks for current formats, hooks and sounds in the target language's market, citing source and date |
 | `creative-director` | 4-8 | Each proposes **one** strong concept from a different angle, with second-by-second structure |
 | `chief-editor` | 1 | Picks the best concepts looking for variety, drops the repeats and says what to fix |
-| `video-builder` | 2 per concept | Writes the builder script and the spec for its variant, renders it, and leaves the concept's delivery README |
+| `story-doctor` | 1 per concept, twice | Before building: the arc and the seconds each variant needs. After rendering: does it develop, does it **land or just stop** |
+| `video-builder` | 1 per variant | Writes the builder script and the spec for its variant, generates the voice, syncs the captions to it and renders |
 | `critic-reviewer` | 1 per concept | Compares the variants against each other, hunts concrete defects by looking and listening, and **fixes** them by re-rendering |
 
 Once the plugin is installed they are invoked with the plugin name in front:
@@ -220,8 +233,9 @@ Once the plugin is installed they are invoked with the plugin name in front:
 `docs/agents.md`.
 
 **Workflows** (`workflows/`): `catalog.js` splits photos, videos and 360 clips across N agents;
-`build.js` builds each concept with its builders and its reviewer. Both write what each agent returns
-to disk before moving on, so an interrupted run resumes without repeating work.
+`build.js` runs a concept through story → common folder → one agent per variant → arc and craft review
+→ fixes. Both read the run ledger first, skip whatever is already finished on disk and write their
+progress as they go, so an interrupted run resumes without repeating work.
 
 The **agent count** comes from how much material there is and how much time you have; the table and
 its caps are in [`docs/architecture.md`](docs/architecture.md).
@@ -242,8 +256,11 @@ its caps are in [`docs/architecture.md`](docs/architecture.md).
   same; for a final delivery, export the flat 360 from Studio and reframe it here.
 - **Rendering is local and slow.** A 30 s video can take 3 to 10 minutes counting proxies, analysis
   and verification.
-- **Synthetic voice sounds synthetic.** The local TTS does well in neutral Spanish and in English,
-  but a genuinely good voice needs a paid service on your own account.
+- **The default narrator voice needs CapCut, on macOS.** For narration in Spanish the default is the
+  app's viral voice, driven by clicks — so on Linux, on Windows, or without the app, you get the local
+  TTS instead, and the concept's README says which voice it used and why. Synthetic voices sound
+  synthetic: the local ones do well in neutral Spanish and in English, but a genuinely good voice needs
+  a paid service on your own account.
 - **Non-Latin scripts need system fonts.** Thai, Chinese and Arabic need fonts with those glyphs and,
   for vowel marks, Pillow built with raqm.
 - **Trends expire.** What gets researched today may be useless in a month: they are re-researched on
@@ -271,7 +288,7 @@ Before publishing or deleting anything, the plugin stops and asks.
 
 - [`docs/architecture.md`](docs/architecture.md) — the full 9-phase flow and what gets handed between phases.
 - [`docs/parallelism.md`](docs/parallelism.md) — how many agents to launch and what is **not** parallelized.
-- [`docs/agents.md`](docs/agents.md) — the eight agents, their contracts and how to scale each one.
+- [`docs/agents.md`](docs/agents.md) — the nine agents, their contracts and how to scale each one.
 - [`docs/installation.md`](docs/installation.md) — per-OS installation, updates and dependency checks.
 - [`docs/configuration.md`](docs/configuration.md) — environment variables, the config file and the output language.
 - [`docs/updating.md`](docs/updating.md) — publishing a version, how it reaches people who already installed it, versioning and changelog.

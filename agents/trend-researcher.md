@@ -44,8 +44,14 @@ detail: it decides which market you look at.
    - BPM with `librosa.beat.beat_track` over that preview. Report the number you got and the margin.
    - Note whether the preview is shorter than the planned video: past ~29 s you need a looped bed.
 5. **Voice and text.** If TTS or a synthetic voice is trending for that format, say so and describe the
-   style. **Real people's voices are never cloned.**
-6. **Hashtags:** 3-5 realistic ones, mixing broad and niche, in the market's language.
+   style, **naming it if it has a name** (the app voices that carry a format are part of the format).
+   **Real people's voices are never cloned.**
+6. **How the format ENDS, and how long it runs.** Both with a source. The close is part of the format —
+   a payoff line, a return to the opening shot, a card, a loop — and the durations that are working are
+   what the concepts weigh their own length against. A market whose format is a 50-second narrated piece
+   is not one where everything should come out at 25 s. Report the range you actually saw, not a round
+   number.
+7. **Hashtags:** 3-5 realistic ones, mixing broad and niche, in the market's language.
 
 ## How you search
 - `WebSearch` to find recent sources; `WebFetch` to read them. Prefer articles and reports with a

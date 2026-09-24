@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "reel-forge/concept.schema.json",
+  "title": "Concept",
+  "description": "One video idea with a hook of its own and an arc that lands, written before anything is built. A creative-director writes exactly one of these into concepts/<slug>.json; the story-doctor reads it before it is built; the chief-editor reads them all and picks.",
+  "$ref": "#/$defs/concept",
+
+  "$defs": {
+    "resourceId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$" },
+
+    "lang": {
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$",
+      "description": "BCP-47 tag for the ON-SCREEN text and the narration: 'en', 'es-MX', 'pt-BR'. Not the language of this file, whose keys and notes are always English."
+    },
+
+    "subject_quota": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "max_ratio"],
+      "description": "How much of this concept the main person may occupy. It is declared HERE, per concept, and the reviewer checks the built variants against this number instead of against a fixed one. Ceilings per kind are in skills/reel-forge/references/concepts.md.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["first_person", "recap", "place_first", "custom"],
+          "description": "first_person: the person is the story (POV, talking to camera). recap: the trip or the event told through them. place_first: the place, the food or the animal is the protagonist and they are a guest. custom: anything the user explicitly asked for."
+        },
+        "max_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Ceiling for cuts_with_subject / cuts in the built variant. Over it, the reviewer blocks."
+        },
+        "min_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Floor, when the concept stops working without the person (a first-person POV with two cuts of them is a different video)."
+        },
+        "note": { "type": "string", "description": "Required on 'custom': who asked for it and why." }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "first_person" } }, "required": ["kind"] },
+          "then": { "properties": { "max_ratio": { "maximum": 0.8 } } } },
+        { "if": { "properties": { "kind": { "const": "recap" } }, "required": ["kind"] },
+          "then": { "properties": { "max_ratio": { "maximum": 0.5 } } } },
+        { "if": { "properties": { "kind": { "const": "place_first" } }, "required": ["kind"] },
+          "then": { "properties": { "max_ratio": { "maximum": 0.25 } } } },
+        { "if": { "properties": { "kind": { "const": "custom" } }, "required": ["kind"] },
+          "then": { "required": ["note"] } }
+      ]
+    },
+
+    "arc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hook", "promise", "development", "close"],
+      "description": "The spine of the video: what it promises, how it grows and how it lands. Cuts without an arc are what makes a finished video feel like it was interrupted: it opens something, never develops it and stops mid-air. Every second in `structure` belongs to one stage of this arc.",
+      "properties": {
+        "hook": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["visual", "resource", "ends_s"],
+          "description": "0-3 s. If you cannot write it in one sentence, the concept is not ready.",
+          "properties": {
+            "visual": { "type": "string", "minLength": 8, "description": "What you SEE. The strongest shot in the catalog, not the first one chronologically." },
+            "text": { "type": "string", "description": "What you READ, in the output language, written for that language and not translated word for word." },
+            "resource": { "$ref": "#/$defs/resourceId", "description": "The catalog id that opens the video." },
+            "ends_s": { "type": "number", "minimum": 0.5, "maximum": 3, "description": "The second the hook is done. Past 3 s it is no longer a hook, it is an intro, and the viewer already left." }
+          }
+        },
+        "promise": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["what", "paid_off_at_s"],
+          "description": "The debt the hook takes on. A hook that promises nothing has nothing to pay back, and a promise that is never paid is exactly what 'it cuts off' means.",
+          "properties": {
+            "what": { "type": "string", "minLength": 12, "description": "What you are telling the viewer is going to happen, in one sentence: three proofs, the place at the end, why nobody goes back." },
+            "paid_off_at_s": { "type": "number", "minimum": 1, "description": "The second the viewer gets what they were promised. It sits inside the close, or in the turn just before it, never in the first third." }
+          }
+        },
+        "development": {
+          "type": "array",
+          "minItems": 2,
+          "description": "The middle: the beats that carry the promise from the hook to the close, in order. Each one adds something the previous one did not. A beat may run long if it carries a `mini_hook`; more than 5 s with nothing new and no reason to stay is where a viewer leaves. A video that needs only one beat is a clip, not a concept.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["at_s", "what", "raises"],
+            "properties": {
+              "at_s": { "type": "number", "minimum": 0, "description": "When this beat lands, on the same clock as `structure`." },
+              "what": { "type": "string", "minLength": 8, "description": "What happens here." },
+              "raises": { "type": "string", "minLength": 8, "description": "What this beat adds that the one before it did not: a new fact, a bigger scale, a complication, a change of place. If you cannot write it, the beat is filler and its seconds belong to another one." },
+              "mini_hook": { "type": "string", "description": "The reason to stay for the next beat: a question left open, a cut on a sound, a counter going up." }
+            }
+          }
+        },
+        "turn": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["at_s", "what"],
+          "description": "The high point or the flip: the moment the video stops being what it looked like. Optional in a gag or a pure photo dump; without it, anything past ~30 s flattens out.",
+          "properties": {
+            "at_s": { "type": "number", "minimum": 0 },
+            "what": { "type": "string", "minLength": 8 }
+          }
+        },
+        "close": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "shot", "lands_because"],
+          "description": "The planned landing, never whatever was left over. Shipping without one is what the feedback 'it ends too abruptly' is about. The five moulds that work are in references/concepts.md.",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["punchline", "back_to_hook", "final_fact", "question", "loop"],
+              "description": "punchline: the gag pays off on the last cut. back_to_hook: the opening shot returns, now meaning something else. final_fact: the number or the name that reframes everything. question: an honest question that invites an answer. loop: the last frame joins the first so the replay is seamless."
+            },
+            "shot": { "type": "string", "minLength": 3, "description": "The last thing on screen, by catalog id or in words." },
+            "text": { "type": "string", "description": "The last caption, in the output language. Optional: a close can land in silence." },
+            "lands_because": { "type": "string", "minLength": 12, "description": "Why this ends the video instead of stopping it: what it answers, closes or flips. 'It is the last clip left' is not a close." },
+            "resource": { "$ref": "#/$defs/resourceId" }
+          }
+        }
+      }
+    },
+
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["t0", "t1", "resource", "what"],
+      "description": "One cut. Blocks are ordered and do not overlap.",
+      "properties": {
+        "t0": { "type": "number", "minimum": 0 },
+        "t1": { "type": "number", "minimum": 0 },
+        "resource": { "$ref": "#/$defs/resourceId", "description": "A catalog id that EXISTS. Inventing one invalidates the whole concept." },
+        "what": { "type": "string", "minLength": 8, "description": "What is on screen in this cut." },
+        "role": {
+          "type": "string",
+          "enum": ["hook", "development", "turn", "close"],
+          "description": "Which stage of the arc these seconds serve. Cuts with no role are the ones that get trimmed first when the video runs long."
+        },
+        "text": { "type": "string", "description": "On-screen copy, written in the output language. Nothing under 0.8 s can be read." },
+        "sound": { "type": "string", "description": "Music, diegetic audio, a hit, silence." },
+        "effect": { "type": "string", "description": "At most two per cut. No cross-fades, wipes or sparkles." },
+        "subject": { "type": "boolean", "description": "Whether the main person is in this cut. This is what the quota is counted from." },
+        "says": {
+          "type": "string",
+          "description": "The narration line that is being spoken over this cut, if any. It is what ties voice to picture: if the voice names something concrete here, this cut has to SHOW it. The reviewer checks that pairing to 0.25 s."
+        }
+      }
+    },
+
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["letter", "what", "differs_in"],
+      "description": "One way of executing this same concept. Two variants have to read differently in the first 3 s; what never changes between them is the concept, the arc's promise and its close, and the output language.",
+      "properties": {
+        "letter": { "type": "string", "pattern": "^[A-H]$" },
+        "what": { "type": "string", "minLength": 8 },
+        "differs_in": {
+          "type": "string",
+          "enum": ["sound", "duration", "subject_presence", "cutting", "structure"],
+          "description": "The single axis this variant moves on. Two variants that move on the same axis are the same variant."
+        },
+        "narrated": { "type": "boolean" },
+        "target_duration_s": {
+          "type": "number",
+          "minimum": 3,
+          "description": "A variant may run shorter or longer than the concept, but it keeps the whole arc: a short variant cuts development beats, never the close."
+        }
+      }
+    },
+
+    "concept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "angle", "family", "lang", "arc", "target_duration_s", "duration_rationale", "subject_quota", "structure", "variants"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "short-name-with-hyphens; it names the folder and the delivered files." },
+        "title": { "type": "string", "minLength": 3 },
+        "angle": { "type": "string", "minLength": 3, "description": "The angle you were assigned. Variety comes from the angles handed out, not from asking for 'something different'." },
+        "family": {
+          "type": "string",
+          "enum": ["beat_photo_dump", "cinematic_pov", "narrated_documentary", "list", "expectation_vs_reality", "chain_or_route", "natural_sound", "character"],
+          "description": "Format family, in references/concepts.md. Two concepts of the same family in one delivery is a repeat."
+        },
+        "lang": { "$ref": "#/$defs/lang" },
+        "platform": { "type": "string", "enum": ["tiktok", "reels", "shorts"] },
+
+        "arc": { "$ref": "#/$defs/arc" },
+
+        "target_duration_s": {
+          "type": "number",
+          "minimum": 6,
+          "maximum": 180,
+          "description": "How long THIS story needs, decided by its arc and not by a house length. Guide ranges, to argue against and not to obey: gag or ranking 10-20 s; recap or POV 20-35 s; storytime, guide or documentary 35-75 s. Past 75 s the material has to earn every second. If there is more story than time, this number goes UP; if there is padding, it goes DOWN."
+        },
+        "duration_rationale": {
+          "type": "string",
+          "minLength": 20,
+          "description": "Why this number and not 10 s less or 15 s more, counted in beats: 'hook 3 s + three proofs of 7 s + turn + close = 31 s'. Writing a duration you cannot justify is how every video came out the same length."
+        },
+        "bpm": { "type": "number", "minimum": 40, "maximum": 220, "description": "Measured on the real preview, never assumed. Required when cut_to is 'beat'." },
+        "beat0_s": { "type": "number", "minimum": 0 },
+        "cut_to": { "type": "string", "enum": ["beat", "natural_sound", "narration", "free"] },
+        "narration": { "type": "boolean", "description": "true means every variant that carries voice ships a voice-script.json (schemas/voice-script.schema.json), and its captions are cut from the generated voice, not from estimates." },
+        "music": { "type": "string", "description": "The sound, with its source. Never an invented 'trending' song." },
+
+        "subject_quota": { "$ref": "#/$defs/subject_quota" },
+
+        "structure": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/block" } },
+        "resources": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/resourceId" },
+          "description": "Every catalog id this concept uses. Must be a subset of the catalog."
+        },
+        "variants": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/variant" },
+          "description": "Two to five ways of executing this same concept. Each one moves on a different axis (`differs_in`), and there are five axes, so five variants is the ceiling: a sixth would repeat one and read as the same video twice."
+        },
+        "notes": { "type": "string" },
+        "missing": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Material the idea wanted and the catalog does not have. Say it here; never request it as if it existed."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "cut_to": { "const": "beat" } }, "required": ["cut_to"] },
+          "then": { "required": ["bpm"] }
+        },
+        {
+          "if": { "properties": { "target_duration_s": { "exclusiveMinimum": 35 } }, "required": ["target_duration_s"] },
+          "then": {
+            "properties": { "arc": { "required": ["turn"] } },
+            "description": "Past 35 s a video without a turn flattens out: the viewer has already understood the pattern and there is nothing left to wait for."
+          }
+        }
+      ]
+    }
+  }
+}

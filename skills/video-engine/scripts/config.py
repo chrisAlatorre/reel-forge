@@ -13,6 +13,7 @@ particular folders:
     REEL_FORGE_FONT_SERIF  .ttf of the serif              (default: Instrument Serif italic)
     REEL_FORGE_FONT_THAI   .ttf/.ttc covering Thai        (optional)
     REEL_FORGE_FONT_CJK    .ttf/.ttc covering CJK         (optional)
+    REEL_FORGE_FORMAT      default aspect ratio           (9x16 | 4x5 | 1x1 | 16x9; the spec wins)
 
 The full list of the plugin's variables is in docs/configuration.md.
 
@@ -23,17 +24,74 @@ folder). All these paths are exported back into the environment, so a spec can w
 import os
 from pathlib import Path
 
-# ------------------------------------------------------------ canvas
+# ------------------------------------------------------------ canvas and formats
 
-W, H = 1080, 1920          # 9:16, the TikTok/Reels/Shorts format
-MARGIN = 1.25              # extra internal resolution (1350x2400) so we can zoom without losing sharpness
+MARGIN = 1.25              # extra internal resolution (x1.25) so we can zoom without losing sharpness
 FPS = 30
-
-# TikTok's safe area: the search bar at the top, the caption bar and footer at the bottom,
-# the button column (like, comment, share) on the right.
-SAFE = {"top": 150, "bottom": 480, "left": 60, "right": 180}
-
 GRAIN_MAX = 0.012          # above this the grain looks dirty, not filmic
+
+# One spec, four destinations. Each format carries its own canvas, its own safe area (what the
+# app's interface covers) and its own text scale, because a `size` that reads well on a phone held
+# vertically is tiny on a landscape frame.
+#
+#   safe   pixels the interface eats on each side
+#   text   multiplier applied to every caption `size`; sizes in a spec are ALWAYS written in the
+#          9x16 reference (1080x1920) and the engine rescales them for the target format
+#   width  fraction of the canvas width centred text may occupy before it wraps
+FORMATS = {
+    # TikTok / Reels / Shorts: search bar on top, caption bar and footer at the bottom, and the
+    # like / comment / share column on the right.
+    "9x16": {"size": (1080, 1920), "text": 1.00, "width": 0.722,
+             "safe": {"top": 150, "bottom": 480, "left": 60, "right": 180}},
+    # Instagram feed: the tallest thing the feed does not crop. The interface sits below the media.
+    "4x5": {"size": (1080, 1350), "text": 0.92, "width": 0.75,
+            "safe": {"top": 70, "bottom": 140, "left": 60, "right": 60}},
+    # Square: feed, LinkedIn, carousels.
+    "1x1": {"size": (1080, 1080), "text": 0.88, "width": 0.75,
+            "safe": {"top": 60, "bottom": 110, "left": 60, "right": 60}},
+    # Landscape: YouTube, a site, a TV. The player's progress bar eats the bottom.
+    "16x9": {"size": (1920, 1080), "text": 0.62, "width": 0.60,
+             "safe": {"top": 80, "bottom": 130, "left": 100, "right": 100}},
+}
+
+# What people write in a spec when they mean one of the four above.
+FORMAT_ALIASES = {"9:16": "9x16", "vertical": "9x16", "portrait": "9x16", "reel": "9x16",
+                  "4:5": "4x5", "feed": "4x5", "1:1": "1x1", "square": "1x1",
+                  "16:9": "16x9", "landscape": "16x9", "horizontal": "16x9", "youtube": "16x9"}
+
+# The spec's `format` wins; $REEL_FORGE_FORMAT only changes the default for specs that declare none.
+FORMAT = "9x16"
+if os.environ.get("REEL_FORGE_FORMAT"):
+    _want = os.environ["REEL_FORGE_FORMAT"].strip().lower().replace(" ", "")
+    FORMAT = FORMAT_ALIASES.get(_want, _want if _want in FORMATS else FORMAT)
+W, H = FORMATS[FORMAT]["size"]
+SAFE = dict(FORMATS[FORMAT]["safe"])
+TEXT_SCALE = FORMATS[FORMAT]["text"]
+TEXT_WIDTH = int(W * FORMATS[FORMAT]["width"])
+
+
+def normalize_format(name):
+    """'9:16', 'vertical', '9x16' -> '9x16'. Raises on anything the engine cannot render."""
+    key = str(name or FORMAT).strip().lower().replace(" ", "")
+    key = FORMAT_ALIASES.get(key, key)
+    if key not in FORMATS:
+        raise SystemExit(f"Unknown `format`: {name}. Options: {', '.join(FORMATS)}")
+    return key
+
+
+def set_format(name):
+    """Switches the canvas, the safe area and the text scale. Call it BEFORE rendering anything.
+
+    render.py and effects.py cache W/H for speed, so both call their `refresh()` right after this.
+    """
+    global FORMAT, W, H, SAFE, TEXT_SCALE, TEXT_WIDTH
+    FORMAT = normalize_format(name)
+    f = FORMATS[FORMAT]
+    W, H = f["size"]
+    SAFE = dict(f["safe"])
+    TEXT_SCALE = f["text"]
+    TEXT_WIDTH = int(W * f["width"])
+    return FORMAT
 
 
 # ------------------------------------------------------------ paths

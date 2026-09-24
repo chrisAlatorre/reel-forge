@@ -1,5 +1,5 @@
 ---
-description: Configures and tests the available narration voices (local ones and CapCut's), generates a comparable sample with each, filters them by the output language and saves the user's favorite.
+description: Configures and tests the narration voices (CapCut's Valentino for Spanish and the local ones), generates a comparable sample with each, filters them by the output language and saves the user's favorite.
 argument-hint: "[--lang es-MX|en-US|...] [--test \"sample text\"] [--local-only] [--create-voice NAME] [--pin <voice>]"
 ---
 
@@ -18,6 +18,24 @@ when the user stops liking how it sounds.
 | `--create-voice NAME` | Designs a new synthetic voice from a description (see below) |
 | `--pin <voice>` | Saves that voice as the favorite without re-testing everything |
 
+## What already gets chosen without asking
+
+Before testing anything, print what would narrate **right now** and why:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/voices/scripts/resolve_voice.py" --lang <tag>
+```
+
+That resolver is the one every narrated run uses, and its order is:
+
+1. what the user asks for, or what this command pinned in `~/.config/reel-forge/voice.json`;
+2. **CapCut's Valentino at 1.4x**, when the output language is Spanish and CapCut is installed;
+3. a local engine (`qwen` on Apple Silicon, `piper` elsewhere), as a **fallback that gets disclosed**.
+
+So for Spanish this command is not choosing from zero: it is asking whether the user wants something
+other than Valentino. Say that in one line, and if they pin a local voice, tell them plainly that
+every Spanish variant will then carry the "narrated with the local voice" line in its README.
+
 ## The language comes first
 
 Resolve the language **before** listing anything, because it decides which voices are even candidates.
@@ -35,8 +53,10 @@ tells them nothing.
 
 ## Skills and agents
 
-- Main skill: `reel-forge:voices` (engines, generation, audio treatment). Scripts:
-  `${CLAUDE_PLUGIN_ROOT}/skills/voices/scripts/voice.py`, `capcut_voice.py` and `narrate.py`.
+- Main skill: `reel-forge:voices` (resolution, engines, generation, audio treatment). Scripts:
+  `${CLAUDE_PLUGIN_ROOT}/skills/voices/scripts/resolve_voice.py` (who reads it, and why),
+  `voice.py`, `capcut_voice.py`, `wordmarks.py` (word marks for the subtitles), `sound_map.py`
+  (spoken viral audios) and `narrate.py`.
 - Consumer: `reel-forge:video-engine`, which drops the narration in as an audio track of the spec; or
   `narrate.py`, which glues it onto an already rendered MP4.
 - **Agents: 0 in the normal case.** Generation is local and sequential, and automating a desktop app
@@ -57,10 +77,13 @@ tells them nothing.
 2. **The system voice.** On **macOS** there is the `say` command, which is instant but sounds like a
    screen reader: fine for blocking out timings, not for publishing. On other systems, don't assume an
    equivalent exists.
-3. **CapCut voices** (the desktop app, **macOS or Windows**). That's where the narrator voices you
-   hear on the platform live. **This depends on a GUI app: it only works if it's installed, and only
-   by driving clicks.** Fallback if it isn't there: a local voice, or having the user add text-to-speech
-   inside the phone app at publish time.
+3. **CapCut voices** (the desktop app, **macOS** for this plugin's automation). That's where the
+   narrator voices heard on the platform live, **Valentino** among them, and for Spanish that is the
+   default rather than one option among many. **It depends on a GUI app: it only works if it's
+   installed, and only by driving clicks** —
+   `uv run "${CLAUDE_PLUGIN_ROOT}/skills/voices/scripts/capcut_voice.py" --preflight` says in one
+   pass whether this machine can do it at all. Fallback if it can't: a local voice (disclosed in the
+   variant's README), or having the user add text-to-speech inside the phone app at publish time.
 4. **Commercial TTS services.** Mention them as an option if the user wants studio quality with a
    clear license, but **they require the user to create the account and the key**. Never ask for a key
    here and never store one.
@@ -107,14 +130,18 @@ Save the choice to `~/.config/reel-forge/voice.json`:
 
 ```json
 {
-  "engine": "local",
-  "voice": "narrator",
-  "lang": "en-US",
-  "speed": 1.0,
+  "engine": "capcut",
+  "voice": "Valentino",
+  "lang": "es-MX",
+  "speed": 1.4,
   "fx": "clean",
   "chosen_on": "2026-01-15"
 }
 ```
+
+`engine` is `capcut`, `qwen`, `voxcpm` or `piper` (`local` is still read, and means whichever local
+engine this machine runs). `lang` matters: a pinned voice whose language does not match a later run
+is **not** used silently — the resolver reports it and carries on down the list.
 
 From then on, everything `/reel` narrates uses that voice without asking again. If a later run uses a
 different `--lang` than the one saved here, say so in one line and offer to pick a voice for the new
@@ -141,9 +168,10 @@ Some local engines design a voice from a text description and a seed, without cl
   the app.
 - Commercial service keys belong to the user: never requested, never stored, never printed.
 
-## Automating a desktop app (only if you need its voices)
+## Automating a desktop app (the Spanish default, and it is still fragile)
 
-Fragile by nature. What has to be respected:
+Valentino comes from CapCut, so for Spanish this is the normal path, not an exotic one — which makes
+its failure modes everybody's problem, not just the curious user's. What has to be respected:
 
 - The buttons **move between app versions**. Before a batch, calibrate against the real window instead
   of trusting saved coordinates.
@@ -157,8 +185,15 @@ Fragile by nature. What has to be respected:
 - It needs the screen unlocked and the window visible. **It does not work in a remote session or with
   the display off**, and the first time the OS may ask for automation permissions that can only be
   granted in front of the machine.
+- **It never fails in silence.** `capcut_voice.py` reads the project's own `draft_info.json` to tell
+  "the clicks landed wrong" (exit 3, recalibrate) from "the project is saturated" (exit 4, it already
+  retried with a new one) from "this machine is missing something" (exit 5). Anything other than 0
+  means nothing usable came out, what was generated stays on disk, and a re-run resumes.
 
 ## Delivery
 
 The sample files, the comparison table, the chosen voice written into the config, and one line saying
-what was saved. If an engine couldn't be tested, say why and what it would take to test it.
+what was saved. If an engine couldn't be tested, say why and what it would take to test it. If the
+user ends up pinning a local voice for Spanish, say once that every variant will carry the
+"narrated with the local voice, not with Valentino" line in its README — that is the point of the
+line, and it is not negotiable afterwards.

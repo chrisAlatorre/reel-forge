@@ -160,7 +160,7 @@ head -20 CHANGELOG.md
 # a clean install of this exact tree works, without touching your own config
 export CLAUDE_CONFIG_DIR=$(mktemp -d)
 claude plugin marketplace add ./ && claude plugin install reel-forge@reel-forge
-claude plugin details reel-forge          # 9 skills, 8 agents
+claude plugin details reel-forge          # 9 skills, 9 agents
 rm -rf "$CLAUDE_CONFIG_DIR" && unset CLAUDE_CONFIG_DIR
 ```
 

@@ -19,6 +19,12 @@ Usage:
 lines.json: ["sentence 1", "sentence 2", ...]. It writes l0.wav, l1.wav... and durations.json.
 That contract (lN.wav + durations.json) is what narrate.py and the editing engine consume.
 
+WHICH ENGINE SHOULD READ THIS AT ALL is not decided here: `resolve_voice.py` decides, and for a
+Spanish run with CapCut installed the answer is the app's Valentino at 1.4x, not this script. Every
+voice below is the FALLBACK for that case — it is local, reproducible and freely licensed, and it
+does not sound like the trend, so when it narrates a Spanish variant the delivery has to say so.
+This script prints that sentence itself.
+
 --engine qwen = Qwen3-TTS 1.7B (Apache-2.0) on MLX: it clones a SYNTHETIC voice designed with
 Qwen3-TTS VoiceDesign ($REEL_FORGE_CACHE/voices/designed/<voice>.wav + .json with the reference
 text). It is nobody's real voice. MLX = Apple Silicon. On another platform use piper
@@ -52,6 +58,12 @@ import subprocess
 import sys
 import wave
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    from resolve_voice import VALENTINO, is_spanish, local_disclosure
+except ImportError:      # this file still has to work on its own, copied out of the plugin
+    VALENTINO, is_spanish, local_disclosure = "Valentino", (lambda t: False), None
 
 CACHE = Path(os.path.expanduser(os.environ.get("REEL_FORGE_CACHE", "~/.cache/reel-forge")))
 VOICES = CACHE / "voices"          # Piper .onnx models
@@ -295,6 +307,13 @@ def main():
                             a.language or REF_LANGUAGE, a.ref_text or REF_TEXT)
     if not (a.lines and a.out):
         ap.error("lines.json and the output folder are missing")
+    # Generating a Spanish narration locally is a fallback, never the default, and the variant has
+    # to carry the reason. Printed here so it appears even when this script is called directly.
+    language = a.language or os.environ.get("REEL_FORGE_LANG")
+    if local_disclosure and is_spanish(language):
+        print("note: " + local_disclosure(a.engine, "this run asked for the local path")
+              + f"\n      (the default for Spanish is {VALENTINO} from CapCut: capcut_voice.py)",
+              file=sys.stderr)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     lines = json.load(open(a.lines))

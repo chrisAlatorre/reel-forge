@@ -1,6 +1,6 @@
 ---
 description: Turns the user's photos and videos into vertical TikToks/Reels end to end - detects sources, validates metadata, researches trends, analyzes the material with parallel agents, and delivers several concepts with variants.
-argument-hint: "[free-form topic or description] [--lang es|en|...] [--auto] [--fast] [--dates YYYY-MM-DD..YYYY-MM-DD] [--place \"City\"] [--source PATH] [--no-trends]"
+argument-hint: "[free-form topic or description] [--lang es|en|...] [--resume] [--fresh] [--auto] [--fast] [--concepts N] [--variants N] [--version vN] [--dates YYYY-MM-DD..YYYY-MM-DD] [--place \"City\"] [--source PATH] [--no-trends]"
 ---
 
 # /reel — vertical recap, end to end
@@ -16,8 +16,13 @@ only what is unavoidable, grouped, **once**.
 | Flag | Effect |
 |---|---|
 | `--lang TAG` | Language of the on-screen text and the narration (`es`, `en`, `es-MX`, `en-US`, `pt-BR`…). Overrides the config for this run. |
+| `--resume` | Pick up the project's last run where it stopped. Skips straight to step 0.5. |
+| `--fresh` | Ignore the run ledger and redo everything from zero, even what is already on disk. |
 | `--auto` | Zero questions. You assume everything with the "When you can't ask" rules and report what you assumed at the end. |
 | `--fast` | Fewer agents (see the scaling table), 2 concepts x 2 variants, no deep trend research. |
+| `--concepts N` | How many concepts to build this round (default 3). Ten is a comparison round: say so in the plan and expect it to take hours. |
+| `--variants N` | How many variants per concept (default 2, up to 8). Each one moves on a different axis and they do **not** all come out the same length. |
+| `--version vN` | The delivery round to write (default: the next unused `v<n>`). A previous version is never overwritten. |
 | `--dates A..B` | Date range already given; don't ask for it. |
 | `--place "X"` | Place or places already given; don't ask for them. |
 | `--no-trends` | Skip step 4 and use the base formats from `skills/reel-forge/references/concepts.md`. |
@@ -52,12 +57,13 @@ Agents you launch in parallel (`reel-forge:<name>`):
 | `trend-researcher` | Searches the web for current formats and sounds for the topic **in the output language's market**, with source and date | Step 4, 1-3 agents |
 | `creative-director` | Proposes **one** concept from an assigned angle, with second-by-second structure | Step 6, 4-8 in parallel |
 | `chief-editor` | Reads every concept together, picks for variety and says what to fix | Step 6, always 1 |
-| `video-builder` | Builds one variant: writes `build.py` and the spec, renders, and reviews its own frame strip | Step 7, 2 per concept |
-| `critic-reviewer` | Compares the concept's variants against each other, verifies with measurements and **fixes** by re-rendering | Step 8, 1 per concept |
+| `story-doctor` | Fixes the arc — hook, promise, development, turn, **close** — and sets the seconds each variant needs; then watches the rendered variants and says which ones stop instead of ending | Steps 6c and 8, 1 per concept each time |
+| `video-builder` | Prepares the concept's `common/` folder, or builds **one** variant: `build.py`, spec, render, self-review, verification | Step 7, 1 for the common folder + 1 per variant |
+| `critic-reviewer` | Compares the concept's variants against each other, re-runs the delivery gate and **fixes** by re-rendering | Step 8, 1 per concept |
 
-With plenty of material, steps 5, 7 and 8 can be run through the plugin's workflows, which write what
-each agent returns to disk and let an interrupted run resume: `workflows/catalog.js` (step 5) and
-`workflows/build.js` (steps 7 and 8).
+With plenty of material, steps 5, 7 and 8 run through the plugin's workflows, which read the run ledger
+first, skip whatever is already finished on disk and write their progress as they go:
+`workflows/catalog.js` (step 5) and `workflows/build.js` (steps 7 and 8).
 
 ### Agent scaling
 
@@ -72,9 +78,9 @@ catalog_agents = min(photo_batches + clip_batches + batches_360, CAP)
 
 | Mode | Catalog CAP | Trends | Directors | Build |
 |---|---|---|---|---|
-| normal | 10 | 2 | 4-8 + 1 chief editor | 3 concepts x 2 builders |
-| `--fast` | 4 | 0-1 | 3 + 1 chief editor | 2 concepts x 2 builders |
-| under 30 pieces | 2 | 1 | 3 + 1 chief editor | 2 concepts x 2 builders |
+| normal | 10 | 2 | 4-8 + 1 chief editor | 3 concepts × (1 story-doctor + 1 common + 1 agent per variant) |
+| `--fast` | 4 | 0-1 | 3 + 1 chief editor | 2 concepts × (1 story-doctor + 1 common + 1 agent per variant) |
+| under 30 pieces | 2 | 1 | 3 + 1 chief editor | 2 concepts × (1 story-doctor + 1 common + 1 agent per variant) |
 
 **Practical cap: ~10 agents at a time.** The machine is also decoding video, and `ffmpeg` already
 uses several cores on its own: more agents is slower, not faster. With 4 concepts, the build runs in
@@ -107,6 +113,32 @@ Use a BCP-47 tag. The region matters: `es-MX` and `es-ES` are different trend ma
 From here on, that tag governs: the captions, the narration script, the voice you pick, the hashtags,
 and the market the trend research targets. It does **not** govern the language you speak to the user
 in — that stays whatever they are writing in — nor the file names or the JSON keys.
+
+## Step 0.5 — Is there a run to pick up? (before anything else that costs time)
+
+Machines go to sleep, laptops close, sessions die. One round of 29 agents lost 7 of them to a sleeping
+machine, and their work with them. So **every run starts by asking whether it is a new one**.
+
+1. Look for the project's ledger: `<workspace>/run.json`, plus the per-agent files in
+   `<workspace>/run/`. If the project folder is not obvious yet, list what is under the root and ask
+   which project they mean — or, with `--resume` and a single candidate, take it.
+2. **The files on disk win over the ledger.** A complete `catalog-photos-3.json` means that batch is
+   done even if the ledger never got written; a ledger entry with no file behind it is not done. Check
+   the files, then trust them.
+3. Report in one line what you found and what you are going to do: *"the catalog is complete (412
+   moments), concept `c-map-lied` has variant A delivered and B never rendered — I'm picking up from
+   B"*. A resume that silently skips a broken batch looks exactly like a resume that worked.
+4. Carry on from the first unfinished phase. **Nothing already finished gets redone**, unless `--fresh`
+   was passed.
+
+With the workflows, this is automatic: `catalog.js` and `build.js` both read the ledger in their first
+phase and skip what is done. Inside the same session you can also replay the cached agent calls with
+`Workflow({ scriptPath, resumeFromRunId: "<runId>" })`, which is faster still. From a cold start, just
+run the workflow again.
+
+The rules the agents follow so this works at all — one progress file per agent, rewritten at least every
+~2 minutes, long jobs split into short saved steps, artifacts written the moment they exist — are in the
+`reel-forge` skill under **Resuming a run**. Repeat them in every prompt you write by hand.
 
 ## Step 1 — Detect sources (automatic, no questions yet)
 
@@ -224,9 +256,12 @@ Split the material per the scaling formula.
 - 360 material: the catalog is by **direction** (yaw/pitch), not only by time — the same second has
   several possible framings. `360-scout` does it, one per clip. See `reel-forge:video-360`.
 
-Every agent writes into a shared catalog in the workspace folder. **The catalog's
-`start_s`/`end_s` window is binding**: whoever ignores it ends up using a frame that is not the one
-that was cataloged.
+Every agent writes **its own** `catalog-<batch>.json`, against `schemas/catalog-item.schema.json`, plus its
+own progress file in `<workspace>/run/`. You merge the batches. Two agents writing one file overwrite
+each other in silence, and an agent that invents its own format forces the batch to be redone.
+
+**The catalog's `start_s`/`end_s` window is binding**: whoever ignores it ends up using a frame that is
+not the one that was cataloged.
 
 ## Step 6 — Concepts (directors + chief editor)
 
@@ -244,30 +279,75 @@ returns **a single concept** with:
 - Whether it carries narration, music, or only diegetic audio.
 - Which catalog moments it uses, **by id**, and the ratio of cuts with and without the subject.
 
-**6b. Chief editor.** A single `chief-editor` reads them all together and picks **3** (2 with
-`--fast`) looking for real variety, drops the repeats and the weak ones, and says exactly what to fix
-in each before it gets built. It is the only point in the flow where somebody sees every proposal at
+**6b. Chief editor.** A single `chief-editor` reads them all together and picks **3** (2 with `--fast`,
+or however many `--concepts N` asked for) looking for real variety, drops the repeats and the weak ones,
+and says exactly what to fix in each before it gets built. With a wide round — many concepts, many
+variants — tell it the number up front: a chief editor told to pick three will pick three, and you will
+launch a round smaller than the one that was asked for. It is the only point in the flow where somebody sees every proposal at
 once; two chief editors contradict each other and the variety is lost.
 
 A concept that uses an id that isn't in the catalog is a serious defect: it doesn't get built.
 
+**6c. Story doctor, one per chosen concept, before anything is built.** It takes the concept apart into
+hook → promise → development → turn → close and hands back binding fixes plus **the seconds each variant needs**,
+worked out from its own beats. This step exists because of one piece of feedback: *"something is being
+developed and it gets cut too soon"*, and *"almost all of them last less than 30 seconds"*. What it
+says is not advice — the builders apply it. If it returns `rework`, the payoff the concept promises
+isn't in the material: say so rather than rendering around a hole.
+
 You confirm the selection in one line and move on. **Don't ask the user to pick a concept**: picking
 is far easier once you can watch the videos.
 
-## Step 7 — Variants
+## Step 7 — The common folder, then one agent per variant
 
-Per concept, **2 variants**, one `video-builder` each. The variants change something you can notice:
-duration, with or without voice, hook order, music versus natural sound. Each builder:
+**7a. The common folder, once per concept, before anybody builds.** One agent leaves in
+`<workspace>/concepts/<slug>/common/` everything the variants share: the originals exported from the
+library, the prepared stills and the pre-renders the engine can't do by itself, the 360 framings
+rendered from `360-scout`'s keys, and the looped, normalized music bed — plus a `RESOURCES.json` saying
+what each file is. Nothing after this step re-exports or re-renders any of it. When each builder did
+this for itself, one used the raw 30 s preview and the last seconds of its video came out silent.
+
+**7b. One `video-builder` per variant** (as many as `--variants N` asked for, up to 8; each one moves on
+a different axis and **their lengths spread**). Not two agents splitting the variants between them: one
+agent, one letter, one folder, one delivery. A builder that dies takes one variant with it instead of half a
+concept, and the run picks that variant back up on its own.
+
+The variants change something you can notice: duration, with or without voice, hook order, music versus
+natural sound. One axis each, and **their lengths spread** — a short variant is a full arc with fewer
+beats, not the long one truncated. Each builder:
 
 1. Writes its `build.py`, which generates the JSON spec and renders with the `reel-forge:video-engine`
    engine (`uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/render.py" spec.json`). The
-   `build.py` has to rebuild everything from scratch, with no dependency on temporaries.
-2. Pulls its own frame strip and **looks at it**: text readable, not covering faces, crops that don't
-   cut off heads, facts and dates correct.
-3. Leaves the project reproducible: a script that rebuilds everything from scratch, not a loose spec
+   `build.py` has to rebuild everything from scratch, with no dependency on temporaries. The segment
+   grid is laid out as the arc the story-doctor set, and it ends on **a close that holds**.
+2. If the variant is narrated, **generates the voice first** and only then the text: `transcribe.py
+   --align` over the generated WAVs, and `"sync"` in the spec taking the times from the voice itself.
+3. Pulls its own frame strip and **looks at it**: text readable, landing on the word being said, not
+   covering faces, crops that don't cut off heads, facts and dates correct — and the last second, which
+   has to end rather than stop.
+4. **Runs the delivery gate on its own file** and keeps fixing until it passes (step 8).
+5. Leaves the project reproducible: a script that rebuilds everything from scratch, not a loose spec
    pointing at temporaries.
 
 Cross-cutting rules every builder respects:
+
+- **The narration script has exactly one format**, the one in `schemas/voice-script.schema.json`, and it
+  is proved to parse before anything depends on it:
+  `uv run "$CLAUDE_PLUGIN_ROOT/skills/voices/scripts/narrate.py" voice-script.json --parse-only` has to
+  print the same number of lines that were written. Narrated videos have already shipped **with no
+  voice** because each agent invented its own layout and the parser skipped every line in silence.
+
+- **The default voice, for narration in Spanish, is CapCut's Valentino** (`narrate.py --engine capcut
+  --voice "Valentino" --speed 1.4`), checked with `capcut_voice.py --preflight` before a batch. It is
+  macOS-only and click-driven; the local engines are the **backup**, and a variant that uses one says so
+  in the concept's README, with why. For other output languages, the voice comes from the `voices`
+  skill's catalog for that language and region.
+
+- **The text is synced, not estimated.** Over narration it comes from the voice's own alignment
+  (`sync`), over a clip's audio from its transcript (`subs`), and with neither from the cut (`seg`). And
+  when the voice names something concrete, the segment showing it declares it (`"says": "…"`). Nobody
+  types a subtitle's second by hand. Tolerance 0.25 s, measured by the gate from the render's
+  `timeline.json` sidecar.
 
 - **The same person must not be in every cut.** Mix landscape, detail, food, people, moments with
   nobody in them. A video where the author is in every cut reads as vain.
@@ -283,15 +363,35 @@ Cross-cutting rules every builder respects:
 
 ## Step 8 — Verify and deliver
 
-One `critic-reviewer` per concept compares **across** variants, not just within each one: the same
-frame with a different treatment, a `look` that drifted by accident, the same shot repeated in two
-cuts. Technical checklist:
+**The gate: nothing reaches the delivery folder without passing `verify.py`.**
 
-- Black frames, long silences and audio peaks (the final peak must sit below −0.5 dBTP).
-- The audio track lasts exactly as long as the video (if the song ends early, the last seconds are
-  silent and nothing warns you).
-- One frame strip per variant, actually looked at.
+```bash
+uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/verify.py" <file.mp4> \
+    --spec spec.json [--script voice-script.json]
+```
+
+Run it with every flag it can take, never bare, and with the `<video>.timeline.json` sidecar next to
+the MP4 — the text, voice-over-image and ending checks read it, and without it they come back `skip`,
+which looks exactly like `pass`. The builder runs it on its own variant; the reviewer runs it again on
+every delivered file, taking nobody's word for it. A variant that fails is fixed **inside its `build.py` and re-rendered**, never
+patched on the MP4. If it cannot be made to pass with the material that exists, it is **not delivered**:
+it is marked non-deliverable and the concept's README says so plainly, with what was missing. A stated
+limit is worth more than a file nobody checked.
+
+Two agents review the same set at once and they are not interchangeable. The **`story-doctor`**'s second
+pass asks whether these are finished videos — does each one develop, does it **land or does it stop**,
+does its length fit what it is telling — and an ending that cuts off is a blocker, even though no command
+detects it. The **`critic-reviewer`** compares **across** variants, not just within each one: the same
+frame with a different treatment, a `look` that drifted by accident, the same shot repeated in two cuts.
+Their blockers are fixed together, inside each variant's `build.py`. On top of the gate:
+
+- One frame strip per variant, plus the last 3 seconds at 8 fps, actually looked at.
+- Three captions per variant checked with the audio playing: on screen while the word is said, and what
+  a line names is what's on screen.
 - Count by hand how many cuts the main person appears in.
+- **Narration:** the voice is audible in the MP4, or the `voice-script.json` ships beside it, parses
+  cleanly and is named in the README. A narrated variant delivered mute with nothing said about it is
+  a defect, not a limitation.
 
 Delivery goes to `<root>/<project>/deliveries/<version>/`, where `<root>` is `REEL_FORGE_HOME` if set,
 and otherwise `~/Movies/reel-forge` on macOS, `~/Videos/reel-forge` on Linux and
@@ -299,12 +399,15 @@ and otherwise `~/Movies/reel-forge` on macOS, `~/Videos/reel-forge` on Linux and
 
 - Clean 1080x1920 MP4s, compressed enough to stay under ~30 MB.
 - Light 720p copies for sending over chat.
-- A single `README.md` per concept: what each variant is, which sound to add in the app, the suggested
-  hashtags (3-5, in the output language) and, if there is narration without an embedded voice, the
-  script with its timings.
+- A single `README.md` per concept: what each variant is **with its duration and why it runs that long**,
+  which voice each narrated variant used, which sound to add in the app, the suggested hashtags (3-5, in
+  the output language) and, if there is narration without an embedded voice, the script with its
+  timings.
 
-Close with a 5-8 line summary: which concepts there are, how they differ, what you assumed and what is
-still to be decided. No filler.
+Close with a 5-8 line summary: which concepts there are, how they differ, **the range of durations the
+round came out at** (if everything landed inside a 10 s band, say so — that is the template talking, not
+the stories), what you assumed, **what did not pass the gate and what is still pending in the ledger**
+(with the one line it takes to pick it up), and what is still to be decided. No filler.
 
 ## If something fails
 
@@ -313,5 +416,16 @@ still to be decided. No filler.
 - **Originals in the cloud**: download only the chosen ones, after curation, never the whole library.
 - **Low disk space**: `/reel-sources` reports it. Under ~20 GB free, work with low-resolution proxies
   and say so.
-- **An agent stalls**: don't wait for it indefinitely. Carry on with what you have and note in the
-  README what was left uncataloged.
+- **An agent stalls**: don't wait for it indefinitely. Carry on with what you have, leave its unit
+  `pending` in the ledger and note in the README what was left uncataloged. The next run picks it up.
+- **The machine went to sleep, or the session died**: nothing is lost that was written to disk. Run
+  `/reel --resume` (or the same workflow again) and it continues from the first unfinished unit. If an
+  agent left a half-written artifact, its `.partial.json` is what it got to; the unit stays pending.
+- **A variant won't pass the gate**: don't ship it anyway and don't quietly drop it. Say which one, why,
+  and what it would take — in the concept's README and in the closing summary.
+- **A variant stops instead of ending**: it is a blocker like any other. Fix it inside its `build.py` —
+  hold the closing shot, or add the beat the story-doctor named — and re-render. Never by freezing the
+  last frame, which reads as a bug.
+- **The default voice isn't available** (no macOS, no CapCut, the preflight fails, the project
+  saturates): fall back to a local engine and **say so in the concept's README**, with the reason. What
+  is not allowed is a silent swap.

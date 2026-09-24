@@ -66,45 +66,51 @@ If there is no Studio, say so in `warnings` and carry on with the proxy.
 Write `<working_folder>/catalog/catalog-<batch>.json` (one agent, one batch, one file), leave the tests in `<working_folder>/tests360/` and
 reply in 6-10 lines: what's on the sphere, which framings you're delivering and what couldn't be done.
 
+The shape is `${CLAUDE_PLUGIN_ROOT}/schemas/catalog-item.schema.json` — read it there, and **validate
+before you answer**: `uv run "${CLAUDE_PLUGIN_ROOT}/schemas/validate.py" <your file> --type catalog-item`.
+The block below is an illustration of a filled-in file, not a second copy of the contract: where the two
+disagree, the schema wins.
+
 ```json
 {
-  "file": "~/Movies/trip/VID_0141.insv",
-  "duration_s": 42.0,
-  "proxy": "tmp/VID_0141-proxy.mp4",
-  "gyro": true,
-  "map": [
-    {"window_s": [0.0, 6.5], "yaw": 180, "whats_there": "the person filming, a metre from the lens"},
-    {"window_s": [0.0, 12.0], "yaw": -14, "pitch": 0, "whats_there": "the subject of the scene, 4 m away"},
-    {"window_s": [0.0, 42.0], "yaw": 126, "whats_there": "river and bank, nobody in shot: the best b-roll"}
-  ],
-  "reframes": [
+  "batch": "c360-1",
+  "agent": "360-scout",
+  "items": [
     {
-      "id": "r-141-a",
+      "id": "d14-141a",
+      "path": "~/Movies/trip/VID_0141.insv",
+      "type": "video360",
       "start_s": 0.0,
-      "dur_s": 3.2,
-      "what_you_see": "push from the river to the subject",
-      "subject": false,
-      "keys": [
-        {"t": 0.0, "yaw": 296, "pitch": 12, "fov": 124},
-        {"t": 3.2, "yaw": 346, "pitch": -3, "fov": 70, "ease": "smooth"}
-      ],
-      "stab": "gyro",
-      "mode": "heading",
-      "level": "auto",
-      "test": "tests360/r-141-a.mp4",
-      "verified": true,
-      "quality": 8,
-      "suggested_use": "hook",
-      "warnings": ["from 6.6 s the subject turns away: don't extend this range"]
+      "end_s": 3.2,
+      "duration_s": 42.0,
+      "description": "push from the river to the subject; the move settles and the last second holds",
+      "quality": 4,
+      "hook": 5,
+      "subject_present": false,
+      "direction": {"yaw": 346, "pitch": -3, "fov": 70},
+      "sheet": "workspace/sheets/c360-1/ring-00.jpg#3",
+      "tags": ["water", "nature", "empty"],
+      "notes": "keys in workspace/material/360/d14-141a.keys.json (stab gyro, mode heading, level auto); test render tests360/d14-141a.mp4, watched. From 6.6 s the subject turns away: do not extend."
+    },
+    {
+      "id": "d14-141b",
+      "path": "~/Movies/trip/VID_0141.insv",
+      "type": "video360",
+      "start_s": 2.4,
+      "end_s": 6.5,
+      "use": false,
+      "reason": "at yaw 180 the person filming is a metre from the lens: the planet effect deforms the face"
     }
   ],
-  "dropped": [
-    {"window_s": [2.4, 6.5], "reason": "someone walks huge across the foreground"}
-  ],
-  "warnings": ["no Insta360 Studio: approximate stitching, the seam shows on nearby objects"]
+  "summary": "42 s sphere: the subject at yaw -14, the river with nobody in it at yaw 126, and the camera operator at 180.",
+  "struck_me": ["the river side is the best b-roll of the trip", "the stitch seam falls on the bank"],
+  "gaps": ["no Insta360 Studio: approximate stitching, the seam shows on nearby objects"]
 }
 ```
 
-Rules: ids `r-<clip>-<letter>`, key `t` values **relative to the start of the range**, angles in degrees
-without wrapping, `verified: true` only if you genuinely looked at the strip of the test render. A
-reframe with no rendered test doesn't get delivered.
+Rules: **one item per useful direction**, not one per clip — the same seconds give you the subject, the
+landscape and the horizon with nobody in it. Two items of the same clip closer than 90° in yaw read as
+the same shot repeated and the schema says so. Angles in degrees, without wrapping. The camera keys live
+in their own `<id>.keys.json` (times relative to the start of the range) and the item points at it from
+`notes`; the catalog never carries the keyframes. **A framing with no test render that you actually
+looked at does not get delivered** — say so in `notes`, with the path of the test.

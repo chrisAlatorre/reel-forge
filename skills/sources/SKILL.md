@@ -1,26 +1,36 @@
 ---
 name: sources
-description: Finds, inventories and validates the material (photos and videos) a reel will be made from. Reads the macOS Photos app read-only, plain folders on any system, and 360 camera material. Use it at the start of any reel-forge project, before researching trends or editing anything.
+description: Finds, inventories and validates the material (photos and videos) a reel will be made from, works out who is in it with or without Apple Photos, and keeps the user's learned preferences and published history. Reads the macOS Photos app read-only, plain folders on any system, and 360 camera material. Use it at the start of any reel-forge project, before researching trends or editing anything, and again whenever the user corrects something or says they published.
 ---
 
 # Material sources and metadata
 
-This skill answers three questions, in this order:
+This skill answers five questions, in this order:
 
 1. **What's there?** How many photos and videos, from which dates, from which places, with whom.
 2. **Is the metadata usable?** If the dates are broken, everything else (grouping into sessions,
    ordering the story, putting a place on screen) comes out wrong.
 3. **What has to be downloaded?** How big it is and what is cloud-only.
+4. **Who is in it?** Named people when the Photos app has them, and face grouping from the images
+   themselves when it doesn't ([`people.py`](#who-is-in-the-material-without-apple-photos)).
+5. **What do we already know about this user?** What they have corrected before and what they have
+   published ([`preferences.py`](#preferences-that-learn), [`history.py`](#what-got-published-and-how-it-did)).
 
-It never writes into the Photos library and never modifies original files.
+It never writes into the Photos library and never modifies original files. The only thing it writes
+outside the project is the user's own preferences and publishing history, in `~/.config/reel-forge/`.
 
 ## First thing
 
 ```bash
 S="$CLAUDE_PLUGIN_ROOT/skills/sources/scripts"
+uv run "$S/preferences.py"    brief                                        # what this user already told us
 uv run "$S/inventory.py"      --from 2026-08-01 --to 2026-08-20 --summary -o inventory.json
 uv run "$S/validate_dates.py" --from 2026-08-01 --to 2026-08-20 --plan corrections.json
 ```
+
+`preferences.py brief` goes first and costs nothing: it prints a handful of lines that belong in the
+prompt of every agent that decides anything. Skipping it is how a run repeats a mistake the user
+already corrected once.
 
 The first says what's there. The second produces the report the user has to confirm. **Don't move on
 to the rest of the pipeline until the dates are settled**: if a batch says 2014 and the trip was in
@@ -468,6 +478,259 @@ uv run python -c "import sources, json; print(json.dumps(sources.library_people(
 
 ---
 
+---
+
+## Who is in the material, without Apple Photos
+
+Apple Photos hands over `faces` and `people` for free, and `--person "Ana Reyes"` filters on them.
+Outside macOS that information does not exist, and inside macOS it is empty for anybody the user
+never named. [`people.py`](scripts/people.py) works it out from the images themselves, on any system.
+
+```bash
+uv run "$S/people.py" models --download                     # once: ~230 KB + ~39 MB of models
+uv run "$S/people.py" detect  inventory.json --out workspace/people/faces.json
+uv run "$S/people.py" cluster workspace/people/faces.json \
+    --out workspace/people/clusters.json --sheets workspace/people/sheets
+uv run "$S/people.py" match   workspace/people/faces.json \
+    --reference ~/Pictures/refs/1.jpg --reference ~/Pictures/refs/2.jpg \
+    --out workspace/people/subject.json
+uv run "$S/people.py" pick    workspace/people/subject.json --out chosen.txt
+```
+
+It takes the same input as `sheets.py` (an `inventory.py` JSON, a folder, or loose paths) and **the
+numbering matches `sheets.py contact` over the same list**, so "number 14" means one thing across
+both. If an item carries a Photos thumbnail, that is what gets read: nothing is downloaded.
+
+### The two questions, and which one to ask
+
+| The user's question | Command | What it needs |
+|---|---|---|
+| "How many different people are in this trip, and which one is me?" | `cluster` | nothing but the material |
+| "Which shots am *I* in?" | `match` | **2-3 reference photos of the subject** |
+
+**`match` is the accurate one, and it is the one to steer the user to**: ask them for two or three
+clear, front-lit photos where their face is large and unobstructed, preferably from different days.
+One reference works and the script says so, but the hit rate drops noticeably. `cluster` is for when
+there is nobody to ask: it groups the faces and produces one sheet of crops per group
+(`workspace/people/sheets/c-01.jpg`), and **the user says which group is the subject**. The biggest
+group is usually them and sometimes their partner; do not decide it on your own.
+
+`pick` turns either report into a one-line-per-item file. What it writes depends on where the
+material came from, because the two paths need different things: **Photos uuids** when the list came
+from the library, which is what `export.py --export --ids` consumes, and **file paths** when it came
+from a folder, because there the item ids are positions in a list and mean nothing on their own.
+`--write ids` / `--write paths` forces one, and forcing `ids` on folder material warns that
+`export.py` will find nothing.
+
+### Backends, in the order the script picks them
+
+| Backend | Detection | Embeddings (grouping) | Where it comes from |
+|---|---|---|---|
+| **YuNet + SFace** (default) | good, with the 5 landmarks | yes | ONNX from the OpenCV Zoo, downloaded once into `$REEL_FORGE_MODELS` |
+| MediaPipe | good | **no** | only if installed: `uv run --with mediapipe people.py detect …` |
+| Haar cascade | weak | **no** | always there, bundled with OpenCV |
+
+Without embeddings there is nothing to group or compare: `cluster` and `match` stop with the exact
+command to fix it. Measured on a 10-photo folder of ~960 px JPEGs: YuNet found 20 faces in all 10
+files, the Haar cascade found 13 in 9 of them. That gap is the whole reason the download exists.
+
+### Thresholds and speed
+
+- `--threshold` is cosine similarity between embeddings; the default **0.363** is SFace's own
+  recommendation for "same person". Raise it to 0.45 when the group is picking up a sibling; lower it
+  to ~0.30 when the subject wears sunglasses or a beard appears mid-trip, then check the sheet.
+- `--min-area` (default 0.15 % of the frame) drops the crowd in the background. Raise it to 1.0 when
+  everything on the street is being detected.
+- `match` also reports a **borderline** band just under the threshold. That band is where profile
+  shots, sunglasses and relatives live: show it to the user instead of guessing.
+- Grouping compares every pair. Measured: 1,500 faces group in ~2 s, 3,000 in ~17 s, and memory grows
+  with the square. `--max-faces` (default 1,500) stops it before it gets silly; narrow the list to a
+  day, a session or the favourites instead of raising it.
+
+### Honest limits of this path
+
+- It is **face** recognition, not person recognition: a shot from behind, a helmet, a full-face mask
+  or a face smaller than the threshold is simply not found. For a trip full of back-of-the-head and
+  drone shots, expect a low hit rate and say so.
+- Close relatives, and especially twins, land in one group at the default threshold.
+- Children change enough between trips that photos a year apart may not match.
+- Sunglasses, heavy backlight, motion blur and small faces all cost accuracy, in that order.
+- Nothing here is as good as what Apple Photos already computed. **On macOS with a library where the
+  user has named people, use the Photos path** (`--person`) and keep this one for folders, for other
+  systems, and for people the user never named.
+- Face embeddings are **biometric data**. They are written to the `--out` path inside `workspace/`,
+  never to `~/.config/reel-forge/`, and they never leave the machine. They are not copied into a
+  delivery, a README or a file name, and deleting the workspace deletes them.
+- The models are downloaded from the OpenCV Zoo on GitHub the first time. On a machine with no
+  network, download them elsewhere and point `$REEL_FORGE_YUNET` / `$REEL_FORGE_SFACE` at the files.
+
+---
+
+## Preferences that learn
+
+A user corrects the same thing twice and the second time is on us. Every correction goes into
+
+```
+~/.config/reel-forge/preferences.json          # $REEL_FORGE_CONFIG_DIR overrides the folder
+```
+
+through [`preferences.py`](scripts/preferences.py), and comes back into the next run through
+`preferences.py brief`.
+
+```bash
+uv run "$S/preferences.py" show                                     # everything stored
+uv run "$S/preferences.py" brief                                    # the block for an agent prompt
+uv run "$S/preferences.py" get presence
+uv run "$S/preferences.py" set presence low
+uv run "$S/preferences.py" set voice "<the voice they asked for>"   # the default when narrated
+uv run "$S/preferences.py" set length dynamic                       # the concept sets the length
+uv run "$S/preferences.py" add voices.rejected "over-bright newsreader"
+uv run "$S/preferences.py" add-rule "no arms-crossed poses" --kind avoid --topic pose
+uv run "$S/preferences.py" rm-rule r-003
+uv run "$S/preferences.py" path                                     # where the file is
+```
+
+### What it can hold
+
+| Key | Values | What it decides |
+|---|---|---|
+| `language` | BCP-47 (`es-MX`, `en-US`, `pt-BR`) | the language of the narration and the on-screen text |
+| `presence` | `none` `rare` `low` `medium` `high` | how much the subject appears. It is a dial, not a switch: `low` still lets a reel open on their face, it just stops every third shot being them |
+| `voice` | free text, the name the user calls it | **the default narration voice.** Anything else has to be justified in the variant's README |
+| `length` | `short` `medium` `long` `dynamic` | `dynamic` is the honest default: the concept decides how long the video runs, not a template |
+| `pace` | `slow` `medium` `fast` | how fast the cuts come |
+| `captions` | `on` `off` `sparse` | on-screen text |
+| `narration` | `on` `off` `sometimes` | whether there is a voice at all |
+| `voices.preferred` / `voices.rejected` | lists | voices that worked and voices that did not |
+| `formats.worked` / `formats.failed` | lists | filled by hand or by `history.py bias --apply` |
+| `music.preferred` / `music.rejected` | lists | sounds to reach for and sounds to stop using |
+| `rules` | `add-rule` / `rm-rule` | everything else, as one sentence an editor can apply to any photo |
+
+`voice` and `length` are the two `brief` prints as their own lines, because they are instructions
+rather than context: "use this voice unless the language rules it out" and "do not cut the story to
+fit a length".
+
+### When to write, exactly
+
+The moment the user corrects something — not at the end of the run, when it has been forgotten. Each
+of these is one command, run as soon as they say it:
+
+| What the user says | What to run |
+|---|---|
+| "I didn't like that shot", "not that pose again" | `add-rule "no arms-crossed poses" --kind avoid --topic pose` |
+| "I'm in too many of these" | `set presence low` |
+| "I barely want to appear" | `set presence rare` |
+| "that voice sounds robotic", "not that voice" | `add voices.rejected "<voice>"` |
+| "this voice, always" | `add voices.preferred "<voice>"` |
+| "keep it in Spanish" | `set language es-MX` |
+| "the photo dump worked, the talking head didn't" | `add formats.worked photo-dump` · `add formats.failed talking-head` |
+| "don't put text over my face" | `add-rule "no captions over the subject's face" --kind never --topic text` |
+| "stop using that sound" | `add music.rejected "<sound>"` |
+| "always this voice" (a specific one, by name) | `set voice "<voice>"` · `add voices.preferred "<voice>"` |
+| "it cuts off too soon", "it ends abruptly" | `add-rule "every video lands its ending: no cut on the last beat" --kind never --topic pace` |
+| "they're all too short", "some should be longer" | `set length dynamic` |
+| "don't show me in every shot" | `set presence low` · `add-rule "don't show the subject in every cut" --kind never --topic person` |
+| "only use shots I starred" | `add-rule "shots of the subject come from their favourites only" --kind always --topic person` |
+| "no work screens / receipts / screenshots" | `add-rule "no receipts, screenshots or work screens" --kind never --topic topic` |
+
+`--kind` is `avoid`, `never`, `prefer` or `always`; `never` and `always` are the hard ones, and
+`brief` prints them under "Never do this (the user said so)". If the same rule is added twice the
+script does not duplicate it — it counts the correction, which is the signal that it stopped being a
+hint. Say back in one line what was recorded, so the user can correct the correction.
+
+### The four moments the orchestrator writes here
+
+Everything above is the user speaking. The orchestrator writes on its own in exactly four places,
+and nowhere else — a preferences file that fills up with guesses is worse than an empty one,
+because every later run trusts it:
+
+| When | What it writes | Why then |
+|---|---|---|
+| **The first run**, after the user answers the language question | `set language <tag>` | it was asked once; asking again every run is the mistake this file exists to prevent |
+| **The first run**, after the user picks or confirms a narration voice | `set voice "<voice>"` | from then on it is the default and only a language mismatch overrides it |
+| **The moment a correction is spoken**, mid-run, not at the end | the matching row of the table above | at the end of the run it has already been forgotten, and half of it was said in passing |
+| **After `history.py bias --apply`**, once there are enough posts | `formats.worked` / `formats.failed` | those two come from numbers, not opinion, and `--apply` only copies the verdicts that are not built on a single post |
+
+Never write a preference from a single inference ("they picked variant B, so they like photo dumps"):
+that belongs in `history.py log`, where it is one data point among many, not in the profile that every
+future run reads as fact. And say back in one line what was recorded — a preference the user did not
+know was being stored is one they cannot correct.
+
+### What must never go in that file
+
+The script refuses it, with the reason: paths, file names (`IMG_4821.HEIC`), library UUIDs, email
+addresses, phone numbers, long card-like numbers and anything that smells of a credential. It stores
+**rules, not material**: "no shots of me holding documents", never a path to the photo. If a
+refusal fires, rephrase the rule so it applies to any photo rather than to one file.
+
+The file is written `0600` in a `0700` folder, atomically, and nothing in it is ever uploaded.
+
+---
+
+## What got published, and how it did
+
+The variant the user actually uploaded is a judgement they already made, and what the post did
+afterwards is the only feedback that is not an opinion. Both live in
+
+```
+~/.config/reel-forge/history.json              # $REEL_FORGE_CONFIG_DIR overrides the folder
+```
+
+through [`history.py`](scripts/history.py).
+
+```bash
+# the moment they say "I uploaded the second one"
+uv run "$S/history.py" log --project oaxaca --variant B --format photo-dump \
+    --platform tiktok --duration 24 --hook question --close payoff --voice warm-narrator \
+    --music "slow piano, trending" --narration --published 2026-09-21
+
+# days later, when they report numbers -- only what they say, nothing is scraped
+uv run "$S/history.py" result h-004 --views 12400 --saves 310 --likes 980 --comments 22 --days 7
+
+uv run "$S/history.py" show
+uv run "$S/history.py" bias --platform tiktok        # before proposing the next concepts
+uv run "$S/history.py" bias --apply                  # and write the solid verdicts into preferences
+```
+
+`--duration` and `--close` are the two fields worth insisting on. `--duration` is how the history
+learns how long *this* account's videos want to be, and `--close` is how it learns which endings
+land — `payoff`, `callback`, `reveal`, `punchline`, `open-loop`, or `abrupt` when it just stopped.
+Logging `abrupt` honestly is the point: it is the only way the report can later show that the posts
+that ended in mid-air did worse.
+
+### How it biases the next proposal
+
+`bias` turns the numbers into a weight per `format`, per **length band**, per `hook`, per `close`
+and per `voice`:
+
+- Rates, not totals: `saves ÷ views` compares across a 200-view post and a 90k one; raw views do not.
+  A save weighs about twice a view, and watch-through the same, because a save is somebody deciding
+  the video was worth keeping.
+- Each post is scored against the **median** post, so the account's own size cancels out.
+- A group's weight is the median of its posts' scores, **damped by how few there are**: one post moves
+  the weight about a third of the way, two or three about two thirds, four or more all the way.
+- The weight is clamped to **0.70 – 1.35**. It changes how often a format is proposed, never whether
+  it is allowed. A format the user loves does not get retired because one post landed at a bad hour.
+
+The length bands are `under 12s`, `12-20s`, `20-30s`, `30-45s`, `45-60s` and `over 60s`. The report
+also names the bands the account has **never posted in**, which is the one thing a weight table
+cannot say by itself: an empty band looks exactly like a bad one, and it is not. If every logged post
+is under 30 s, the history has no evidence at all that a 50 s cut would do worse — so a concept that
+needs 50 s gets to be 50 s, and the run finds out.
+
+Use it like this: run `bias` before writing concepts, propose more of what is above 1.05 and less of
+what is below 0.95, and **say why in one line** ("your last two photo dumps saved twice as well as the
+talking heads, so two of these three are photo dumps"). Never present a weight as a rule — posting
+time, the sound and plain luck move these numbers more than the edit does, and the report says so.
+
+Lengths, hooks and closes are **reported, never applied**: they steer one run's proposals and are
+recomputed from the numbers every time. Only formats cross into the profile, and only when the
+evidence is real. `--apply` copies those solid verdicts (weight ≥ 1.15 or ≤ 0.85, and never from a
+single post) into `preferences.json` as `formats.worked` / `formats.failed`, where they become part of
+what every run reads.
+
+---
+
 ## What to hand the user
 
 After running both tools, tell them in a few lines:
@@ -477,8 +740,13 @@ After running both tools, tell them in a few lines:
 3. **What they need to confirm**, with the date report as is.
 4. How many GB would have to be downloaded if everything were used, and that the normal path is to
    review with thumbnails and download only what gets chosen.
+5. Who is in it: the named people if Photos has them, or the groups from `people.py cluster` with
+   their sheets, asking which one is the subject.
 
 Don't start the trend research or the editing until they answer the date question.
+
+And at the other end of the run, when they have picked and posted one: `history.py log` it, and
+whatever they corrected along the way goes into `preferences.py` **while they are still saying it**.
 
 ## Honest limits
 
@@ -491,3 +759,11 @@ Don't start the trend research or the editing until they answer the date questio
 - **`--download-missing` needs network and patience**, and `--use-photokit` only works on macOS.
 - **Insta360 and Google Photos have no public way to bulk download.** There the user has to do their
   part.
+- **Face grouping is not as good as Apple Photos', and it is faces, not people**: a back, a helmet or
+  a tiny face is never found, close relatives can land in one group. The detail is in
+  [the people section](#who-is-in-the-material-without-apple-photos).
+- **Preferences and history are per user and per machine.** They live in `~/.config/reel-forge/`,
+  they are not synced anywhere, and a fresh machine starts knowing nothing. They are also only as
+  good as what got written into them during the runs.
+- **The published numbers are whatever the user reports.** Nothing is scraped from any platform, so
+  the history has the gaps the user leaves, and a handful of posts is not evidence.

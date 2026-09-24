@@ -1,18 +1,34 @@
 # The catalog
 
 It's the contract between the context agents and the builders. If every agent invents its own format,
-phase 7 collapses. Hand this whole file to every context agent.
+the build phase collapses.
+
+**The format is a schema, not a description:** `$CLAUDE_PLUGIN_ROOT/schemas/catalog-item.schema.json`.
+Hand that file to every context agent along with this one, and have it validate before answering:
+
+```bash
+uv run "$CLAUDE_PLUGIN_ROOT/schemas/validate.py" workspace/catalog/catalog-day-03.json --type catalog-item
+```
 
 Each agent writes **its own** `workspace/catalog/catalog-<batch>.json`. You merge them into
-`workspace/catalog/catalog.json` (concatenate `items`, check there are no duplicate `id`s).
+`workspace/catalog/catalog.json` — same shape, `batch: "merged"` — and validate the result.
 
-## Format
+## What an item is
+
+**One item is one moment, not one file.** A photo is an item. Each usable window of a video is its own
+item, with its own id, its own `start_s`/`end_s` and its own description. Each usable framing of a 360
+clip is its own item too, with its `direction`. A 40 s clip that yields three good windows is three
+items; the filler in between is another item with `use: false`.
+
+That is what lets a concept say "cut 4 is `d03-021a`" without anybody having to guess which second of
+which file that means.
 
 ```json
 {
   "batch": "day-03-city",
-  "agent": "context-3",
-  "reviewed": "2026-09-23",
+  "agent": "photo-curator",
+  "summary": "Market day: food stalls, one strong fire moment, one clean portrait.",
+  "struck_me": ["the wok flare-up", "the empty square at dawn", "the dog under the table"],
   "items": [
     {
       "id": "d03-014",
@@ -21,92 +37,78 @@ Each agent writes **its own** `workspace/catalog/catalog-<batch>.json`. You merg
       "date": "2026-08-04T17:22:10",
       "place": "central market",
       "favorite": true,
-      "subject": true,
-      "use": true,
-      "what_it_is": "Him facing camera eating at a stall, side afternoon light, smoke behind. Natural smile, eyes open.",
+      "subject_present": true,
+      "description": "Facing camera eating at a stall, side afternoon light, smoke behind. Natural smile, eyes open.",
       "quality": 4,
       "hook": 3,
       "sheet": "workspace/sheets/day-03/sheet-01.jpg#14",
-      "notes": "Burst of 5; this is the 3rd and the only one without a blink.",
-      "tags": ["food", "people", "street"]
+      "tags": ["food", "people", "market"],
+      "notes": "Burst of 5; this is the 3rd and the only one without a blink."
     },
     {
-      "id": "d03-021",
+      "id": "d03-021a",
       "path": "~/Pictures/trip/VID_0155.mp4",
       "type": "video",
-      "date": "2026-08-04T18:03:00",
-      "duration_s": 42.0,
-      "fps": 60,
-      "ranges": [
-        {
-          "start_s": 3.2, "end_s": 7.4, "use": true, "subject": false,
-          "what_it_is": "Shot of the wok, big flare-up at 5.1 s. Static camera.",
-          "quality": 5, "hook": 5,
-          "audio": "loud steady sizzling; works as diegetic sound",
-          "tags": ["food", "fire"]
-        },
-        {
-          "start_s": 0.0, "end_s": 3.2, "use": false,
-          "reason": "camera hunting for the framing, you can see the ground"
-        }
-      ]
+      "start_s": 3.2, "end_s": 7.4, "duration_s": 42.0, "fps": 60,
+      "subject_present": false,
+      "description": "The wok, big flare-up at 5.1 s. Static camera.",
+      "quality": 5, "hook": 5,
+      "audio": "loud steady sizzling; works as diegetic sound",
+      "sheet": "workspace/sheets/day-03/strip-155.jpg",
+      "tags": ["food", "motion"]
     },
     {
-      "id": "d03-030",
-      "path": "~/Pictures/trip/IMG_0170.png",
-      "type": "photo",
+      "id": "d03-021z",
+      "path": "~/Pictures/trip/VID_0155.mp4",
+      "type": "video",
+      "start_s": 0.0, "end_s": 3.2,
       "use": false,
-      "reason": "screenshot"
+      "reason": "camera hunting for the framing, you can see the ground"
     }
   ]
 }
 ```
 
-## Fields
+Field by field — names, types, what is required — in the schema. What the schema can't tell you:
 
-| Field | Required | What it is |
-|---|---|---|
-| `id` | yes | unique across the whole project. Batch prefix + number. |
-| `path` | yes | relative to `~` or to the project root. **Never an absolute path carrying a user name.** |
-| `type` | yes | `photo`, `video`, `video360`, `live` |
-| `date` | yes if it exists | ISO 8601 from the metadata, not from the filesystem |
-| `use` | yes | `false` + `reason` for everything dropped. Nothing gets deleted. |
-| `subject` | yes | `true` if the video's main person appears |
-| `favorite` | if the library provides it | starred as a favorite |
-| `what_it_is` | yes, if `use` | **what you saw**, in one or two sentences: what's there, what light, what expression, what moves |
-| `quality` | yes, if `use` | 1-5 technical: focus, exposure, framing, stability |
-| `hook` | yes, if `use` | 1-5 how much it stops the thumb. A 5 is a candidate for the first cut. |
-| `ranges` | on videos | list of windows; the whole file is **not** used |
-| `audio` | if applicable | what you hear in that range and whether it's usable |
-| `sheet` | yes, if `use` | which contact sheet it came from and with what number (that's how it gets audited) |
-| `tags` | yes, if `use` | the vocabulary below |
-
-`what_it_is` is written in English, like the rest of the catalog: it's a working contract, not copy.
-The on-screen text of the video follows the output language and lives in the concept, not here.
+- `description` is **what you saw**, in one or two sentences: what's there, what light, what expression,
+  what moves. "A temple" is useless; "gilded façade backlit, people seen from behind in the lower third"
+  is. Written in English, like the rest of the file: it's a working contract, not copy. The on-screen
+  text of the video follows the output language and lives in the concept, not here.
+- `hook` is a 5 only for something that genuinely stops you: a close animal, fire, a view opening up, a
+  face reacting. Most material is a 2 or a 3.
+- `sheet` is what makes the catalog auditable: which contact sheet or strip you read it off, with its
+  number. An agent that catalogs by file name is obvious precisely because it can't fill this in.
+- `audio` describes what you hear **in that window**, and whether it's usable.
+- `use: false` + `reason` for everything dropped. Nothing gets deleted, and nothing gets dropped
+  silently: the user may want the receipt back because the price is the joke of the video. There is no
+  separate list of drops — a dropped item is an item, in the same `items` array, so nobody has to merge
+  two lists to know what happened to a file.
 
 ## Tag vocabulary
 
-Use it verbatim; the builders filter on these words.
+The schema enforces it, because the builders filter on these exact words:
 
 `landscape` `city` `architecture` `interior` `food` `drink` `people` `friends` `animals` `water`
 `night` `sunset` `transport` `market` `nature` `detail` `motion` `empty` `sky`
 `crowd` `religious` `art` `sport` `weather`
 
-`empty` = nobody in frame. It's the most useful tag for meeting the subject quota: tag generously.
+`empty` = nobody in frame. It's the most useful tag for meeting a concept's subject quota
+(see `concepts.md`): tag generously.
 
 ## Rules for whoever writes the catalog
 
-- **Describe what you saw, not what you assume.** "A temple" is useless; "gilded façade backlit, people
-  seen from behind in the lower third" is.
-- A high `hook` only for something that genuinely stops you: a close animal, fire, a view opening up, a
-  face reacting. Most material is a 2 or a 3.
+- **Describe what you saw, not what you assume.** How you actually look at it — contact sheets, face
+  crops, frame strips — is in `selection.md`.
 - If you're unsure about a file, `use: false` with reason `"needs review"` and move on. Don't guess.
-- A video's ranges don't overlap and are ordered by `start_s`.
-- If a range is shorter than 0.8 s, it can't carry a caption or a stamp: it can't be read.
+- A video's windows don't overlap and are ordered by `start_s` (the validator checks both).
+- A window shorter than 0.8 s can't carry a caption or a stamp: it can't be read.
+- Two framings of the same 360 clip closer than 90° of yaw read as the same shot repeated.
 
 ## Rules for whoever reads the catalog
 
 - **You cannot step outside `start_s`/`end_s`.** If you need to, pull a strip of that zone, look at it,
-  and update the catalog with the new range. Never silently.
-- Don't use an `id` with `use: false` without saying so in your notes.
-- Two cuts with the same `id` in one video: only if they sit far apart in the edit and look different.
+  and update the catalog with the new window. Never silently: the build result has an `out_of_window`
+  field for exactly this.
+- Don't use an id with `use: false` without saying so in your notes.
+- The same id in two cuts of one video: only if they sit far apart in the edit and look different.

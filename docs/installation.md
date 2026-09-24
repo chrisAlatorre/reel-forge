@@ -51,7 +51,7 @@ Check that it installed:
 
 ```bash
 claude plugin list                  # reel-forge@reel-forge · enabled
-claude plugin details reel-forge    # 9 skills, 8 agents and the token cost
+claude plugin details reel-forge    # 9 skills, 9 agents and the token cost
 ```
 
 or, inside Claude Code, `/plugin`: `reel-forge` should show up installed and enabled, and `/reel` should

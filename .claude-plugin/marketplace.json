@@ -8,7 +8,7 @@
     {
       "name": "reel-forge",
       "source": "./",
-      "description": "Turns your photo and video library into vertical TikToks/Reels, with trend research, parallel curation and several variants per concept."
+      "description": "Turns your photo and video library into vertical TikToks/Reels, with trend research, parallel curation, a story arc and a duration decided per concept, and several variants of each one."
     }
   ]
 }

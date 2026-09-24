@@ -58,7 +58,8 @@ ffmpeg -i clip.mp4 -vf "fps=1,scale=216:384,tile=8x4" -frames:v 1 strip.jpg
 ## Catalog ranges, not files
 
 A 40 s video holds 3-6 good seconds. The catalog stores windows with `start_s` and `end_s` plus a
-description of what happens inside that exact window. Format in `catalog.md`.
+description of what happens inside that exact window: each window is its own catalog item, with its own
+id. Format in `catalog.md`, enforced by `schemas/catalog-item.schema.json`.
 
 **The window is binding.** Two builders took a clip outside its cataloged window (catalog said 0-4 s;
 one used 4.0-5.7, the other 7.2-8.4) and instead of the subject you got strangers' faces against the
@@ -69,7 +70,7 @@ How to split a clip into ranges:
 2. Mark the changes: change of framing, of subject, of light, the camera settling, the moment something
    happens.
 3. One range per thing that happens, with ~0.3 s of padding inside each end.
-4. Drop the filler (camera hunting, hands, ground, black screen) explicitly: catalog it as a range with
+4. Drop the filler (camera hunting, hands, ground, black screen) explicitly: catalog it as an item with
    `use: false` and a reason, so nobody rediscovers it.
 
 ## Default drops
@@ -89,13 +90,17 @@ In the catalog: `"use": false, "reason": "screenshot"`. Nothing gets deleted.
 
 ## Subject quota
 
-- Default: **the subject in half the cuts or fewer**. What worked in production was 14-35 %.
-- The rest: landscape, architecture, food, people (locals, friends, the group), animals and shots with
-  nobody in them.
+**The ceiling is not a fixed number: each concept declares its own** in `subject_quota`, and the
+reviewer checks the built variants against that one. The table of ceilings per concept kind is in
+`concepts.md`; here, what it means while you're choosing material:
+
+- Whatever the ceiling is, the rest of the cuts have to exist: landscape, architecture, food, people
+  (locals, friends, the group), animals and shots with nobody in them. Tag those `empty` generously —
+  that's the tag the builders filter on to fill the gap.
 - The subject with friends counts as the subject. Shots of other people only: yes, in moderation, and
   only if they add something (a scene, not a portrait of someone else).
-- **Count the cuts by hand at the end** and write the number in the README: "21 cuts, the subject in 3
-  (14 %)".
+- **Count the cuts by hand at the end**, put it in `cuts` / `cuts_with_subject` and in the README:
+  "21 cuts, the subject in 3 (14 %)".
 
 ## When the subject appears
 

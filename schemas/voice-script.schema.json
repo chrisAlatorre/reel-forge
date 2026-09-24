@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "reel-forge/voice-script.schema.json",
+  "title": "Voice script",
+  "description": "The narration of one variant: every line with the second it comes in on, how long it is expected to run, and whether the music ducks under it. It is written as voice-script.json next to the variant's MP4. This file is the contract; the plain-text voice-script.txt that ships to the user is generated FROM it, never the other way round.",
+  "$ref": "#/$defs/script",
+
+  "$defs": {
+    "script": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concept", "variant", "lang", "lines"],
+      "properties": {
+        "concept": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "variant": { "type": "string", "pattern": "^[A-H]$" },
+        "lang": {
+          "type": "string",
+          "pattern": "^[a-z]{2,3}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$",
+          "description": "BCP-47 tag of the run's output language. The lines are written in it AND the voice has to speak it: a script in one language read by a voice from another is the first thing anybody notices."
+        },
+        "video": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/Users/|/home/|/root/|[A-Za-z]:\\\\Users\\\\)",
+          "description": "The rendered MP4 these seconds refer to. The seconds come from that spec's grid, not from your ear."
+        },
+        "video_duration_s": { "type": "number", "minimum": 1, "description": "No line may start after this." },
+        "voice": { "type": "string", "description": "The voice that was used or is meant to be used. Synthetic and freely licensed; never a clone of a real person." },
+        "engine": { "type": "string", "enum": ["qwen", "voxcpm", "piper", "capcut", "none"], "description": "'none' means the variant ships without voice and this file is what lets the user add it." },
+
+        "duck_db": {
+          "type": "number",
+          "maximum": 0,
+          "default": -12,
+          "description": "How far the music and the clip audio drop while a line with duck=true is speaking. This is the field that stops anybody lowering a clip's audio by hand: the builder applies it at render time."
+        },
+        "duck_pad_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "default": 0.3,
+          "description": "Seconds of ramp before and after the line, so the duck does not click."
+        },
+
+        "lines": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/line" } },
+        "notes": { "type": "string", "description": "For whoever edits the file. Never synthesized." }
+      }
+    },
+
+    "line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "start_s"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 2,
+          "description": "Exactly as it will be heard, in the output language. No quotes, no stage directions, no character names. Short, 6 to 14 words. Numbers written as words: 'twenty minutes', not '20 min'. Pauses come from commas and periods, never from stretching the audio."
+        },
+        "start_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The second the speaking starts. Taken from the spec's grid (beats x 60/bpm, or dur), inside the segment the line refers to."
+        },
+        "duration_hint_s": {
+          "type": "number",
+          "minimum": 0.2,
+          "description": "How long you expect the line to run, so the next one can be placed before it is synthesized. Once the WAVs exist, check the real durations: t[i] + duration[i] < t[i+1], or two voices talk at once."
+        },
+        "duck": {
+          "type": "boolean",
+          "default": true,
+          "description": "Duck the music and the clip audio under this line by duck_db. false only when the line is meant to fight the sound on purpose."
+        },
+        "emphasis": {
+          "type": "string",
+          "enum": ["soft", "normal", "strong"],
+          "default": "normal",
+          "description": "Delivery of this line. 'strong' is for the hook and the payoff; using it on every line flattens all of them."
+        },
+        "wav": {
+          "type": "string",
+          "description": "The generated file for this line, l0.wav, l1.wav... in index order, alongside durations.json. That pair is the contract any voice source has to leave."
+        }
+      }
+    }
+  }
+}

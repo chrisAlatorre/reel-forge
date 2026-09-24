@@ -1,18 +1,24 @@
 ---
 name: video-engine
-description: reel-forge's render engine. Turns a JSON spec into a vertical 9:16 video (1080x1920) ready for TikTok, Reels or Shorts, with photos, clips, 360 reframes and animated maps; text with a safe area, colour looks, film grain and audio mixing. Use it whenever a plugin video has to be rendered, adjusted or debugged.
+description: reel-forge's render engine. Turns a JSON spec into a finished video in the destination's aspect ratio (9:16, 4:5, 1:1 or 16:9), with photos, clips, 360 reframes and animated maps; text with a safe area, colour looks, film grain, an audio mix that ducks itself under the narration, subtitles taken word by word from the voice or from the clips' own audio, and a verification pass no delivery skips (text in sync, and an ending that lands instead of cutting off). Use it whenever a plugin video has to be rendered, adjusted, verified or debugged.
 ---
 
-# Video engine (JSON spec → 9:16)
+# Video engine (JSON spec → MP4)
 
-Everything runs locally. The input is a JSON file; the output, a 1080x1920 MP4. The engine builds each
-frame in numpy and encodes it with ffmpeg: it depends on no editor and no service.
+Everything runs locally. The input is a JSON file; the output, an MP4 in the format the spec asks for
+(9:16 by default). The engine builds each frame in numpy and encodes it with ffmpeg: it depends on no
+editor and no service.
 
 ```bash
 R=${CLAUDE_PLUGIN_ROOT}/skills/video-engine/scripts/render.py
 uv run "$R" my-spec.json
 uv run "$R" my-spec.json --out ~/Videos/another-path.mp4
+uv run "$R" my-spec.json --format 1x1              # the same spec, another destination
 ```
+
+**Nothing gets delivered without `verify.py` passing** (last section). It is one command and it catches
+the failures that have actually shipped: a video with no audio, a narration buried under the clip's own
+sound, subtitles half a second off the voice, a video that stops mid-idea, and a file too heavy to send.
 
 There is a commented example spec, with every segment type and every text style, in the plugin's
 **`examples/spec-example.json`**. It is valid JSON: the engine ignores keys starting with an underscore,
@@ -26,6 +32,8 @@ Files:
 | `scripts/effects.py` | Person segmentation, text behind the subject, character intro, route map. |
 | `scripts/config.py` | Canvas, safe area and paths configurable through environment variables. |
 | `scripts/resources.py` | Downloads the fonts, the base map and the segmentation model. |
+| `scripts/transcribe.py` | Subtitle candidates from a clip's audio, and word-by-word alignment of a narration. |
+| `scripts/verify.py` | The delivery gate: audio, length, holes, peak, audible voice, text in sync, ending, weight. |
 
 ## Requirements
 
@@ -89,6 +97,7 @@ A relative `"out"` (`"trip/day-one-A.mp4"`) hangs off `REEL_FORGE_OUTPUT`; an ab
 ```jsonc
 {
   "out": "project/video.mp4",   // relative to REEL_FORGE_OUTPUT, or absolute / with ~ / with $VAR
+  "format": "9x16",              // "9x16" (default) | "4x5" | "1x1" | "16x9"
   "fps": 30,                     // default 30
   "crf": 22,                     // x264 quality: 22 ≈ 6 Mbps. Default 22
   "look": "film",                // "film" | "teal" | "clean"
@@ -97,16 +106,25 @@ A relative `"out"` (`"trip/day-one-A.mp4"`) hangs off `REEL_FORGE_OUTPUT`; an ab
   "audio_fade_out": 1.2,         // audio tail; 0 on videos meant to loop
   "bpm": 123.0,                  // if any segment uses "beats"
   "beat0": 0.0,                  // the second the first beat lands on
+  "duck": true,                  // everything drops under the narration. Default true
 
   "segments": [ /* see below */ ],
   "captions": [ /* see below */ ],
+  "sync": { /* subtitles taken from the narration, word by word */ },
   "audio": [ /* tracks that DO go in the clean version */ ],
   "preview_audio": { /* copyrighted song, review only */ }
 }
 ```
 
-The engine writes **two files** when there is `preview_audio`: `video.mp4` (clean, the one you upload)
-and `video-preview.mp4` (with the song, for review only).
+The engine writes **three files**: `video.mp4` (clean, the one you upload), `video.timeline.json`
+(what it burned in and where every cut fell — `verify.py` reads it) and, when there is
+`preview_audio`, `video-preview.mp4` (with the song, for review only).
+
+**The length is the spec's, not the engine's.** There is no minimum and no maximum: the engine
+renders 9 seconds or 70 the same way. What the length has to answer to is the idea — a concept that
+needs a setup, a turn and a landing does not fit in 15 s, and one that is a single joke dies if you
+stretch it to 45. The engine only enforces the consequence: `verify.py` warns when a video **stops**
+instead of ending (last shot under 0.6 s, no fade, nothing closing it).
 
 ### Segments
 
@@ -150,6 +168,8 @@ Every segment contributes **image only**. Its duration is declared with `dur` (s
 | `flash` | false | A 3-frame white flash on entry. Only on the drop, once per video. |
 | `behind` | — | Giant text **behind the subject** (see below). |
 | `cutout` | — | Character intro with a cutout (see below). |
+| `subs` | — | Subtitles of **this clip's own audio** (see "Text that stays in sync"). |
+| `says` | — | What the narration names while this shot is on screen; `verify.py` checks it. |
 
 **`behind` — text behind the subject**
 
@@ -184,9 +204,16 @@ black rectangles appear in the video, that's a NaN in the mask.
 {"t0": 0.0, "t1": 2.4, "text": "things nobody\ntells you about this",
  "style": "clean", "pos": "low", "size": 58, "color": [255, 212, 0],
  "pop": true, "words": false, "dx": 0, "dy": -128}
+
+{"seg": 3, "text": "this one lives and dies with shot 3"}
+{"seg": [3, 5], "text": "from the entry of 3 to the end of 5", "lead": 0.15, "tail": 0.3}
 ```
 
 - `t0` / `t1` are **global** video time, not segment time.
+- `seg` replaces them and ties the caption **to the cut**: the engine reads the window off the same
+  grid the segments are built from, so changing a duration moves the text with it. `lead` delays the
+  entry after the cut and `tail` holds it past the exit (default 0: the text dies with its shot).
+  A negative index counts from the end, so `"seg": -1` is the closing shot.
 - `words: true` splits the text into groups of up to 3 words with time proportional to the letters: the
   karaoke subtitle used over narration.
 - `pop` (default `true`): enters with a 0.12 s micro-bounce.
@@ -233,6 +260,87 @@ safe area: centring on the safe area (60 left against 180 right) leaves everythi
 left. The usable wrapping width is **780 px**: at `size` 56-58 about 22 characters fit per line; at
 62-72, fewer.
 
+### The other three formats
+
+`"format"` in the spec (or `--format`, which overrides it) switches the canvas, the safe area and the
+text scale. **Every `size` in a spec is written in the 9x16 reference** and the engine rescales it: a
+64 px caption that reads well on a phone held vertically is tiny across a 16:9 frame.
+
+| `format` | Canvas | Safe area (top/bottom/left/right) | Text | Where it goes |
+|---|---|---|---|---|
+| `9x16` | 1080x1920 | 150 / 480 / 60 / 180 | ×1.00 | TikTok, Reels, Shorts |
+| `4x5` | 1080x1350 | 70 / 140 / 60 / 60 | ×0.92 | Instagram feed (the tallest it doesn't crop) |
+| `1x1` | 1080x1080 | 60 / 110 / 60 / 60 | ×0.88 | Square feeds, LinkedIn, carousels |
+| `16x9` | 1920x1080 | 80 / 130 / 100 / 100 | ×0.62 | YouTube, a site, a TV |
+
+Aliases work too (`9:16`, `vertical`, `square`, `landscape`…), and `$REEL_FORGE_FORMAT` changes the
+default for specs that declare none. The same spec renders in all four, but **`focus` does not travel**:
+a framing chosen for 9:16 crops the sides in 16:9 and cuts the subject in half. Re-render, look at the
+frame strip of each format, and fix the `focus` of the segments that need it.
+
+---
+
+## Text that stays in sync
+
+**No text on screen is timed by hand.** Every piece of text is anchored to something that cannot
+drift: the voice that says it, the audio of the clip it belongs to, or the cut it lives in. Typed
+seconds survive exactly one change of duration; after that the video looks dubbed, and a frame strip
+never shows it, because every frame on its own looks right.
+
+| There is… | The text comes from | In the spec |
+|---|---|---|
+| a narration | the generated voice, word by word | `"sync": {...}` at the top level |
+| a clip whose own audio is heard | that clip's transcript | `"subs"` in the segment |
+| neither | the cut | `"seg"` in the caption |
+
+### From the narration (`sync`)
+
+```bash
+# 1. the voices skill generates the narration: voice/l0.wav, l1.wav… + durations.json
+# 2. the engine reads it back and gives every word the second it is really pronounced on
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/video-engine/scripts/transcribe.py" \
+    --align common/voice/ --script common/voice-script.json        # → voice/alignment.json
+```
+
+```jsonc
+"sync": {"from": "common/voice/alignment.json", "style": "clean", "pos": "low", "size": 52}
+```
+
+The engine burns in the subtitles in groups of up to three words, each one starting when the voice
+starts that word. **The written text always wins**: the model only contributes times, so a voice that
+swallows a syllable does not get to rewrite the caption. `shift` moves the whole thing if you want the
+text a touch ahead of the voice — and `verify.py` will say so, because it compares against where the
+voice actually is.
+
+Regenerate the alignment whenever the narration is regenerated: another take, another rhythm, and a
+stale `alignment.json` is subtitles from the previous version.
+
+### From the clip's own audio (`subs`)
+
+```jsonc
+{"src": "clip.mov", "dur": 4.0, "start": 12.0, "subs": true}
+{"src": "clip.mov", "dur": 4.0, "subs": {"from": "transcripts/clip.json", "pos": "low", "size": 52}}
+{"src": "clip.mov", "dur": 4.0, "subs": [{"t0": 0.2, "t1": 1.6, "text": "written by hand"}]}
+```
+
+`transcribe.py CLIP.mov` writes the candidates next to the clip; the spec decides which ones get burned
+in. Times in a transcript are the **source clip's**, so the engine maps them with the segment's `start`
+and `speed` and drops whatever falls outside the cut. Subtitle it only if that audio **is heard in the
+final mix** and adds something: over music, TTS or a viral audio the original voice is not audible, and
+a subtitle for something nobody hears reads as a mistake.
+
+### What the voice names has to be on screen (`says`)
+
+```jsonc
+{"src": "cathedral.jpg", "dur": 2.4, "says": "the cathedral"}
+{"src": "market.mov", "dur": 3.0, "says": ["the market", "six in the morning"]}
+```
+
+A promise the spec makes and `verify.py` collects: it looks the phrase up in the narration's word times
+and fails if it is said while another shot is on screen (0.25 s of tolerance). The classic version of
+this failure is the voice saying "and then we got to the beach" over the shot of the hotel room,
+because a clip was reordered and nobody re-read the script.
+
 ---
 
 ## Colour looks and grain
@@ -273,6 +381,28 @@ comes from the spec's `audio` tracks.
 | `gain` | Linear multiplier (`1.0` = as is). |
 | `dur` | Trims the track to N seconds, with a 0.3 s fade in and a 0.5 s fade out. |
 | `offset` | The second the source is taken from. |
+
+### Ducking under the narration (automatic)
+
+While a voice track is speaking, **everything else drops on its own**: ambience, the clip's diegetic
+sound, the music bed. It is the engine's job and not each spec's, because a narration mixed at the
+same level as the clip is simply not understood — and that already shipped.
+
+```jsonc
+"duck": true                                   // the default
+"duck": {"db": -12, "ramp_s": 0.25, "lead_s": 0.15, "tail_s": 0.35}
+"duck": false                                  // flat sum: only if there is a reason
+```
+
+- **What counts as a voice**: `"role": "voice"` in the track, or a path the voice contract writes
+  (`voice/l0.wav`, `l1.wav`…, or a name carrying "voice", "narration", "voz", "tts"). `"role": "sfx"`
+  and anything under `sfx/` never ducks: a whoosh lasts 200 ms and ducking it kills it.
+- **A single track can opt out** (`"duck": false`) or ask for its own depth (`"duck": -6`).
+- Two lines closer together than the two ramps duck **once**, or the bed pumps between sentences.
+- The engine needs the voice's length: with `dur` in the track it uses that, otherwise it measures the
+  file. If it cannot, it says so and that line ducks nothing — check the render's output.
+- The render prints the windows it ducked, and `verify.py --script` measures the voice band inside each
+  line to confirm it really is over the background.
 
 **How it's mixed, and why in two steps.** First every track is mixed into a WAV
 (`amix normalize=0` → `apad whole_dur` → `atrim` to the exact length) and then that WAV gets attached to
@@ -346,7 +476,39 @@ Maps are always rendered with the `clean` look and no grain, even if the video u
 
 ## Verify before delivering
 
-No render gets delivered without being looked at. Commands that catch almost everything:
+```bash
+V=${CLAUDE_PLUGIN_ROOT}/skills/video-engine/scripts/verify.py
+uv run "$V" video.mp4
+uv run "$V" video.mp4 --script voice-script.json      # + "is the voice audible? is the text in sync?"
+uv run "$V" video.mp4 --spec spec.json --json report.json
+```
+
+It prints one JSON with `pass` / `warn` / `fail` / `skip` per criterion and **exits 1 if anything
+failed**, so a build script stops on it. A `warn` never stops anything: it is something to look at.
+
+| Check | It fails (or warns) when |
+|---|---|
+| `audio_track` | there is no audio stream, or there is more than one |
+| `duration` | the audio does not last as long as the picture, or neither matches the spec |
+| `black_frames` | a black stretch outside the final fade |
+| `silence` | an audio hole longer than 0.6 s outside the tail |
+| `peak` | the true peak goes above -0.5 dBTP |
+| `voice_audible` | a narrated stretch does not rise over the background (needs `--script`) |
+| `text_sync` | burned-in text drifts more than **0.25 s** from the voice saying it |
+| `voice_image` | the voice names a segment's `says` while another shot is on screen |
+| `text_cut` | *warns*: text with no audio behind it holds past its shot |
+| `ending` | *warns*: it stops instead of ending — last shot under 0.6 s, no fade, nothing closing it |
+| `preview_size` / `file_size` | the review copy or the delivery weighs too much |
+
+The text and ending checks read `video.timeline.json`, which the render leaves next to the MP4: the
+real windows of everything that got burned in, the cuts, and the narration's word times. With an older
+render, `--spec` reconstructs part of it (it cannot see what `sync`, `subs` or `words` expanded into)
+and with neither, the ending is judged from the picture's own scene cuts.
+
+Two of these exist because of failures that shipped and that **no frame strip shows**: subtitles half a
+second off the voice, and a video that ends mid-idea on a dry cut.
+
+### And still, look at it
 
 ```bash
 # frame strip: always the first thing
@@ -411,6 +573,17 @@ screen are true, and long captions don't drop orphan words.
 16. **Patching by hand what the engine gets wrong.** If a step fixes something (normalizing the preview,
     overlaying CJK subtitles), it goes inside the script that renders, not in the README: on the next
     rebuild the mistake comes back silently.
+17. **Typing the subtitles' seconds.** They match on the first render and drift on the next change of
+    duration. Over a narration they come from `sync`, over a clip from `subs`, and with no audio at all
+    from `seg`. `verify.py` fails at 0.25 s of drift.
+18. **Ending on the last frame of the last cut.** A 0.4 s closing shot with no fade does not read as an
+    ending, it reads as a file that got truncated — which is exactly the complaint these videos got.
+    The landing shot wants **0.8-1.5 s**, something that closes the idea on screen or in the voice, and
+    a `fade_out` of 0.3-0.5 (0 only on a video built to loop, where the seam IS the ending).
+19. **Stretching a video to hit a duration.** Repeated shots and a held final frame are more obvious
+    than a short video. The length comes out of the idea; if the idea is 12 s, the video is 12 s.
+20. **An `alignment.json` from the previous take.** Regenerating the narration and re-rendering without
+    re-aligning gives subtitles timed to a voice that no longer exists. Align again, always.
 
 ## Known limits
 

@@ -9,9 +9,9 @@
 #   "telemetry-parser",     # only for 360 segments (`r360`)
 # ]
 # ///
-"""Video engine: builds a vertical 9:16 (1080x1920) video from a JSON spec.
+"""Video engine: builds a video from a JSON spec, in the format the destination asks for.
 
-    uv run scripts/render.py SPEC.json [--out path/output.mp4]
+    uv run scripts/render.py SPEC.json [--out path/output.mp4] [--format 9x16|4x5|1x1|16x9]
 
 Every frame is assembled in numpy and encoded with ffmpeg (`ffmpeg` and `ffprobe` have to be on
 the PATH). The full spec format is in SKILL.md.
@@ -19,21 +19,26 @@ the PATH). The full spec format is in SKILL.md.
 Spec summary:
 {
   "out": "project/video.mp4",           # relative to $REEL_FORGE_OUTPUT, or an absolute path
+  "format": "9x16",                     # 9x16 (default) | 4x5 | 1x1 | 16x9
   "fps": 30, "crf": 22,
   "look": "film" | "teal" | "clean", "grain": 0.008,
   "fade_out": 0.4, "audio_fade_out": 1.2,
   "bpm": 123.0, "beat0": 0.0,
   "segments": [
     {"src": "photo.jpg", "beats": 2, "focus": [0.5, 0.4], "kb": 0.06, "punch": 0.10},
-    {"src": "clip.mov", "dur": 2.4, "start": 3.0, "speed": 0.5, "flash": true}
+    {"src": "clip.mov", "dur": 2.4, "start": 3.0, "speed": 0.5, "flash": true, "subs": true}
   ],
-  "captions": [{"t0": 0.0, "t1": 2.0, "text": "...", "style": "clean", "pos": "low"}],
-  "audio": [{"src": "voice.wav", "at": 1.2, "gain": 1.0}],
+  "captions": [{"t0": 0.0, "t1": 2.0, "text": "...", "style": "clean", "pos": "low"},
+               {"seg": 3, "text": "..."}],          # tied to the cut instead of to a second
+  "sync": {"from": "voice/alignment.json"},          # subtitles taken from the voice, word by word
+  "audio": [{"src": "voice/l0.wav", "at": 1.2, "gain": 1.0}],
+  "duck": true,                                      # everything drops under the narration
   "preview_audio": {"src": "song.m4a", "offset": 0, "gain": 1.0}
 }
 
-The engine produces `video.mp4` (clean, without copyrighted music) and, if there is
-`preview_audio`, also `video-preview.mp4` for review only.
+The engine produces `video.mp4` (clean, without copyrighted music), `video.timeline.json` (what it
+burned in and where every cut fell, which `verify.py` reads) and, if there is `preview_audio`, also
+`video-preview.mp4` for review only.
 
 Caption text is written in the run's output language; the engine translates nothing.
 """
@@ -41,6 +46,7 @@ import argparse
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -70,6 +76,15 @@ except ImportError:
     pass
 
 W, H, MARGIN, SAFE = config.W, config.H, config.MARGIN, config.SAFE
+
+
+def set_format(name):
+    """Switches the canvas (9x16 | 4x5 | 1x1 | 16x9) and re-reads it here and in effects."""
+    global W, H, SAFE
+    fmt = config.set_format(name)
+    W, H, SAFE = config.W, config.H, config.SAFE
+    effects.refresh()
+    return fmt
 
 
 # ------------------------------------------------------------ material
@@ -241,11 +256,13 @@ def _wrap(draw, text, f, width):
 
 
 def render_text(text, style="clean", size=None, color=None):
-    size = size or DEFAULT_SIZE[style]
+    # Sizes in a spec are always written in the 9x16 reference (1080x1920); each format rescales
+    # them, because a 64 px caption that reads fine on a phone held vertically is tiny on 16x9.
+    size = max(16, int(round((size or DEFAULT_SIZE[style]) * config.TEXT_SCALE)))
     if style == "pin":
         return _render_pin(text, size)
     f = font(style, size, text)
-    width = W - 2 * 150  # symmetric margin: centred text never invades the button column
+    width = config.TEXT_WIDTH  # symmetric margin: centred text never invades the button column
     tmp = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
     txt = _wrap(tmp, text, f, width)
     spacing = int(size * 0.18)
@@ -317,11 +334,20 @@ def _render_pin(text, size):
 
 
 def prepare_captions(caps):
-    """Expands the captions into already rasterized pieces with their time window."""
+    """Expands the captions into already rasterized pieces with their time window.
+
+    Each piece keeps its text and, when it came from the narration, the second the voice actually
+    says it (`audio_t0`): the timeline the render writes next to the MP4 carries both, and that is
+    what `verify.py` compares to find text drifting away from the voice.
+    """
     pieces = []
     for c in caps:
         style, pos = c.get("style", "clean"), c.get("pos", "low")
-        common = {"pos": pos, "dx": c.get("dx", 0), "dy": c.get("dy", 0)}
+        common = {"pos": pos, "dx": c.get("dx", 0), "dy": c.get("dy", 0),
+                  "source": c.get("source", "spec")}
+        for k in ("audio_t0", "audio_t1", "line"):
+            if c.get(k) is not None:
+                common[k] = c[k]
         if c.get("words"):
             # Word-by-word subtitle in groups of up to 3, timed proportionally to the letters
             groups, g = [], []
@@ -334,14 +360,21 @@ def prepare_captions(caps):
                 groups.append(" ".join(g))
             total = sum(len(x) + 2 for x in groups)
             t = c["t0"]
-            for x in groups:
+            for k, x in enumerate(groups):
                 d = (c["t1"] - c["t0"]) * (len(x) + 2) / total
-                pieces.append({"t0": t, "t1": t + d, "pop": True,
-                               "img": render_text(x, style, c.get("size"), c.get("color")), **common})
+                # Only the first group starts where the voice does; the rest are shared out by
+                # letters, which is an estimate and must not claim to be anchored to the audio.
+                piece = {**common, "t0": t, "t1": t + d, "pop": True, "text": x,
+                         "img": render_text(x, style, c.get("size"), c.get("color"))}
+                if k:
+                    piece.pop("audio_t0", None)
+                    piece.pop("audio_t1", None)
+                pieces.append(piece)
                 t += d
         else:
-            pieces.append({"t0": c["t0"], "t1": c["t1"], "pop": c.get("pop", True),
-                           "img": render_text(c["text"], style, c.get("size"), c.get("color")), **common})
+            pieces.append({**common, "t0": c["t0"], "t1": c["t1"], "pop": c.get("pop", True),
+                           "text": c["text"],
+                           "img": render_text(c["text"], style, c.get("size"), c.get("color"))})
     return pieces
 
 
@@ -377,6 +410,290 @@ def paste_text(frame, piece, t):
     a = sub[..., 3:4] * global_alpha
     zone = frame[y0:y1, x0:x1].astype(np.float32)
     frame[y0:y1, x0:x1] = (zone * (1 - a) + sub[..., :3] * 255 * a).astype(np.uint8)
+
+
+
+# ------------------------------------------------------------ subtitles of the clip's own audio
+
+def _scaled(px):
+    """A pixel size written in the 9x16 reference, in the current format."""
+    return max(8, int(round(px * config.TEXT_SCALE)))
+
+
+def _read_transcript(path):
+    """A transcript from `transcribe.py`: [{t0, t1, text}] in the SOURCE clip's time."""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    raw = data.get("segments", data) if isinstance(data, dict) else data
+    out = []
+    for e in raw:
+        t0 = float(e.get("t0", e.get("start", 0)))
+        t1 = float(e.get("t1", e.get("end", t0)))
+        text = (e.get("text") or "").strip()
+        if text and t1 > t0:
+            out.append({"t0": t0, "t1": t1, "text": text})
+    return out
+
+
+def segment_subtitles(s, g0, g1):
+    """Captions for what is HEARD in this segment, only if the segment asks for them (`subs`).
+
+    The engine never subtitles on its own: `transcribe.py` proposes candidates and the spec decides,
+    segment by segment, which ones get burned in. Accepted forms:
+
+        "subs": true                                   # the sidecar <clip>.transcript.json
+        "subs": "transcripts/clip.json"                # a transcript, in the clip's own time
+        "subs": {"from": "...", "style": "clean", "pos": "low", "size": 52, "shift": 0.0}
+        "subs": [{"t0": 0.2, "t1": 1.6, "text": "..."}]  # by hand, relative to the SEGMENT
+
+    A transcript carries the clip's time, so the engine maps it with the segment's `start` and
+    `speed`; anything falling outside the segment is dropped, not squeezed in.
+    """
+    cfg = s.get("subs")
+    if not cfg:
+        return []
+    if cfg is True:
+        cfg = {}
+    elif isinstance(cfg, str):
+        cfg = {"from": cfg}
+    elif isinstance(cfg, list):
+        cfg = {"lines": cfg}
+    else:
+        cfg = {k: v for k, v in cfg.items() if not k.startswith("_")}
+
+    lines = cfg.get("lines")
+    if lines is None:
+        src = config.path(s["src"]) if s.get("src") else None
+        where = cfg.get("from") or (str(src) + ".transcript.json" if src else None)
+        if not where:
+            raise SystemExit("A segment asks for `subs` but carries neither `from` nor `src`.")
+        where = config.path(where)
+        if not where.exists():
+            raise SystemExit(f"`subs` needs the transcript {where}.\nGenerate it with:  "
+                             f"uv run \"{Path(__file__).resolve().parent / 'transcribe.py'}\" \"{src}\"")
+        start, speed = float(s.get("start", 0)), float(s.get("speed", 1) or 1)
+        lines = [{"t0": (e["t0"] - start) / speed, "t1": (e["t1"] - start) / speed, "text": e["text"]}
+                 for e in _read_transcript(where)]
+
+    shift = float(cfg.get("shift", 0.0))
+    min_dur = float(cfg.get("min_dur", 0.7))
+    out = []
+    for e in lines:
+        t0 = max(g0, g0 + float(e["t0"]) + shift)
+        t1 = min(g1, g0 + float(e["t1"]) + shift)
+        if t1 - t0 < 0.2:          # a fragment that barely touches this cut: it cannot be read
+            continue
+        t1 = min(g1, max(t1, t0 + min_dur))
+        cap = {"t0": t0, "t1": t1, "text": e["text"], "style": cfg.get("style", "clean"),
+               "pos": cfg.get("pos", "low"), "size": cfg.get("size", 52), "source": "clip"}
+        for k in ("color", "words", "pop", "dx", "dy"):
+            if k in cfg:
+                cap[k] = cfg[k]
+        out.append(cap)
+    return out
+
+
+# ------------------------------------------------------------ text tied to the cut, and to the voice
+
+def anchor_captions(caps, starts, cuts):
+    """Resolves the captions that declare `seg` instead of hand-written seconds.
+
+    With no narration underneath, a caption belongs to a shot, not to a number somebody typed:
+
+        {"seg": 3, "text": "…"}                  # it lives and dies with segment 3
+        {"seg": [3, 5], "text": "…"}             # from the entry of 3 to the end of 5
+        {"seg": 3, "lead": 0.15, "tail": 0.3}    # comes in a touch after the cut, holds past it
+
+    Retyping the seconds every time a duration changes is how text ends up drifting away from the
+    picture; `seg` cannot drift, because it is read off the same grid the cuts are.
+    """
+    out = []
+    for c in caps:
+        c = {k: v for k, v in c.items() if not k.startswith("_")}
+        seg = c.pop("seg", None)
+        lead, tail = float(c.pop("lead", 0.0)), float(c.pop("tail", 0.0))
+        if seg is not None:
+            idx = [seg, seg] if isinstance(seg, int) else [seg[0], seg[-1]]
+            n = len(starts)
+            for i in idx:
+                if not isinstance(i, int) or not -n <= i < n:
+                    raise SystemExit(f"A caption points at `seg` {seg}, and the spec has {n} segments.")
+            c["t0"] = starts[idx[0]] + lead
+            c["t1"] = cuts[idx[1]] + tail
+            # Anchored to the grid: it cannot drift, and spanning several shots is what it was
+            # asked to do, so the verifier does not read it as text outliving its cut.
+            c["source"] = "cut"
+        elif "t0" not in c or "t1" not in c:
+            raise SystemExit(f"A caption carries neither `t0`/`t1` nor `seg`: {c.get('text', '')[:40]}")
+        if c["t1"] <= c["t0"]:
+            raise SystemExit(f"A caption ends before it starts ({c['t0']} → {c['t1']}): "
+                             f"{c.get('text', '')[:40]}")
+        out.append(c)
+    return out
+
+
+def says_of(segment):
+    """A segment's `says`: what the narration names while THIS shot is on screen.
+
+        {"src": "cathedral.jpg", "dur": 2.4, "says": "la catedral"}
+        {"src": "market.mov", "dur": 3.0, "says": ["el mercado", "seis de la mañana"]}
+
+    It is a promise the spec makes and `verify.py` collects: if the voice says "the cathedral"
+    while a beach is on screen, nobody watching believes the video. The engine only records it;
+    checking it needs the narration's word times, which is why it travels in the timeline.
+    """
+    says = segment["says"]
+    says = [says] if isinstance(says, str) else list(says)
+    out = [str(x).strip() for x in says if str(x).strip()]
+    if not out:
+        raise SystemExit("A segment carries an empty `says`: name what the voice says there, or drop it.")
+    return out
+
+
+def sync_captions(cfg, total):
+    """Subtitles taken from the narration already generated, word by word.
+
+        "sync": {"from": "common/voice/alignment.json", "style": "clean", "pos": "low", "size": 52}
+        "sync": "common/voice/alignment.json"
+
+    The file comes out of `transcribe.py --align`, which reads the WAVs the voices skill wrote and
+    gives every word the second it is really pronounced on. Subtitles estimated by hand drift from
+    the voice by half a second and the drift is invisible in a frame strip, which is why this path
+    exists and why `verify.py` refuses more than 0.25 s of it.
+    """
+    if not cfg:
+        return [], []
+    if isinstance(cfg, str):
+        cfg = {"from": cfg}
+    cfg = {k: v for k, v in cfg.items() if not k.startswith("_")}
+    where = config.path(cfg.get("from") or "")
+    if not where.exists():
+        raise SystemExit(f"`sync` needs the alignment {where}.\nGenerate it with:  uv run "
+                         f"\"{Path(__file__).resolve().parent / 'transcribe.py'}\" "
+                         f"--align <voice folder> --script <voice-script.json>")
+    data = json.loads(where.read_text(encoding="utf-8"))
+    shift = float(cfg.get("shift", 0.0))
+    out = []
+    for c in data.get("captions", []):
+        t0, t1 = float(c["t0"]) + shift, float(c["t1"]) + shift
+        if t0 >= total:
+            continue
+        cap = {"t0": max(0.0, t0), "t1": min(total, t1), "text": c["text"], "source": "voice",
+               "audio_t0": round(float(c.get("audio_t0", c["t0"])), 3),
+               "audio_t1": round(float(c.get("audio_t1", c["t1"])), 3),
+               "line": c.get("line"),
+               "style": cfg.get("style", c.get("style", "clean")),
+               "pos": cfg.get("pos", c.get("pos", "low")),
+               "size": cfg.get("size", c.get("size", 52))}
+        for k in ("color", "pop", "dx", "dy"):
+            if k in cfg:
+                cap[k] = cfg[k]
+        if cap["t1"] > cap["t0"]:
+            out.append(cap)
+    if not out:
+        raise SystemExit(f"{where} carries no caption inside the video's {total:.2f} s: "
+                         f"is it the alignment of another variant?")
+    words = [{"t0": round(float(w["t0"]) + shift, 3), "t1": round(float(w["t1"]) + shift, 3),
+              "text": w["text"]}
+             for line in data.get("lines", []) for w in line.get("words", [])]
+    return out, words
+
+
+# ------------------------------------------------------------ ducking under the narration
+
+DUCK_DEFAULTS = {"db": -12.0, "ramp_s": 0.25, "lead_s": 0.15, "tail_s": 0.35}
+_VOICE_HINTS = ("voice", "narration", "narracion", "narração", "narracao", "voz", "tts")
+
+
+def track_role(a):
+    """'voice' | 'sfx' | 'bed'. Explicit `role` wins; otherwise it reads the path.
+
+    The voice contract (`voices` skill) writes l0.wav, l1.wav… inside a `voice/` folder, so a
+    narration coming from the plugin is recognised with nothing added to the spec.
+    """
+    role = str(a.get("role", "")).strip().lower()
+    if role in ("voice", "narration", "vo", "tts"):
+        return "voice"
+    if role in ("sfx", "fx", "effect", "hit"):
+        return "sfx"
+    if role:
+        return "bed"
+    src = str(a.get("src", "")).replace("\\", "/").lower()
+    name = src.rsplit("/", 1)[-1]
+    if re.fullmatch(r"l\d+\.wav", name) or any(h in src for h in _VOICE_HINTS):
+        return "voice"
+    if "/sfx/" in src:
+        return "sfx"
+    return "bed"
+
+
+def duck_settings(value):
+    """The spec's `duck`. `false` disables it; a dict overrides the defaults."""
+    if value is False or value == 0:
+        return None
+    cfg = dict(DUCK_DEFAULTS)
+    if isinstance(value, dict):
+        cfg.update({k: v for k, v in value.items() if not k.startswith("_")})
+    db = min(0.0, float(cfg["db"]))
+    return {"db": db, "gain": 10 ** (db / 20), "ramp": max(0.02, float(cfg["ramp_s"])),
+            "lead": max(0.0, float(cfg["lead_s"])), "tail": max(0.0, float(cfg["tail_s"]))}
+
+
+def audio_duration(src):
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=duration:format=duration",
+                        "-select_streams", "a:0", "-of", "json", str(src)], capture_output=True, text=True)
+    try:
+        d = json.loads(r.stdout or "{}")
+        for v in ([x.get("duration") for x in d.get("streams", [])] + [d.get("format", {}).get("duration")]):
+            if v not in (None, "N/A"):
+                return float(v)
+    except Exception:
+        pass
+    return None
+
+
+def voice_windows(tracks, cfg, total):
+    """The stretches where somebody is speaking, with their margin, already merged."""
+    raw = []
+    for a in tracks:
+        if track_role(a) != "voice":
+            continue
+        dur = a.get("dur")
+        if dur is None:
+            measured = audio_duration(config.path(a["src"]))
+            dur = (measured - float(a.get("offset", 0))) if measured else None
+        if not dur or float(dur) <= 0:
+            print(f"  duck: I cannot measure {Path(str(a.get('src'))).name}; "
+                  f"that line does not duck anything", flush=True)
+            continue
+        at = float(a.get("at", 0))
+        raw.append([max(0.0, at - cfg["lead"]), min(total, at + float(dur) + cfg["tail"])])
+    raw.sort()
+    merged = []
+    for w in raw:
+        # Two lines closer than the two ramps: one single duck, or the bed pumps between sentences.
+        if merged and w[0] - merged[-1][1] <= 2 * cfg["ramp"]:
+            merged[-1][1] = max(merged[-1][1], w[1])
+        else:
+            merged.append(w)
+    return [(round(a, 3), round(b, 3)) for a, b in merged if b > a]
+
+
+def duck_shape(windows, ramp):
+    """ffmpeg expression, 0 outside the windows and 1 inside, with linear ramps of `ramp` seconds."""
+    return "+".join(f"clip(min((t-{a - ramp:.3f})/{ramp:.3f},({b + ramp:.3f}-t)/{ramp:.3f}),0,1)"
+                    for a, b in windows)
+
+
+def track_duck_gain(a, cfg):
+    """The linear gain this track drops to while the voice is speaking, or None if it does not duck."""
+    own = a.get("duck", True)
+    if own is False or track_role(a) in ("voice", "sfx"):
+        return None
+    if isinstance(own, dict) and "db" in own:
+        return 10 ** (min(0.0, float(own["db"])) / 20)
+    if isinstance(own, (int, float)) and not isinstance(own, bool):
+        return 10 ** (min(0.0, float(own)) / 20)
+    return cfg["gain"]
 
 
 # ------------------------------------------------------------ assembly
@@ -419,13 +736,15 @@ def _segment_base(s, n, fps, src, focus):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Vertical 9:16 video engine")
+    ap = argparse.ArgumentParser(description="Video engine: a JSON spec into an MP4")
     ap.add_argument("spec", help="JSON file with the spec")
     ap.add_argument("--out", help="overrides the spec's `out`")
+    ap.add_argument("--format", help="overrides the spec's `format` (9x16 | 4x5 | 1x1 | 16x9)")
     args = ap.parse_args()
 
     with open(args.spec) as fh:
         spec = json.load(fh)
+    fmt = set_format(args.format or spec.get("format") or config.FORMAT)
     fps = spec.get("fps", config.FPS)
     look = LOOKS[spec.get("look", "film")]
     vig = vignette(look["vig"])
@@ -435,14 +754,27 @@ def main():
 
     # Segment timings on an absolute grid, so they don't accumulate drift against the beat
     t = spec.get("beat0", 0.0)
-    cuts = []
+    cuts, starts = [], []
     for s in spec["segments"]:
         if "beats" in s and beat is None:
             raise SystemExit("A segment uses `beats` but the spec carries no `bpm`.")
+        starts.append(t)
         t += s["beats"] * beat if "beats" in s else s["dur"]
         cuts.append(t)
     total = cuts[-1]
-    pieces = prepare_captions(spec.get("captions", []))
+
+    # Subtitles of the clips' own audio: burned in ONLY where the spec asks for them, segment by
+    # segment (`"subs"`). The rule for when they belong at all is in SKILL.md.
+    # Text comes from one of three places, and every one of them is anchored to something real:
+    # the spec's own captions (to a second or, with `seg`, to the cut), the narration already
+    # generated (`sync`, word by word) and the clips' own audio (`subs`, per segment).
+    captions = anchor_captions(spec.get("captions", []), starts, cuts)
+    synced, voice_words = sync_captions(spec.get("sync"), total)
+    captions += synced
+    for s, g0, g1 in zip(spec["segments"], starts, cuts):
+        captions += segment_subtitles(s, g0, g1)
+    captions.sort(key=lambda c: c["t0"])
+    pieces = prepare_captions(captions)
 
     out = config.resolve_output(args.out or spec["out"])
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -456,7 +788,7 @@ def main():
         n = round(end * fps) - round(start * fps)
         src = str(config.path(s["src"])) if s.get("src") else ""
         focus = s.get("focus", [0.5, 0.5])
-        route_map = effects.RouteMap(s["map"], font("bold", 54)) if "map" in s else None
+        route_map = effects.RouteMap(s["map"], font("bold", _scaled(54))) if "map" in s else None
         base = _segment_base(s, n, fps, src, focus)
         if base is not None and s.get("stutter"):
             k = int(s["stutter"])  # repeat each frame k times: the low-fps walking effect
@@ -466,7 +798,7 @@ def main():
         title = None
         if s.get("behind"):
             bh = s["behind"]
-            size = bh.get("size", 230)
+            size = _scaled(bh.get("size", 230))
             while True:  # shrink until it fits the width
                 title = effects.render_title(bh["text"], font(bh.get("style", "bold"), size, bh["text"]),
                                              bh.get("color", [255, 255, 255]))
@@ -475,7 +807,7 @@ def main():
                 size = int(size * 0.93)
         cards = None
         if s.get("cutout"):
-            cards = [effects.card(x, font("bold", 44, x)) for x in s["cutout"].get("lines", [])]
+            cards = [effects.card(x, font("bold", _scaled(44), x)) for x in s["cutout"].get("lines", [])]
         masks = {}   # a one-entry cache: on photos the base frame repeats
         kb, punch = s.get("kb", 0.05), s.get("punch", 0.0)
         m = None
@@ -528,6 +860,17 @@ def main():
     afo = float(spec.get("audio_fade_out", 1.2))
     audio_tail = (f",afade=t=out:st={max(0, total - afo)}:d={afo}" if afo > 0 else "") + ",alimiter=limit=0.89:level=false"
 
+    # Automatic ducking: while a voice track is speaking, everything else (ambience, the clip's
+    # diegetic sound, the music bed) drops `duck.db` with `duck.ramp_s` ramps and comes back up.
+    # It is the engine's job, not each spec's: a narration mixed at the same level as the clip is
+    # simply not understood, and that already shipped.
+    duck = duck_settings(spec.get("duck", True))
+    windows = voice_windows(spec.get("audio", []), duck, total) if duck else []
+    shape = duck_shape(windows, duck["ramp"]) if windows else None
+    if shape:
+        print(f"  duck: {duck['db']:.0f} dB under the voice, {len(windows)} window(s), "
+              f"ramps of {duck['ramp']:.2f} s", flush=True)
+
     def mix(target, tracks):
         if not tracks:
             if target == out:
@@ -545,8 +888,14 @@ def main():
             ms = int(a.get("at", 0) * 1000)
             trim = (f"atrim=0:{a['dur']},afade=t=in:d=0.3,"
                     f"afade=t=out:st={max(0, a['dur'] - 0.5)}:d=0.5," if a.get("dur") else "")
-            filters.append(f"[{k}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,{trim}"
-                           f"adelay={ms}|{ms},volume={a.get('gain', 1)}[a{k}]")
+            # asetpts before the adelay: with `-ss` on the input the first pts is not always 0,
+            # and the duck expression below reads the VIDEO's t, not the source's.
+            chain = (f"[{k}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,"
+                     f"asetpts=PTS-STARTPTS,{trim}adelay={ms}|{ms},volume={a.get('gain', 1)}")
+            g = track_duck_gain(a, duck) if shape else None
+            if g is not None:
+                chain += f",volume=volume='1+({g:.5f}-1)*({shape})':eval=frame"
+            filters.append(chain + f"[a{k}]")
         mixed = "".join(f"[a{k}]" for k in range(len(tracks)))
         # aresample first_pts=0: if NO track starts at at=0, the mix comes out with an initial pts
         # equal to the first adelay and the atrim below clips the audio to (total - that adelay).
@@ -565,7 +914,35 @@ def main():
     mix(out, clean)
     if silent.exists():
         silent.unlink()
+
+    # The timeline: what the render actually burned in and where every cut fell. `verify.py` reads
+    # it to check the text against the voice (0.25 s) and against the cut, and to judge the ending.
+    # Reconstructing this from the spec is not the same thing: `words`, `subs` and `sync` all expand
+    # into pieces the spec never spelled out.
+    speech = voice_windows(spec.get("audio", []), duck_settings({"lead_s": 0, "tail_s": 0}), total)
+    timeline = {
+        "schema": "render-timeline/1", "video": str(out), "format": fmt, "size": f"{W}x{H}",
+        "fps": fps, "duration": round(total, 3),
+        "fade_out": float(spec.get("fade_out", 0) or 0),
+        "audio_fade_out": float(spec.get("audio_fade_out", 1.2) or 0),
+        "shots": [dict({"i": i, "t0": round(t0, 3), "t1": round(t1, 3), "dur": round(t1 - t0, 3),
+                        "src": Path(str(s.get("src", ""))).name or ("map" if "map" in s else "")},
+                       **({"says": says_of(s)} if s.get("says") else {}))
+                  for i, (s, t0, t1) in enumerate(zip(spec["segments"], starts, cuts))],
+        "words": voice_words,
+        "captions": [{k: (round(p[k], 3) if isinstance(p.get(k), float) else p.get(k))
+                      for k in ("t0", "t1", "text", "pos", "source", "audio_t0", "audio_t1", "line")
+                      if p.get(k) is not None}
+                     for p in pieces],
+        "voice": [list(w) for w in speech],
+    }
+    timeline_path = out.with_name(out.stem + ".timeline.json")
+    timeline_path.write_text(json.dumps(timeline, ensure_ascii=False, indent=1), encoding="utf-8")
+
     print(json.dumps({"out": str(out), "duration": round(total, 2),
+                      "timeline": str(timeline_path),
+                      "format": fmt, "size": f"{W}x{H}",
+                      "duck": {"db": duck["db"], "windows": windows} if shape else None,
                       "preview": str(out.with_name(out.stem + "-preview.mp4")) if spec.get("preview_audio") else None},
                      ensure_ascii=False))
 

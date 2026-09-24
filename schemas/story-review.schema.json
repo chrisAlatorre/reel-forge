@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "reel-forge/story-review.schema.json",
+  "title": "Story review",
+  "description": "The story-doctor's verdict on one concept: does the hook promise something, is the promise paid, does the middle develop, does the ending land, and how many seconds the story actually needs. Written twice per concept — `story/<concept>.json` before anything is built (binding on the video-builder) and `story/<concept>-post.json` on the rendered variants (read by the critic-reviewer). Nobody else writes this file.",
+  "$ref": "#/$defs/story_review",
+
+  "$defs": {
+    "level": {
+      "type": "string",
+      "enum": ["blocks", "optional"],
+      "description": "`blocks` is reserved for the three defects that make a video feel cut off: the promise never paid, the close missing, the arc broken. Everything else is `optional`. Marking polish as blocking is how a variant gets re-rendered twice for nothing."
+    },
+
+    "fix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["what", "level", "why"],
+      "description": "One correction, verifiable at a glance: a second, a catalog id, a line. Never an adjective.",
+      "properties": {
+        "what": { "type": "string", "minLength": 12, "description": "The instruction, concrete enough to apply without asking: which block, which seconds, which id, which line." },
+        "level": { "$ref": "#/$defs/level" },
+        "why": { "type": "string", "minLength": 8, "description": "The defect it repairs, in the terms of the arc." },
+        "variant": { "type": "string", "pattern": "^[A-H]$", "description": "Only when the fix belongs to one variant. Left out, it is the concept's and every variant applies it." },
+        "use": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$" },
+          "description": "Catalog ids the fix needs. They have to EXIST: asking for a shot nobody has is how a concept ends up padded with the wrong material."
+        }
+      }
+    },
+
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["why"],
+      "properties": {
+        "from_s": { "type": "number", "minimum": 0 },
+        "to_s": { "type": "number", "minimum": 0 },
+        "at_s": { "type": "number", "minimum": 0 },
+        "why": { "type": "string", "minLength": 8 },
+        "save_s": { "type": "number", "description": "Seconds this cut gives back." },
+        "use": { "type": "array", "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$" } }
+      }
+    },
+
+    "duration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recommended_s", "in_beats"],
+      "description": "The length this story needs, argued in beats. This is the field that stops every video coming out the same length.",
+      "properties": {
+        "declared_s": { "type": "number", "minimum": 0, "description": "What the concept or the render said." },
+        "recommended_s": { "type": "number", "minimum": 3, "description": "What the story needs. It goes UP when there is more story than time and DOWN when there is padding; never toward a house length." },
+        "in_beats": { "type": "string", "minLength": 12, "description": "The count that defends the number: 'hook 3 + three proofs of 7 + turn 4 + close 3'. A length that cannot be written in beats is a template." },
+        "cut": { "type": "array", "items": { "$ref": "#/$defs/window" }, "description": "Stretches that hold one idea with nothing new." },
+        "lengthen": { "type": "array", "items": { "$ref": "#/$defs/window" }, "description": "Beats that are being starved, with the material that would feed them." },
+        "per_variant": {
+          "type": "array",
+          "description": "The seconds each variant needs. A short variant drops development beats and KEEPS the whole arc: it never drops the close.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["letter", "recommended_s", "in_beats"],
+            "properties": {
+              "letter": { "type": "string", "pattern": "^[A-H]$" },
+              "recommended_s": { "type": "number", "minimum": 3 },
+              "in_beats": { "type": "string", "minLength": 12 },
+              "keeps": { "type": "string", "description": "What this length protects when it is shorter than the concept's." }
+            }
+          }
+        }
+      }
+    },
+
+    "arc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hook_promises", "promise_paid_off", "development", "close"],
+      "description": "The four questions, each answered with a second and a quote rather than an adjective.",
+      "properties": {
+        "hook_promises": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ok"],
+          "properties": {
+            "ok": { "type": "boolean" },
+            "as_the_viewer_would_say_it": { "type": "string", "description": "The promise in the viewer's words: 'it is going to tell me why nobody goes back'. A hook that promises nothing cannot fill this in." },
+            "why": { "type": "string" }
+          }
+        },
+        "promise_paid_off": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ok"],
+          "description": "The single most serious defect there is: unpaid, the video feels cut off however well it is edited.",
+          "properties": {
+            "ok": { "type": "boolean" },
+            "at_s": { "type": ["number", "null"], "description": "The second the viewer gets what they were promised, or null when they never do." },
+            "why": { "type": "string" }
+          }
+        },
+        "development": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ok", "beats"],
+          "properties": {
+            "ok": { "type": "boolean" },
+            "beats": { "type": "integer", "minimum": 0 },
+            "largest_gap_s": { "type": "number", "minimum": 0, "description": "The longest stretch with nothing new and no mini_hook holding the viewer across it." },
+            "flat_beats": { "type": "array", "items": { "type": "string" }, "description": "Beats that add what a previous one already added. Three beats saying the same thing are one beat played three times." },
+            "why": { "type": "string" }
+          }
+        },
+        "close": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ok"],
+          "properties": {
+            "ok": { "type": "boolean" },
+            "kind": { "type": "string", "enum": ["punchline", "back_to_hook", "final_fact", "question", "loop"], "description": "The mould it uses, or the one it should use." },
+            "why": { "type": "string", "description": "Why it lands, or what it stops on instead." }
+          }
+        }
+      }
+    },
+
+    "story_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pass", "concept", "verdict", "arc", "duration", "fixes"],
+      "properties": {
+        "pass": { "type": "string", "enum": ["pre", "post"], "description": "`pre` reads the concept before anything is built; `post` watches the rendered variants." },
+        "concept": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "variants": { "type": "array", "items": { "type": "string", "pattern": "^[A-H]$" }, "description": "The variants this pass looked at. Required in practice on a `post` pass." },
+        "verdict": {
+          "type": "string",
+          "enum": ["ship", "rework", "reject"],
+          "description": "`reject` means the payoff is not in the material and no edit will put it there. If the arc is sound, `ship` with one line: a concept that works does not need proof that it was read."
+        },
+        "arc": { "$ref": "#/$defs/arc" },
+        "duration": { "$ref": "#/$defs/duration" },
+        "fixes": { "type": "array", "items": { "$ref": "#/$defs/fix" } },
+        "ending": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Only on a `post` pass: what the last seconds actually do. These are the symptoms verify.py measures on the file (`ending`), read here as story rather than as defects.",
+          "properties": {
+            "lands": { "type": "boolean" },
+            "last_shot_s": { "type": "number", "minimum": 0 },
+            "still_moving": { "type": "boolean", "description": "The last frame is mid-pan or mid-gesture. The single thing that reads most as 'it got cut off'." },
+            "caption_on_last_frame": { "type": "boolean" },
+            "audio_ends_with_picture": { "type": "boolean" },
+            "why": { "type": "string" }
+          }
+        },
+        "notes": { "type": "string", "description": "Anything that is not yours — black frames, peaks, quota, language, safe area — goes here in one line and stops there. Two agents fixing the same defect is how a variant gets re-rendered with opposite corrections." }
+      }
+    }
+  }
+}

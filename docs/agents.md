@@ -3,7 +3,7 @@
 > The agent files live in `agents/`. This document is in `docs/` on purpose: every `.md` inside
 > `agents/` gets loaded as an agent, and a README in there breaks plugin validation.
 
-Eight subagents that turn a photo and video library into several vertical TikToks/Reels. Each one does a
+Nine subagents that turn a photo and video library into several vertical TikToks/Reels. Each one does a
 single thing, takes and returns **JSON**, and can be launched many times in parallel.
 
 Once the plugin is installed they are invoked with the plugin name in front: `reel-forge:photo-curator`,
@@ -18,15 +18,23 @@ Once the plugin is installed they are invoked with the plugin name in front: `re
  │ clip-analyst     │ ──► │  catalog/*.json  │──►│   (xN parallel)  │──►│   (xN parallel)  │
  │ 360-scout        │     │                  │   └────────┬─────────┘   └────────┬─────────┘
  └──────────────────┘     └──────────────────┘            │                      │
- ┌──────────────────┐                                     ▼                      ▼
- │ trend-researcher │ ──► trends/trends.json      ┌──────────────────┐   ┌──────────────────┐
- │      (xN)        │                             │ chief-editor     │   │ critic-reviewer  │
- └──────────────────┘                             │  selection.json  │   │ (1 per concept)  │
-                                                  └──────────────────┘   └──────────────────┘
+ ┌──────────────────┐                             ┌───────▼──────────┐   ┌───────▼──────────┐
+ │ trend-researcher │ ──► trends/trends.json      │ chief-editor     │   │ critic-reviewer  │
+ │      (xN)        │                             │  selection.json  │   │ (1 per concept)  │
+ └──────────────────┘                             └───────┬──────────┘   └───────┬──────────┘
+                                                          │                      │
+                                          ┌───────────────▼──────────────────────▼───────────┐
+                                          │ story-doctor — PRE on every concept, POST on      │
+                                          │ every rendered variant: arc, ending, duration     │
+                                          └───────────────────────────────────────────────────┘
 ```
 
 The three material stages and the research run **at the same time**. The rest is sequential: no concepts
 without a catalog, no building without a selection, no delivery without a review.
+
+The `story-doctor` runs **twice**, and both passes gate what follows: nothing is built before it has
+read the concept, and nothing ships before it has watched the render. It is the agent that exists for
+one complaint — a video that opens something, never develops it and stops mid-air.
 
 ## When to use each one
 
@@ -36,54 +44,54 @@ without a catalog, no building without a selection, no delivery without a review
 | `clip-analyst` | Know which seconds of a clip work and which are filler | `catalog/catalog-<batch>.json` | 1 per video (or per 3-4 short videos) |
 | `360-scout` | Pull 9:16 framings out of an equirectangular: sheets, the subject's yaw/pitch, keys and test renders | `catalog/catalog-<batch>.json` + test MP4s | 1 per 360 file |
 | `trend-researcher` | Know which formats, hooks and sounds are working **today** for the topic, in the output language's market | `trends/trends.json`, or `trends/trends-<theme>.json` when several run | 1 per theme (formats / sounds / niche), merged into `trends/trends.json` |
-| `creative-director` | Propose **one** strong concept with second-by-second structure and 3-4 variants | `concepts/<slug>.json` | 4-8, each with a different angle |
+| `creative-director` | Propose **one** strong concept: an arc that promises, develops and lands, the seconds that story needs, second-by-second structure and 2-5 variants | `concepts/<slug>.json` | 4-8, each with a different angle |
+| `story-doctor` | Judge whether the video is **finished**: does the hook promise, is it paid, does the middle develop, does the ending land, and is the duration the one the story needs | `story/<concept>.json` (pre) and `story/<concept>-post.json` (post) | **1 per concept, per pass** |
 | `chief-editor` | Decide what gets built, protecting variety, and say what to fix | `selection.json` | 1, always |
-| `video-builder` | Render the variants, export clean + preview and write the README | MP4 + `build.py` + `spec.json` + `README.md` | **2 per concept**, one variant each |
-| `critic-reviewer` | Find concrete defects and **fix them by re-rendering** | `review-<concept>.json` + a corrected MP4 | **1 per concept**, sees all its variants together |
+| `video-builder` | Render the variants, export clean + preview, and leave the script of the narration | MP4 + `build.py` + `spec.json` + `result.json` (+ `voice-script.json`) | **2 per concept**, one variant each |
+| `critic-reviewer` | Find concrete defects, check the quota the concept declared, and **fix by re-rendering** | `review.json` + the corrected MP4 + the concept's README | **1 per concept**, sees all its variants together |
 
 ## How to scale the number of instances
 
-The general rule: **parallelize what only looks, serialize what decides.**
+The general rule: **parallelize what only looks, serialize what decides.** The numbers per phase are in
+[`../skills/reel-forge/references/agents.md`](../skills/reel-forge/references/agents.md) and the
+reasoning in [`parallelism.md`](parallelism.md); they are not repeated here.
 
-- **Catalog (curator, analyst, scout).** Split by the natural unit: a day of photos, one video, one 360
-  file. With material from a long trip it's normal to launch 10-20 instances. Start with 4-6 at a time and
-  raise it if the machine can take it: the render and `ffmpeg` are what weigh, and several sessions
-  competing turn a 3-second photo into minutes.
-- **Trends.** 2 or 3 instances: one for formats and hooks, one for sounds with BPM, one for the niche or
-  the destination. More than that and they repeat each other.
-- **Directors.** This is where the flow's leverage is: **launch 4 to 8, each with a different, explicit
-  angle** (narrated documentary, pure natural sound, guide with prices, visual gag, POV, list with a
-  payoff, block counter). They can't see each other: the variety comes from the angles you assign, not
-  from asking them for "something different".
-- **Chief editor: always one.** It's the only one that sees the whole set. Two chief editors contradict
-  each other and the variety is lost.
-- **Builders: two per concept**, one variant each. A single one with four variants copies itself: it
-  changes the copy and keeps the same edit. Two independent ones genuinely diverge. With more variants,
-  hand them out in pairs, but **fix the look, the music bed and the 9:16 crops in common** and have them
-  all write into the same README. The classic mistake is one builder leaving a `look` the other had
-  already rejected, so the hook comes out washed out in half the deliveries.
-- **Reviewers: one per concept**, always, even when "it looks fine", and never one of the builders. It has
-  to see **all the variants together**: what shows up most often (a `look` that washes out the hook, the
-  same shot in two variants) only shows by comparison. It fixes what blocks; if a fix changes the idea, it
-  escalates to the chief editor.
+Two things that are easy to get wrong and are worth saying twice:
+
+- **Directors: the variety comes from the angles you assign**, not from asking for "something
+  different". Eight directors with no angle return eight photo dumps.
+- **Chief editor and reviewer are singular.** The editor is the only one who sees every proposal at
+  once; the reviewer is the only one who sees every variant of a concept at once. Duplicate either and
+  you lose exactly what the step was for.
 
 When you duplicate instances of any agent, pass it in the invocation: **which batch or angle is its**,
-**where it writes**, **which ids are already taken** and, for anything that produces copy, **the output
-language tag**. If two write the same file, work gets lost.
+**where it writes**, **which schema it writes to**, **which ids are already taken** and, for anything
+that produces copy, **the output language tag**. If two write the same file, work gets lost.
 
 ## Contracts between agents
 
-- **Resource ids:** `p-###` a photo, `v-<clip>-<letter>` a video range, `r-<clip>-<letter>` a 360 reframe.
-  A concept only uses ids that exist in the catalog.
-- **Times** in seconds with 2 decimals. A range's times are relative to the start of its file; the 360
-  keys' times are relative to the start of the range.
-- **Quality and potential** as integers 1 to 10, with the criteria written into each agent.
-- **Paths** with `~` or relative to the working folder. Never an absolute path from anyone's machine.
-- **Language:** the catalog, the JSON keys and the notes are in English; the on-screen copy, the
-  narration and the hashtags are in the run's output language.
-- **Nobody invents material.** If something is missing, it goes into `missing`, `pending` or `not_found`.
-- Every agent writes its JSON **and** replies with a short text summary: whoever invoked it reads the
-  summary, the next agent reads the JSON.
+Every artifact that crosses from one agent to another has a JSON Schema in
+[`../schemas/`](../schemas/README.md), and each agent validates its own file **before answering**:
+
+```bash
+uv run "$CLAUDE_PLUGIN_ROOT/schemas/validate.py" <file> --type <contract>
+```
+
+| Agent | Writes | Contract |
+|---|---|---|
+| `photo-curator`, `clip-analyst`, `360-scout` | `catalog/catalog-<batch>.json` | `catalog-item` |
+| `creative-director` | `concepts/<slug>.json` | `concept` |
+| `story-doctor` | `story/<concept>.json`, `story/<concept>-post.json` | `story-review` |
+| `chief-editor` | `selection.json` | its own report; the concepts it cites are `concept` |
+| `video-builder` | `<letter>/result.json`, and `voice-script.json` when narrated | `variant-build-result`, `voice-script` |
+| `critic-reviewer` | `review.json` | `review-result` |
+
+The conventions the schemas enforce — id format, seconds, 1-5 ratings, paths without anyone's home
+directory, English keys with only the on-screen copy in the output language, nothing invented and
+nothing deleted — are written once in [`../schemas/README.md`](../schemas/README.md).
+
+Every agent writes its JSON **and** replies with a short text summary: whoever invoked it reads the
+summary, the next agent reads the JSON. If the two disagree, the file wins.
 
 ## What the plugin lends them
 
@@ -99,10 +107,16 @@ folder.**
 | `${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/sheets.py` | Contact sheets, face crops and frame strips |
 | `${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/validate_dates.py` | Metadata report and the corrections plan |
 | `${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/export.py` | Thumbnails and selective export from Apple Photos |
-| `${CLAUDE_PLUGIN_ROOT}/skills/voices/scripts/voice.py` · `narrate.py` | Local TTS narration and mixing onto an already rendered MP4 |
+| `${CLAUDE_PLUGIN_ROOT}/skills/video-engine/scripts/verify.py` | The delivery gate: audio, length, black frames, peak, text sync, voice-to-picture and the ending |
+| `${CLAUDE_PLUGIN_ROOT}/skills/video-engine/scripts/transcribe.py` | What a clip says, and **when** the narration says each word (`--align`) |
+| `${CLAUDE_PLUGIN_ROOT}/skills/voices/scripts/resolve_voice.py` | Which voice narrates this run, and why: Valentino for Spanish, a local engine as the fallback |
+| `${CLAUDE_PLUGIN_ROOT}/skills/voices/scripts/voice.py` · `narrate.py` · `capcut_voice.py` | Narration and mixing onto an already rendered MP4 |
+| `${CLAUDE_PLUGIN_ROOT}/skills/voices/scripts/sound_map.py` · `wordmarks.py` | A spoken viral audio mapped by phrase, and the words a caption has to land on |
+| `${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/history.py` · `people.py` · `preferences.py` | What has already been published, who is in the library, and what the user keeps asking for |
 | `${CLAUDE_PLUGIN_ROOT}/skills/*/SKILL.md` | The long guides: `video-engine`, `video-360`, `voices`, `sources` |
 | `${CLAUDE_PLUGIN_ROOT}/skills/reel-forge/references/` | The detail of every phase of the flow |
 | `${CLAUDE_PLUGIN_ROOT}/examples/spec-example.json` | The engine's commented spec, valid JSON |
+| `${CLAUDE_PLUGIN_ROOT}/schemas/` | The JSON Schemas every agent writes to, and `validate.py` |
 
 If any of those files gets renamed, update this table and the agents that mention it.
 
@@ -113,8 +127,11 @@ If any of those files gets renamed, update this table and the agents that mentio
   path is a folder of files with EXIF dates and a list of favorites.
 - **Insta360 Studio** (macOS/Windows) gives the best 360 stitch. Without it, the plugin does an
   approximate stitch with `ffmpeg v360` and the seam shows on nearby objects.
-- **CapCut** for the app's narration voice: macOS/Windows only, with the app installed. Without it, the
-  variant ships without voice plus a `voice-script.txt` with the timings.
+- **CapCut** for the app's narration voice: macOS/Windows only, with the app installed. When the output
+  language is Spanish this is the **default** narrator — Valentino at 1.4x, the voice that side of the
+  platform actually sounds like. Without CapCut the run falls back to a local engine, which works and is
+  reproducible but does **not** sound like the trend, so the variant's README has to say so.
+  `resolve_voice.py` makes that call once per run and carries the sentence to disclose in `disclose`.
 - **macOS `say`** is not used as a final voice; the plugin's local TTS is cross-platform.
 - `ffmpeg`, `ffprobe` and `uv` are always required.
 

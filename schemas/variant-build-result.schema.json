@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "reel-forge/variant-build-result.schema.json",
+  "title": "Variant build result",
+  "description": "What a video-builder returns for ONE variant, written to workspace/concepts/<concept>/<letter>/result.json before it answers. The reviewer reads this, not the chat message.",
+  "$ref": "#/$defs/result",
+
+  "$defs": {
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/Users/|/home/|/root/|[A-Za-z]:\\\\Users\\\\)"
+    },
+
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["black_frames", "silence_gaps", "peak_dbtp", "audio_duration_s", "video_duration_s", "strip"],
+      "description": "Measured, not asserted. Every field comes from a command you actually ran; the reviewer re-runs them and a lie here is a blocker.",
+      "properties": {
+        "black_frames": { "type": "integer", "minimum": 0, "description": "blackdetect=d=0.08:pix_th=0.12" },
+        "silence_gaps": { "type": "integer", "minimum": 0, "description": "silencedetect=n=-45dB:d=0.25" },
+        "peak_dbtp": { "type": "number", "maximum": 0, "description": "loudnorm print_format=summary. Must stay below -0.5." },
+        "lufs": { "type": "number" },
+        "audio_tracks": { "type": "integer", "minimum": 0, "description": "Exactly one in a delivery." },
+        "audio_duration_s": { "type": "number", "minimum": 0, "description": "Has to match the video's, or the ending goes silent." },
+        "video_duration_s": { "type": "number", "minimum": 0 },
+        "size_mb": { "type": "number", "minimum": 0 },
+        "strip": { "$ref": "#/$defs/path", "description": "The fps=2,tile=12x6 strip you LOOKED at. Without it, nobody looked." }
+      }
+    },
+
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concept", "letter", "spec", "builder", "mp4", "duration_s", "cuts", "cuts_with_subject", "moments", "checks"],
+      "properties": {
+        "concept": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "letter": { "type": "string", "pattern": "^[A-H]$" },
+
+        "spec": { "$ref": "#/$defs/path", "description": "spec.json the engine rendered." },
+        "builder": { "$ref": "#/$defs/path", "description": "build.py that regenerates the spec and the pre-renders FROM SCRATCH. A spec pointing at a temporary you already deleted is not reproducible." },
+        "mp4": { "$ref": "#/$defs/path", "description": "Clean 1080x1920 render, no copyrighted music." },
+        "preview": { "$ref": "#/$defs/path", "description": "-preview.mp4 with the song, for listening only." },
+        "light": { "$ref": "#/$defs/path", "description": "-light.mp4 at 720p, for sending over chat." },
+
+        "duration_s": { "type": "number", "minimum": 1 },
+        "cuts": { "type": "integer", "minimum": 1, "description": "Counted by hand, not estimated." },
+        "cuts_with_subject": { "type": "integer", "minimum": 0, "description": "Counted by hand. cuts_with_subject / cuts is checked against the concept's subject_quota." },
+        "moments": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$" },
+          "description": "Catalog ids used. Every one exists, and no cut steps outside its start_s/end_s window."
+        },
+        "out_of_window": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Ids whose window you had to widen, with the strip you looked at first. Empty is the normal answer."
+        },
+
+        "narrated": { "type": "boolean" },
+        "voice_script": { "$ref": "#/$defs/path", "description": "voice-script.json (schemas/voice-script.schema.json) when narrated is true. It ships next to the MP4 even when the voice is already baked in." },
+        "voice_engine": { "type": "string", "description": "Which engine produced the WAVs, or '' when the variant ships without voice." },
+
+        "checks": { "$ref": "#/$defs/checks" },
+        "notes": { "type": "string", "description": "Decisions you took and what did not come out the way you wanted." },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Anything you could not do and worked around: a missing dependency, a voice that never generated, a range that had to be trimmed. Silence here reads as 'everything worked'."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "narrated": { "const": true } }, "required": ["narrated"] },
+          "then": { "required": ["voice_script"] }
+        }
+      ]
+    }
+  }
+}

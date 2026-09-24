@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "reel-forge/review-result.schema.json",
+  "title": "Review result",
+  "description": "What the critic-reviewer returns for ONE concept, with every variant of it in front of it: workspace/concepts/<concept>/review.json. The reviewer fixes what blocks and re-renders; this file records what it found and what it did.",
+  "$ref": "#/$defs/review",
+
+  "$defs": {
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/Users/|/home/|/root/|[A-Za-z]:\\\\Users\\\\)"
+    },
+
+    "problem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["variant", "severity", "what", "where", "how_to_fix", "status"],
+      "properties": {
+        "variant": { "type": "string", "pattern": "^[A-H]$" },
+        "severity": {
+          "type": "string",
+          "enum": ["blocks", "important", "minor"],
+          "description": "'blocks' only for what makes delivery impossible. Wrong output language, a cut outside its catalog window, a silent ending and an illegible caption all block."
+        },
+        "what": { "type": "string", "minLength": 8 },
+        "where": { "type": "string", "minLength": 1, "description": "The exact second or range where it shows." },
+        "how_to_fix": { "type": "string", "minLength": 8 },
+        "status": {
+          "type": "string",
+          "enum": ["fixed", "open", "not_fixable"],
+          "description": "'fixed' means you changed the variant's build.py and re-rendered, never that you patched the MP4. 'not_fixable' needs a reason and a swap that can actually be done."
+        },
+        "reason": { "type": "string", "description": "Required on not_fixable." },
+        "escalate": { "type": "boolean", "description": "true when the fix would change the idea of the video: that decision is the chief-editor's, not yours." }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "not_fixable" } }, "required": ["status"] },
+          "then": { "required": ["reason"] }
+        }
+      ]
+    },
+
+    "quota_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "max_ratio", "per_variant"],
+      "description": "The concept's declared subject_quota, verified against what actually got built. Checked against the concept's own number, never against a fixed one.",
+      "properties": {
+        "kind": { "type": "string", "enum": ["first_person", "recap", "place_first", "custom"] },
+        "max_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "min_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "per_variant": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["letter", "cuts", "cuts_with_subject", "ratio", "pass"],
+            "properties": {
+              "letter": { "type": "string", "pattern": "^[A-H]$" },
+              "cuts": { "type": "integer", "minimum": 1 },
+              "cuts_with_subject": { "type": "integer", "minimum": 0, "description": "Counted by hand on the frame strip. Do not trust what the builder reported." },
+              "ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+              "pass": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concept", "variants_reviewed", "approved", "problems", "subject_quota", "language_ok", "comparison"],
+      "properties": {
+        "concept": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "variants_reviewed": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^[A-H]$" },
+          "description": "Every variant of the concept. Reviewing one at a time is what lets an uneven look through."
+        },
+        "approved": { "type": "array", "items": { "type": "string", "pattern": "^[A-H]$" } },
+        "problems": { "type": "array", "items": { "$ref": "#/$defs/problem" } },
+        "subject_quota": { "$ref": "#/$defs/quota_check" },
+        "language_ok": { "type": "boolean", "description": "Every caption, stamp, hashtag and narration line in the run's output language, correctly spelled. Mixed languages in one video is a blocker." },
+        "facts_checked": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Dates, places and prices that appear on screen, each with what you verified it against. Watch the time zones."
+        },
+        "comparison": { "type": "string", "minLength": 20, "description": "What actually changes between the variants, from comparing the SAME frame across them." },
+        "recommended": { "type": "string", "pattern": "^[A-H]$" },
+        "readme": { "$ref": "#/$defs/path", "description": "The concept's single README.md, in the output language, with every variant inside it. Not one per agent." },
+        "rerendered": { "type": "array", "items": { "type": "string", "pattern": "^[A-H]$" }, "description": "Variants you re-rendered after fixing." }
+      }
+    }
+  }
+}

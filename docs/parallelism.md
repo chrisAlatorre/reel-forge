@@ -8,28 +8,13 @@ Looking at material — photos, frame strips, ring sheets, transcriptions — is
 where N agents give you almost N times the throughput. Touching things — a desktop app, the photo
 library, the same output file — doesn't parallelize: it collides.
 
-## How many context agents
+**The table of how many agents per phase is in
+[`skills/reel-forge/references/agents.md`](../skills/reel-forge/references/agents.md)**, which is what
+the orchestrator reads when it gets there. This document is the why, and everything the table can't
+say. It is not repeated here: two copies of a number drift, and the one that drifts is always the one
+you didn't read.
 
-| Files to catalog | Parallel agents | How it splits |
-|---|---|---|
-| under 200 | **3** | by day or by place |
-| 200 to 1000 | **6** (8 if there are more than 10 days) | one agent per day, or per batch of ~150 files |
-| over 1000 | **10** (practical cap) | cheap sift first; then one agent per batch of ~150 of what survived |
-
-On top of that, always:
-
-- **1 agent per 360 clip.** A 20 s equirectangular clip yields three or four different framings and needs
-  its own ring sheets. Mixing it into that day's photo batch makes the agent pull a single framing and
-  miss the rest.
-- **1 trend agent**, with web search, running in parallel with everything else. It doesn't depend on the
-  catalog and the catalog doesn't depend on it, so it has no reason to wait its turn.
-- **2 builder agents per concept**, with the variants split between them.
-- **1 reviewer agent per concept**, different from the builders.
-
-Never more agents than units of material: an agent with half a day of photos has nothing to compare
-against and repeats what the one next to it already said.
-
-### The two caps that actually bind
+## The two caps that actually bind
 
 1. **The Workflow tool's cap: `min(16, CPUs − 2)` simultaneous agents.** You can hand `pipeline()` 40
    batches without a problem; the surplus waits its turn. What you can't do is *force* more concurrency
@@ -71,14 +56,36 @@ against and repeats what the one next to it already said.
 - **Deciding.** The concepts, the shot order and what gets delivered are not handed out: you decide those
   by reading what the agents returned. A committee of agents produces four videos that look alike.
 
+## The machine has to stay awake
+
+A round of 29 agents over real material is hours of work. In one of them the laptop went to sleep
+mid-run and **7 agents died with it**: everything they had looked at and not yet written was gone, and
+what came back was a catalog with holes nobody had asked for.
+
+Before launching a wave that will run unattended:
+
+- **macOS:** run the round under `caffeinate -dimsu` (display, idle, sleep, system, and keep it while
+  the process lives), or at least `caffeinate -i` around the workflow. Closing the lid still sleeps the
+  machine on most models: leave it open.
+- **Linux:** inhibit the idle and sleep targets for the duration of the run
+  (`systemd-inhibit --what=idle:sleep`).
+- **Windows:** turn off sleep in the active power plan for that session.
+- Plugged into power, and check the disk has room before starting: a render that runs out of space
+  fails at the end, when everything has already been paid for.
+
+And regardless of any of that: **whatever isn't on disk is lost**, which is the next section.
+
 ## Always write to disk
 
 A catalog run with 10 agents is 20-40 minutes of work. If it gets interrupted — the user cancels, an
 agent crashes, the battery dies — **whatever isn't on disk is lost**.
 
-- **Every agent writes its result BEFORE answering.** The prompts in `workflows/catalog.js` require it:
+- **Every agent writes its result BEFORE answering**, complete and validated against its schema
+  (`schemas/`). The prompts in `workflows/catalog.js` require it:
   `workspace/catalog/catalog-<batch>.json`. And if that file already exists and is complete, the agent
   reads it and returns it instead of looking at everything again. The second run costs almost nothing.
+  That is also what makes a run survive a sleeping machine: the agents that had already written stay
+  written, and only the rest get relaunched.
 - **`workspace/` is rebuildable; `deliveries/` is not touched.** Every variant leaves a `build.py` that
   regenerates its spec and its pre-renders from scratch. Never leave a `spec.json` pointing at a temporary
   you already deleted: once the temporaries are cleaned up, that spec is irreproducible.

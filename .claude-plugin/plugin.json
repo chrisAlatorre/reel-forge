@@ -1,8 +1,8 @@
 {
   "name": "reel-forge",
   "displayName": "Reel Forge",
-  "version": "0.2.1",
-  "description": "Turns your photo and video library into vertical TikToks/Reels: inventory, curation with parallel agents, trend research, automatic editing and several variants per concept.",
+  "version": "0.4.0",
+  "description": "Turns your photo and video library into vertical TikToks/Reels: inventory, curation with parallel agents, trend research, an arc per concept with the duration that story needs, automatic editing, captions cut from the narration itself, and several variants per concept.",
   "author": {
     "name": "reel-forge contributors",
     "url": "https://github.com/chrisAlatorre/reel-forge"

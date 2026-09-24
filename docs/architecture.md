@@ -16,6 +16,12 @@ gets decided.
 5. **Everything rebuilds from a script.** Every variant leaves its `build.py`, not just its `spec.json`:
    a spec pointing at a deleted temporary is irreproducible.
 6. **Nothing ships unreviewed.** Every concept goes through a reviewer that compares its two variants.
+7. **Agents hand each other files, not prose.** Every artifact that crosses a phase is JSON with a
+   schema in [`schemas/`](../schemas/README.md), written to disk and validated before the agent
+   answers. Free text is where a batch gets silently reinvented and where a narrated video ends up
+   shipping mute.
+8. **The main path carries no optional extras.** The animated route map, the character intro and the
+   person cutout live in the engine and are opt-in per concept, never assumed by the flow.
 
 ## Full flow
 
@@ -75,14 +81,29 @@ gets decided.
                         │ 6. CONCEPTS                   │
                         │ creative-director x4-8, in    │
                         │ parallel: one concept each,   │
-                        │ from its own angle, with hook │
-                        │ and second-by-second structure│
+                        │ from its own angle, with its  │
+                        │ ARC (promise, development,    │
+                        │ close), the seconds that      │
+                        │ story needs, and second-by-   │
+                        │ second structure              │
                         │             │                 │
                         │             v                 │
                         │ chief-editor x1: picks the    │
                         │ best for variety and says     │
                         │ what to fix -> selection      │
                         │ (you confirm here)            │
+                        └───────────────┬───────────────┘
+                                        v
+                        ┌───────────────────────────────┐
+                        │ 7. STORY   (pre pass)         │  story-doctor,
+                        │ before a single frame is      │  1 per concept
+                        │ rendered: does the hook       │
+                        │ promise, is the promise paid, │
+                        │ does the middle develop, does │
+                        │ the close land, and how many  │
+                        │ seconds does it really need   │
+                        │ -> story/<concept>.json       │
+                        │    (its `blocks` are binding) │
                         └───────────────┬───────────────┘
                                         v
         ┌───────────────────────────────┼───────────────────────────────┐
@@ -98,24 +119,35 @@ gets decided.
 └────┼───────┼─────┘          └────┼───────┼─────┘          └────┼───────┼─────┘
      │       │                     │       │                     │       │
      └───────┴─────────────────────┴───────┴─────────────────────┴───────┘
-                                        │   7. BUILD  (workflows/build.js)
-                                        │   video-builder x2 per concept
+                                        │   8. COMMON + 9. BUILD
+                                        │   (workflows/build.js)
+                                        │   video-builder x1 per variant
                                         │   build.py -> spec.json -> 1080x1920 render
+                                        │   + verify.py on every render
                                         v
                         ┌───────────────────────────────┐
-                        │ 8. REVIEW                     │  critic-reviewer,
+                        │ 10. ARC  (post pass)          │  story-doctor,
+                        │ watches the rendered variants:│  1 per concept
+                        │ does it develop, does the end │
+                        │ land or does it just stop,    │
+                        │ does the length fit the story │
+                        │ -> story/<concept>-post.json  │
+                        └───────────────┬───────────────┘
+                                        v
+                        ┌───────────────────────────────┐
+                        │ 10. REVIEW                    │  critic-reviewer,
                         │ looks at frames and listens:  │  1 per concept, sees
                         │ black frames, audio gaps,     │  all its variants
                         │ peak under -0.5 dBTP, audio   │  together before closing
                         │ as long as the video, text    │
-                        │ overlaps, wrong facts,        │
-                        │ cuts counted                  │
+                        │ synced to the voice, wrong    │
+                        │ facts, cuts counted           │
                         │ -> fixes by re-rendering      │
                         └───────────────┬───────────────┘
-                                        │ what fails goes back to 7
+                                        │ what fails goes back to 9
                                         v
                         ┌───────────────────────────────┐
-                        │ 9. DELIVERY                   │
+                        │ 11. DELIVERY                  │
                         │ deliveries/v1/<concept>/      │
                         │  <concept>-A.mp4   (clean)    │
                         │  ...-A-preview.mp4 (song)     │
@@ -166,26 +198,67 @@ different angle**: one on the beat, one narrated, one with few long shots, one a
 returns one concept, with a first-second hook, a second-by-second structure, the moments it uses by id
 and the ratio of cuts with and without the subject.
 
+Every concept also carries an **arc** and the **duration that arc needs**. The arc is four fields — what
+the hook promises, the beats that develop it, the optional turn, and the close with the reason it lands —
+and `target_duration_s` is argued in beats in `duration_rationale`, never taken from a house length. That
+is what makes one concept 14 s and the next one 52 s instead of every video coming out the same size, and
+why a video stops feeling like it was interrupted: the ending was planned before the middle was written.
+
+Each concept also declares **its own subject quota** (`subject_quota`): how much of the video the main
+person may occupy, according to what the concept is — a first-person POV and a piece where the place is
+the protagonist are not held to the same number. The ceilings per kind are in
+`skills/reel-forge/references/concepts.md`, and the reviewer verifies against what the concept declared.
+
 Then one `chief-editor` reads them all together and chooses: drops the repeats and the weak ones, keeps
 the ones that genuinely differ, and says exactly what to fix in each before it gets built. It's the only
 point where anybody sees every proposal at once, which is why it's the one that guarantees variety. You
 confirm its selection before the rendering starts.
 
-### 7. Build
-Two `video-builder` per concept (handed out by `workflows/build.js`), with the same outline and freedom
+### 7. Story (pre pass)
+One `story-doctor` per concept, **before a single frame is rendered** — it is the cheapest agent in the
+flow and the one that prevents the most wasted rendering. It answers five questions with a second and a
+quote each: does the hook promise something, is the promise paid off and where, does the middle develop
+or is it loose cuts, does the ending land or does it just stop, and is there too much time or too little
+and where. It returns `story/<concept>.json` (`story-review` contract) with a verdict, corrections that
+name a second and a catalog id, and the seconds each variant needs defended in beats. Its `blocks` fixes
+are binding on the builder.
+
+Its other job is that **durations stop being all the same**: a run of videos that all land within 5 s of
+each other is itself a finding, because the length is coming from a template and not from the stories.
+
+### 8. Common and 9. Build
+One `video-builder` per variant (handed out by `workflows/build.js`), with the same outline and freedom
 of execution. The shared work (music bed, 9:16 crops, light copies) is prepared **once** in `common/`;
 when each agent did it on its own, one used the raw track and the last seconds of its video came out
-silent. Each agent writes its `build.py`, which has to regenerate everything from scratch.
+silent. Each agent writes its `build.py`, which has to regenerate everything from scratch, and its
+`result.json` with the counts and the measurements it actually ran.
 
-### 8. Review
+A narrated variant also writes its `voice-script.json`: every line with the second it comes in on, how
+long it runs and whether the music ducks under it. That file is the contract — when the script was left
+as prose in an answer, the narration step had nothing to parse and the variant shipped mute — and the
+`duck` field is what stops anybody lowering a clip's audio by hand so the voice can be heard.
+
+For a narrated variant the captions are **cut from the voice that was generated**, not from estimates:
+`transcribe.py --align` gives every word the second it is really pronounced on, and the spec's `sync`
+takes the caption times from that file. Half a second of drift reads as a dubbed video and no frame strip
+shows it, because every frame on its own looks right. Every render passes `verify.py` before it leaves
+the builder.
+
+### 10. Arc (post pass) and Review
+The same `story-doctor` watches the rendered variants: the frame strip, the last four seconds of audio
+and the last 0.6 s frame by frame, hunting for the endings that read as "it got cut off" — a last frame
+caught mid-pan, music that stops before the picture, a caption still on screen on the last frame, a
+promise paid and then four more seconds of nothing, variants that all run the same length when the
+concept said they differed in duration. It writes `story/<concept>-post.json`.
 One `critic-reviewer` per concept, different from whoever built it, with every variant of the concept in
 front of it so they can be compared **together**: that's how you find what doesn't show inside a single
 one (the same frame with a different treatment, a `look` that washes out the hook, the same shot repeated
 in two cuts). A measurable checklist: `blackdetect`, `silencedetect`, loudness and real peak, the audio
 track's duration against the video's, the file size, a frame strip genuinely looked at, and a hand count
-of the cuts the main person appears in. The reviewer doesn't just report: **it fixes and re-renders**.
+of the cuts the main person appears in, checked against **the concept's own quota** and not against a
+fixed number. The reviewer doesn't just report: **it fixes and re-renders**.
 
-### 9. Delivery
+### 11. Delivery
 Per variant: the clean 1080x1920 MP4 with no copyrighted music, the `-preview` with the song just for
 listening, and a 720p copy for chat. One README per concept, with what each variant is, which sound to
 add in the app, the suggested hashtags and the timed script if it's narrated. Every round is a new
@@ -193,85 +266,53 @@ version: `v2` doesn't touch `v1`.
 
 ## How the agent count gets decided
 
-### Photo catalog (phase 4)
+The table — how many agents per phase, and how the batches split — lives in one place:
+[`skills/reel-forge/references/agents.md`](../skills/reel-forge/references/agents.md), which is what
+the orchestrator loads when it reaches that phase. [`parallelism.md`](parallelism.md) explains the
+reasoning, the caps that actually bind, what must never be parallelized and how a run survives the
+machine going to sleep.
 
-| Files | Agents | How they split |
-|---|---|---|
-| Under 200 | **3** | One per day or per place |
-| 200 to 1000 | **6** (8 if the period covers more than 10 days) | One per day, or per batch of ~150 files |
-| Over 1000 | **10** | Cheap sift first; then batches of ~150 of what's left |
+What's worth keeping in mind at the architecture level:
 
-On top of that table, **never more agents than days**: an agent with half a day of material has nothing
-to compare against and repeats what the one next to it already said.
-
-### Video and 360 catalog
-
-| Material | Agents | Why |
-|---|---|---|
-| Videos | **1 per 4** (configurable) | Actually watching a video is ~15 tool calls (frame strip, crops, transcription, checking a second). Past 4-5, the agent runs out of context and starts describing from memory |
-| 360 clips | **1 per clip** | Every equirectangular yields several different framings and needs its own ring sheets. Worth a whole agent even if it's 20 seconds long |
-
-### Trends
-**1** by default, in parallel with everything else. Up to **3** when it's worth splitting by theme
-(formats, sounds, niche) so one agent doesn't contaminate the other.
-
-### Concepts
-**4-8 creative directors** in parallel, one per angle: fewer than 4 and every proposal looks alike; more
-than 8 and the chief editor spends more time discarding than choosing. Then **1 chief editor**, always
-exactly one, because its job is precisely to see everything together.
-
-### Build
-**2 per concept, always.** That's what lets you compare: with one variant you're judging in the abstract;
-with three or more, you stop reviewing them. The two get chosen so they read differently (silent with
-diegetic sound versus narrated, long versus short, chronological order versus energy order).
-
-### Review
-**1 per concept**, different from whoever built it, with every variant in front of it. It measures and
-looks at frames, which is cheap, but it also fixes: if it has to re-render, that counts as another render
-in the machine's budget.
-
-### Caps and adjustments
-
-- **Practical cap: ~10 agents at a time.** Beyond that, renders start taking minutes and it isn't the
-  code's fault, it's the disk and the CPU. With 4 concepts, the build runs in two waves.
-- **Short on time** (`--fast`): the agent cap goes up and the frame-strip resolution and transcription
-  quality go down.
-- **No hurry:** smaller batches (~100 files) for a finer review.
-- **Material in the cloud:** the network sets the limit. Catalog with thumbnails, download only the chosen
-  originals, and in a single round, after curation.
-- **A modest machine** (under 8 GB of free RAM or fewer than 4 cores): cap at 3 agents, because the
-  `ffmpeg` preprocessing competes with them.
-- **Low disk** (under ~20 GB free): low-resolution proxies and an explicit warning.
-- **An agent stalls:** don't wait for it indefinitely. Carry on with what you have and note in the README
-  what was left uncataloged.
-
-### Summary
-
-| Phase | Agents | Rule |
-|---|---|---|
-| Scope, inventory, sift | 0 | Main thread |
-| Photo catalog | 3-10 | Table by file count, never more than days |
-| Video catalog | 1 per 4 videos | Context per agent, not file count |
-| 360 catalog | 1 per clip | Every clip is its own job |
-| Trends | 1-3 | In parallel with the catalog |
-| Concepts | 4-8 directors + 1 chief editor | One angle per director; the editor chooses and asks for fixes |
-| Build | 2 per concept | In waves if it goes past ~8 agents |
-| Review | 1 per concept | Sees every variant of the concept and compares them |
+- **The context phase is the bottleneck and where the value is.** Everything downstream is a function
+  of how well the material got looked at.
+- **Never more agents than units of material.** An agent with half a day of photos repeats what the one
+  next to it already said.
+- **~10 agents at a time**, because `ffmpeg` is already parallel internally and four simultaneous
+  renders take almost as long as four in series.
+- **What decides is serialized**: one chief editor, one reviewer per concept. A committee produces four
+  videos that look alike.
+- **Adjust for the machine, not for the material**: fewer than 4 cores or under 8 GB free → cap at 3
+  agents; material in the cloud → the network sets the limit, catalog from thumbnails and download the
+  chosen originals in a single round; under ~20 GB free disk → low-resolution proxies and say so.
+- **An agent stalls:** don't wait for it indefinitely. Carry on with what you have and note in the
+  README what was left uncataloged.
 
 ## What gets handed between phases
 
-| Artifact | Who writes it | Who reads it |
-|---|---|---|
-| Source inventory | Phase 2 | Phases 3 and 4 |
-| `workspace/sheets/` (contact sheets, strips, face crops) | Phase 3 | Catalog agents |
-| `workspace/catalog/catalog-<batch>.json` | Each catalog agent | Phase 4b |
-| `workspace/catalog/catalog.json` | Phase 4b | Phases 6 and 7 |
-| `workspace/trends/trends.json` | The trend researcher | Phase 6 |
-| `keys.json` per 360 clip | `360-scout` | Builders |
-| The proposed concepts and `selection.json` | Directors and chief editor | Builders |
-| `workspace/concepts/<concept>/common/` | Main thread | Both builders |
-| `workspace/concepts/<concept>/<A\|B>/build.py` and `spec.json` | Builder | Render engine and reviewer |
-| `deliveries/v1/<concept>/` | Phase 9 | You |
+Everything an agent hands to another agent is **JSON with a schema in
+[`schemas/`](../schemas/README.md)**, written to disk before the agent answers and validated with
+`schemas/validate.py`. The chat message is a summary of the file, never the result itself.
+
+| Artifact | Who writes it | Who reads it | Contract |
+|---|---|---|---|
+| Source inventory | Phase 2 | Phases 3 and 4 | — |
+| `workspace/sheets/` (contact sheets, strips, face crops) | Phase 3 | Catalog agents | — |
+| `workspace/catalog/catalog-<batch>.json` | Each catalog agent | Phase 4b | `catalog-item` |
+| `workspace/catalog/catalog.json` | Phase 4b | Phases 6, 7 and 9 | `catalog-item` |
+| `workspace/trends/trends.json` | The trend researcher | Phase 6 | `references/trends.md` |
+| `keys.json` per 360 clip | `360-scout` | Builders | `video-360` skill |
+| `concepts/<slug>.json` | Directors | Story doctor, chief editor, builders | `concept` |
+| `selection.json` | Chief editor | You and the builders | its own report |
+| `workspace/story/<concept>.json` | `story-doctor`, pre pass | Builders (its `blocks` are binding) | `story-review` |
+| `workspace/concepts/<concept>/common/` | Main thread | Every builder of that concept | `RESOURCES.json` |
+| `<letter>/build.py`, `spec.json` and `result.json` | Builder | Render engine and reviewer | `variant-build-result` |
+| `<variant>.timeline.json` next to the MP4 | Render engine | `verify.py`, story doctor, reviewer | `render-timeline/1` |
+| `common/voice/alignment.json` | `transcribe.py --align` | The engine's `sync`, and `verify.py` | `caption-sync/1` |
+| `voice-script.json` next to the MP4 | Builder, when narrated | The narration step and the user | `voice-script` |
+| `workspace/story/<concept>-post.json` | `story-doctor`, post pass | Reviewer and you | `story-review` |
+| `workspace/concepts/<concept>/review.json` | Reviewer | You | `review-result` |
+| `deliveries/v1/<concept>/` | Phase 11 | You | — |
 
 Everything lives in the project's working folder, never in the plugin's repo:
 

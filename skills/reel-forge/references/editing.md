@@ -1,7 +1,9 @@
 # Editing: the engine, the effects and what already cost dearly
 
-Engine: `skills/video-engine/scripts/render.py`. It reads a JSON spec and renders a vertical
-1080x1920. It needs `ffmpeg` on the PATH. Works on macOS, Linux and Windows.
+Engine: `skills/video-engine/scripts/render.py`. It reads a JSON spec and renders the video in the
+format the destination asks for — 9:16 (1080x1920) by default, plus 4:5, 1:1 and 16:9. It needs
+`ffmpeg` on the PATH. Works on macOS, Linux and Windows. Nothing is delivered without
+`scripts/verify.py` passing.
 
 ```bash
 uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/render.py" spec.json
@@ -16,25 +18,34 @@ hours to find.
 ```json
 {
   "out": "trip/deliveries/v1/concept/concept-A.mp4",
+  "format": "9x16",
   "crf": 22,
   "look": "film|teal|clean",
   "grain": 0.008,
   "bpm": 123.0, "beat0": 0.0,
   "fade_out": 0.4,
   "audio_fade_out": 1.2,
+  "duck": true,
   "preview_audio": {"src": "common/song.m4a", "offset": 0.0, "gain": 1.0},
-  "audio": [{"src": "common/natural_audio.wav", "at": 0.0, "gain": 1.0}],
+  "audio": [{"src": "common/voice/l0.wav", "at": 0.6, "gain": 1.0},
+            {"src": "common/natural_audio.wav", "at": 0.0, "gain": 1.0}],
+  "sync": {"from": "common/voice/alignment.json", "style": "clean", "pos": "low"},
   "segments": [
     {"src": "common/p01.jpg", "beats": 2, "focus": [0.5, 0.4], "kb": 0.06, "punch": 0.10},
-    {"src": "common/c03.mp4", "dur": 2.4, "start": 3.0, "speed": 0.5, "flash": true}
+    {"src": "common/c03.mp4", "dur": 2.4, "start": 3.0, "speed": 0.5, "flash": true, "says": "the market"}
   ],
   "captions": [
-    {"t0": 0.0, "t1": 2.0, "text": "nobody tells you this", "style": "clean", "pos": "upper"}
+    {"t0": 0.0, "t1": 2.0, "text": "nobody tells you this", "style": "clean", "pos": "upper"},
+    {"seg": -1, "text": "and that is the whole trip", "style": "serif", "pos": "center"}
   ]
 }
 ```
 
 - `out` relative to `$REEL_FORGE_OUTPUT`, or absolute / with `~` / with `$VAR`.
+- `format`: `9x16` (default), `4x5`, `1x1` or `16x9`. Sizes are always written in the 9x16 reference
+  and the engine rescales them; `focus` does NOT travel between formats, so re-check the framing.
+- `duck`: everything drops under the narration on its own (default `true`).
+- `sync` / `subs` / `seg`: where the text's times come from. See "Text".
 - `focus`: the point (0-1) that ends up centred when cropping to 9:16.
 - `kb`: slow zoom over the segment. `punch`: a snap zoom that settles in ~0.2 s.
 - `speed 0.5` over 60 fps material gives real slow motion, without interpolation.
@@ -53,6 +64,41 @@ difference). The light copies go at 720p and crf 24 (4-11 MB).
 Grain of 0.03 at half resolution "shows up massively". Grain goes fine, at full resolution and in
 luminance only: **`grain` ≤ 0.008**. The engine caps it at 0.012.
 
+## Rhythm, length and ending
+
+**The length comes out of the idea, not out of a template.** The engine renders 9 seconds or 70 the
+same way, and nothing in the plugin wants a video to be under 30 s. What decides it is how much the
+concept needs to open, turn and land:
+
+| The concept is… | It usually lives at | Shape |
+|---|---|---|
+| one image, one joke, one number | 8-15 s | hook, proof, punch |
+| a moment with a turn (before → after, expectation → reality) | 18-30 s | hook, setup, turn, landing |
+| a story, a route, a day, a list of 5 | 35-60 s+ | hook, three or four beats, closing |
+
+A 45 s video is not a 20 s one with more shots: it is a video with **beats**. Each beat has its own
+small arc (it opens, it shows, it closes) and hands over to the next; if any of them can be removed
+without the ending changing, remove it and the video is shorter.
+
+**Pacing inside the video.** Opening cuts short and quick (0.6-1.2 s) to earn the first seconds;
+the body breathes (1.5-3 s) so what is on screen can actually be seen; the landing is the longest
+shot of the video. Cutting at the same interval from beginning to end reads as a slideshow, however
+good the material is.
+
+**The ending is a shot, not the point where the material ran out.** These are the ones that fixed the
+"it cuts off too soon" complaint:
+
+- The last shot lasts **0.8-1.5 s**. Under 0.6 s the video reads as a truncated file, and `verify.py`
+  warns about exactly that.
+- Something **closes**: the line that answers the hook, the number, the face reacting, the wide shot
+  the whole thing was building to. A closing text that lands with the last cut counts.
+- `fade_out` 0.3-0.5 and `audio_fade_out` 1.0-1.5. `0` only on a video built to loop — and then the
+  seam IS the ending, so the last frame has to hand over to the first one.
+- The narration must finish **before** the picture does, never at the same second. A voice still
+  speaking at the last frame is the same failure heard instead of seen.
+- Do not stretch a video to reach a length: a repeated shot and a held final frame are more obvious
+  than a short video.
+
 ## Framing to 9:16
 
 - **Don't use a blurred background as a default.** A horizontal photo letterboxed between two blurred
@@ -63,6 +109,15 @@ luminance only: **`grain` ≤ 0.008**. The engine caps it at 0.012.
 
 ## Text
 
+- **Nothing is timed by hand.** Over a narration the subtitles come from the voice itself
+  (`transcribe.py --align` → `"sync"` in the spec, word by word); over a clip whose audio is heard,
+  from its transcript (`"subs"`); with no audio behind it, the caption is tied to its shot
+  (`"seg": 3`) instead of to a typed second. Typed seconds match on the first render and drift on the
+  next change of duration — the video then looks dubbed and no frame strip shows it. `verify.py`
+  fails at 0.25 s of drift.
+- **What the voice names has to be on screen while it names it.** Declare it in the segment
+  (`"says": "the cathedral"`) and the verifier checks it against the narration's word times. The
+  usual way this breaks is reordering clips and not re-reading the script.
 - **9:16 safe area:** 150 px top, **480 px bottom** (that's where the app's buttons and description
   live) and 180 px right. A chip "right at the bottom" gets covered by the interface.
 - Genuinely centred: on the screen's centre, with a symmetric margin.
@@ -147,6 +202,13 @@ And if it ever gets added, it should follow these rules, which came out of a "th
 - **A helper script with no execute permission** that nobody was calling: the preview kept coming out
   clipped on every rebuild. If a step fixes something, it goes inside the script that renders, not in
   the README.
+- **Subtitles with typed seconds.** They matched on the first render, then a duration changed and the
+  text ended up half a second off the voice. Over narration, `sync`; over a clip, `subs`; with no
+  audio, `seg`.
+- **A video that ends on the last frame of a 0.4 s cut.** It reads as a truncated file, not as an
+  ending. The landing shot wants 0.8-1.5 s, something that closes, and a `fade_out`.
+- **Delivering without the gate.** `uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/verify.py"
+  video.mp4 --script voice-script.json` — it exits 1 on a real failure and warns on the ending.
 - **In zsh, `$VAR[a1]` inside a `filter_complex` eats the label** (zsh reads it as an array index). The
   result: an mp4 with two audio tracks and no error at all. Always use `${VAR}[a1]` and check with
   `ffprobe -show_entries stream=index,codec_type`.

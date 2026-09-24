@@ -19,6 +19,12 @@ import config  # noqa: E402
 W, H = config.W, config.H
 
 
+def refresh():
+    """Re-reads the canvas after `config.set_format()`. render.py calls it; nothing else has to."""
+    global W, H
+    W, H = config.W, config.H
+
+
 # ------------------------------------------------------------ segmentation
 
 def _photo_module():
