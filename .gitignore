@@ -1,0 +1,91 @@
+# --- Salidas de video y proyectos ---
+# El material del usuario y los renders NUNCA se versionan.
+out/
+salidas/
+proyectos/
+build/
+*.mp4
+*.mov
+*.MOV
+*.m4v
+*.insv
+*.insp
+*.webm
+*.gif
+
+# --- Audio generado (voz, mezclas, previews de música) ---
+*.wav
+*.aiff
+*.m4a
+*.mp3
+!**/assets/**
+
+# --- Fotos y material fuente ---
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.HEIC
+*.dng
+*.tiff
+!docs/img/**
+!ejemplos/**
+
+# --- Cachés y modelos descargados ---
+.cache/
+cache/
+modelos/
+models/
+*.tflite
+*.onnx
+*.pt
+*.safetensors
+*.gguf
+
+# --- Temporales de trabajo ---
+tmp/
+temp/
+*.tmp
+*.log
+proxys/
+proxies/
+frames/
+tiras/
+contactsheets/
+
+# --- Specs e inventarios generados en corridas locales ---
+*.spec.json
+inventario*.json
+catalogo*.json
+duraciones.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.uv/
+.ruff_cache/
+.pytest_cache/
+
+# --- Sistema y editores ---
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# --- Secretos ---
+.env
+.env.*
+*.key
+credenciales*.json
+
+# --- Excepciones: lo que sí es parte del plugin ---
+# (efectos de sonido, tipografías y material de ejemplo que se distribuyen con el repo)
+!**/assets/**
+!ejemplos/**
+!docs/img/**

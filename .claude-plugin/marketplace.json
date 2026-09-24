@@ -1,0 +1,14 @@
+{
+  "name": "reel-forge",
+  "description": "Marketplace de reel-forge: el plugin que convierte una biblioteca de fotos y videos en TikToks/Reels verticales.",
+  "owner": {
+    "name": "reel-forge contributors"
+  },
+  "plugins": [
+    {
+      "name": "reel-forge",
+      "source": "./",
+      "description": "Convierte tu biblioteca de fotos y videos en TikToks/Reels verticales, con investigación de tendencias, curaduría en paralelo y varias variantes por concepto."
+    }
+  ]
+}

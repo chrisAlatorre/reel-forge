@@ -1,0 +1,22 @@
+{
+  "name": "reel-forge",
+  "displayName": "Reel Forge",
+  "version": "0.1.0",
+  "description": "Convierte tu biblioteca de fotos y videos en TikToks/Reels verticales: inventario, curaduría con agentes en paralelo, investigación de tendencias, edición automática y varias variantes por concepto.",
+  "author": {
+    "name": "reel-forge contributors",
+    "url": "https://github.com/chrisAlatorre/reel-forge"
+  },
+  "homepage": "https://github.com/chrisAlatorre/reel-forge",
+  "repository": "https://github.com/chrisAlatorre/reel-forge",
+  "license": "MIT",
+  "keywords": [
+    "tiktok",
+    "reels",
+    "video",
+    "ffmpeg",
+    "fotos",
+    "360",
+    "tts"
+  ]
+}
