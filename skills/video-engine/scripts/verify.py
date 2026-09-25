@@ -30,7 +30,7 @@ Criteria:
 | `text_sync`    | burned-in text drifts more than `--text-tolerance` (0.25 s) from the voice saying it |
 | `text_cut`     | *warns*: text with no voice behind it stays on screen after its shot is gone |
 | `voice_image`  | the voice names something (a segment's `says`) while another shot is on screen |
-| `ending`       | *warns*: it ends on a dry cut — picture still moving, sound at full level, no fade, no closer, last shot under 0.6 s |
+| `ending`       | *warns*: with `"loop": true` in the spec, that the last frame does not land on the first; otherwise: it ends on a dry cut — picture still moving, sound at full level, no fade, no closer, last shot under 0.6 s |
 | `preview_size` | the review copy weighs more than `--max-preview-mb` |
 
 `voice_audible` is the one that catches the failure nobody sees in a frame strip: a video delivered
@@ -57,6 +57,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import sys
 from pathlib import Path
 
@@ -133,6 +134,29 @@ def parse_script(path):
         if m and len(m.group(2).strip(" |")) >= 8:
             lines.append((float(m.group(1)), m.group(2).strip(" |")))
     return lines
+
+
+def loop_seam(video, v_dur):
+    """PSNR in dB between the LAST frame and the FIRST. None when it cannot be measured.
+
+    This is the measurement of a looping ending: if the video starts again with no jump, the two
+    frames are nearly the same and the PSNR climbs. Done with ffmpeg alone (this script depends on
+    nothing else): two PNGs and the psnr filter.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        a, b = Path(d) / "first.png", Path(d) / "last.png"
+        for args, dst in ((["-i", str(video)], a),
+                          (["-sseof", "-0.05", "-i", str(video)], b)):
+            r = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", *args,
+                                "-frames:v", "1", str(dst)], capture_output=True, text=True)
+            if r.returncode != 0 or not dst.exists():
+                return None
+        r = subprocess.run(["ffmpeg", "-nostdin", "-v", "info", "-i", str(a), "-i", str(b),
+                            "-lavfi", "psnr", "-f", "null", "-"], capture_output=True, text=True)
+        m = re.findall(r"average:([0-9.]+|inf)", r.stderr)
+        if not m:
+            return None
+        return 99.0 if m[-1] == "inf" else float(m[-1])
 
 
 def load_timeline(video, given, enabled=True):
@@ -375,6 +399,12 @@ def main():
     ap.add_argument("--peak", type=float, default=-0.5, help="the true-peak ceiling in dBTP")
     ap.add_argument("--voice-margin", type=float, default=4.0,
                     help="dB the voice band has to rise over the background while someone speaks")
+    # 18 dB, calibrated on real footage at grain 0.006: a loop that meets scores 24.2 dB; an
+    # ordinary ending, measured against a different opening shot, scores 3.7; and the CEILING is
+    # not infinity but 27.1 — what two CONSECUTIVE frames of one still shot score, because the
+    # grain is drawn per frame. A floor above that would fail perfect loops.
+    ap.add_argument("--loop-seam-db", type=float, default=18.0,
+                    help="PSNR floor between the last frame and the first when the video declares a loop")
     ap.add_argument("--timeline", help="the render's timeline; by default <video>.timeline.json")
     ap.add_argument("--no-timeline", action="store_true", help="ignore the timeline sidecar")
     ap.add_argument("--text-tolerance", type=float, default=0.25,
@@ -633,7 +663,22 @@ def main():
     bad = (len(symptoms) >= 2
            or still_moving
            or (last_dur is not None and last_dur < a.min_last_shot and not faded))
-    if last_dur is None and not captions:
+    declared_loop = bool((timeline or {}).get("loop"))
+    if declared_loop:
+        # The video says it closes in a loop. There, a dry cut is NOT a defect: it is the form.
+        # What has to be checked is a different thing — that the seam does not show, i.e. that the
+        # last frame IS the first. Without this, every looping video came out warned for nothing.
+        seam = loop_seam(video, v_dur)
+        if seam is None:
+            skip(report, "ending", "it declares a loop and I could not measure the seam")
+        else:
+            warn(report, "ending", seam >= a.loop_seam_db,
+                 (f"it closes in a loop and the seam does not show: last frame against first, "
+                  f"PSNR {seam:.1f} dB (floor {a.loop_seam_db:g})") if seam >= a.loop_seam_db else
+                 (f"it declares a loop but the seam jumps: last frame against first, PSNR "
+                  f"{seam:.1f} dB, under the {a.loop_seam_db:g} floor. Either the closing shot "
+                  f"does not land on the opening frame, or there is a fade eating it"))
+    elif last_dur is None and not captions:
         skip(report, "ending", "I cannot tell where the last shot starts")
     else:
         # The two numbers travel with the verdict either way: the story-doctor argues about the

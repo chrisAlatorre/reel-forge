@@ -55,6 +55,42 @@ or a 2:1 equirectangular), **it isn't yours**: hand it to `360-scout` and say so
   data, licence plates and ID cards.
 - Ranges where the subject is left with an odd expression, if the profile asks you to look after them.
 
+## What is between the camera and the subject
+
+A shot is two different judgements and only one of them is easy. *What was happening* is the easy
+one, and it is the one everybody writes down. *What the rectangle actually looks like* is the one
+that gets skipped, and it is the one that ships a bad video.
+
+The shot this rule exists for was catalogued, honestly, as "a ship passes the window",
+and that was true. It was also: the bottom third taken by two strangers seen from behind, a window
+mullion cutting the picture in half, and dirty glass over the only thing the caption pointed at.
+Nothing in the description was wrong. Nobody had looked at the frame.
+
+So look at the frame, and **measure it**:
+
+```
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/framecheck.py PHOTO.jpg
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/framecheck.py CLIP.MOV --from 9.6 --to 13.0
+```
+
+It reports what stands between the lens and the subject, in the **9:16 crop** (which is what will
+be seen, not what was shot): people in the bottom third seen from any angle, long straight edges
+cutting the picture, veiling glare, and how much of the height is actually free. It reports; it
+does not decide. You decide, with its numbers in front of you.
+
+Record the result in `obstructions` on the item — `glass`, `frame`, `foreground_people`,
+`foreground_object`, `dirt`, `reflection`. When it is not empty the schema holds you to two things:
+**`quality` is at most 2**, and `notes` says either how a crop removes the obstruction or why the
+shot earns its place anyway. Both are legitimate answers. Silence is not.
+
+Three things this is NOT:
+- It is not "no people in the background". A market full of people is the shot. This is about
+  bodies **between the lens and the subject**, close enough to own the bottom of the frame.
+- It is not "never shoot through glass". A bullet-train window with the country going past is a
+  good shot. Dirty glass over the one thing the caption names is not.
+- It is not a gate. Nothing is deleted. A shot with an obstruction that you still want goes in with
+  its `obstructions` filled and a `notes` that argues for it.
+
 ## Output format
 Write `<working_folder>/catalog/catalog-<batch>.json` (one agent, one batch, one file) and reply in 5-8 lines: duration, how many ranges,
 which is the best and why.

@@ -24,6 +24,7 @@ outside the project is the user's own preferences and publishing history, in `~/
 ```bash
 S="$CLAUDE_PLUGIN_ROOT/skills/sources/scripts"
 uv run "$S/preferences.py"    brief                                        # what this user already told us
+uv run "$S/facts.py" --project <project> brief                            # what is true about THIS project
 uv run "$S/inventory.py"      --from 2026-08-01 --to 2026-08-20 --summary -o inventory.json
 uv run "$S/validate_dates.py" --from 2026-08-01 --to 2026-08-20 --plan corrections.json
 ```
@@ -480,6 +481,54 @@ uv run python -c "import sources, json; print(json.dumps(sources.library_people(
 
 ---
 
+## `framecheck.py`: what is in the rectangle
+
+Curation answers two questions and only writes down the easy one. *What was happening* goes into
+`description` and is usually right. *What the frame actually looks like* is the one nobody checks,
+and it is the one that ships a bad shot.
+
+```
+FC="uv run ${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/framecheck.py"
+$FC PHOTO.jpg
+$FC CLIP.MOV --from 9.6 --to 13.0
+$FC A.jpg B.jpg C.MOV                               # several at once: the models load once
+$FC --catalog workspace/catalog/catalog.json --apply   # the whole catalog, ~3 s a moment
+```
+
+**Catalog mode is how it normally runs**: the catalog workflow calls it right after the merge. With
+`--apply` it writes `obstructions` back only for the case that is never a judgement — bodies near the
+lens under the subject — and caps that item's `quality` at 2 with the reason in `notes`. What is a
+judgement (a lone window edge: a bullet train with the country going past is a good shot) goes only
+into `catalog.framecheck.json` beside the catalog, for the directors to weigh. Frames are read at
+1280 px tall, since every measurement is a share of the frame; on 4K sources that took it from ~14 s
+to ~3 s a moment with identical verdicts.
+
+It judges the **9:16 crop**, which is what will be seen rather than what was shot, and it reads
+frames through **ffmpeg**, not OpenCV, because a phone stores a vertical video as a horizontal
+stream plus a rotation flag — reading it the other way measures the middle of the wrong picture.
+It fills `obstructions` on the catalog item, and the schema then requires `notes` and caps
+`quality` at 2.
+
+| It reports | Which means |
+|---|---|
+| `people_by_third` | share of each horizontal third that is a person, **from any angle**. A face detector does not see the back of a head, and the shot this exists for is two strangers with their backs to the lens. |
+| `crossing_lines` | long straight edges cutting the picture: window mullions, bars, door jambs. |
+| `haze`, `contrast` | veiling glare and flatness. |
+| `clear_band` | tallest band of height with nothing blocking in it. |
+| `findings` | the shortlist worth arguing about. Empty means nothing stood out. |
+
+**`haze` never speaks on its own, and that is a measured decision, not caution.** Across real
+material it does not separate dirty glass from real weather: a misty seascape scores 0.47 and the
+dirty boat window 0.39. It only becomes a finding once something else establishes there *is* glass
+— an edge cutting the frame, or bodies right under the lens. The two signals that do discriminate
+are people in the bottom third and a crossing edge.
+
+It reports; it never gates and never deletes. A shot through a bullet-train window with the country
+going past is a good shot; the same technique over the one thing the caption names is not. That
+difference is a judgement, and the point of the numbers is that the judgement gets made with them.
+
+---
+
 ## Who is in the material, without Apple Photos
 
 Apple Photos hands over `faces` and `people` for free, and `--person "Ana Reyes"` filters on them.
@@ -664,6 +713,41 @@ addresses, phone numbers, long card-like numbers and anything that smells of a c
 refusal fires, rephrase the rule so it applies to any photo rather than to one file.
 
 The file is written `0600` in a `0700` folder, atomically, and nothing in it is ever uploaded.
+
+---
+
+## Facts of the project: what happened
+
+Preferences are about the user and hold on every project. Facts are about **one** project — who was
+there, where, when — and they live with it, in `<project>/facts.json`, written by
+[`facts.py`](scripts/facts.py):
+
+```bash
+F="uv run $S/facts.py --project <the folder that holds workspace/>"
+$F add "They travelled with a friend from the start, through the first three cities" \
+   --about people --when 2026-07-31..2026-08-16 \
+   --forbid '\b(llegu[ée]|viaj[ée]|viajaba)\b[^.!?]{0,40}\bsol[oa]\b' --allow-if 'Oporto|Porto' \
+   --said "<the user's words>"
+$F brief                                   # paste into every agent that writes words
+$F check voice-script.json spec.json       # exit 1: a line contradicts a fact
+$F show · $F rm f-002 · $F adopt-rule r-006   # adopt-rule: move a misfiled preference here
+```
+
+| What the user says | Where it goes |
+|---|---|
+| "that's my friend, not a stranger", "we split up in the last city", "that was the 3rd" | `facts.py add` |
+| "I don't want to appear so much", "not that voice", "no forced poses" | `preferences.py` |
+
+Write a fact **the moment the user corrects what happened**, with `--said` quoting them, and give it
+the phrasings it rules out (`--forbid`) plus the context where those phrasings become true again
+(`--allow-if`: being alone IS true once the friend has gone home). `check` then catches the exact sentence the user
+already rejected, in any narration or caption, before it can ship again. It is a backstop: the
+story-doctor still reads `brief` and squares the whole story with it, because a false premise rarely
+comes out as one forbidden phrase.
+
+`preferences.py add-rule` refuses a sentence that reads like an event and sends it here. That is on
+purpose: filed as a preference, "the friend travelled along until the last city" would be applied to the
+next trip, where nobody was along.
 
 ---
 

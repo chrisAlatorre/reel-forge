@@ -385,9 +385,30 @@ def next_id(rules: list) -> str:
     return f"r-{(max(used) + 1 if used else 1):03d}"
 
 
+# A rule says how the user likes videos and is true on every project. A sentence that says what
+# HAPPENED — who travelled with whom, where they split up, which day — is a fact of one project, and
+# filed here it leaks into the next trip as if it were true there too. That already happened once.
+FACTLIKE = re.compile(
+    r"\b(travell?ed|flew|went|arrived|met|was with|split up|stayed|visited|trip|"
+    r"viaj[óoéea]\w*|fu[ie]\b|lleg[óoué]\w*|regres[óoé]\w*|se separ\w*|conoc[íi]\w*|"
+    r"\d{4}-\d{2}-\d{2}|until|hasta que|from there|desde ah[íi])\b", re.I)
+
+
+def looks_like_a_fact(text: str) -> bool:
+    return bool(FACTLIKE.search(text))
+
+
 def cmd_add_rule(args) -> int:
     data = load()
     text = guard(args.text, "rule")
+    if looks_like_a_fact(text) and not args.global_anyway:
+        raise Refused(
+            "That reads like something that HAPPENED on one project (who, where, when), not like "
+            "how the user wants their videos. A preference applies to every future project, so a "
+            "fact filed here gets applied to trips it has nothing to do with.\n"
+            "Store it with the project instead:\n"
+            "  uv run facts.py --project <project folder> add \"<the fact>\" --about people\n"
+            "If it really is a rule for every project, run it again with --global-anyway.")
     said = guard(args.said, "quote") if args.said else None
     rules = data.setdefault("rules", [])
     for rule in rules:
@@ -475,6 +496,8 @@ def main() -> int:
     s.add_argument("--kind", choices=RULE_KINDS, default="avoid")
     s.add_argument("--topic", choices=RULE_TOPICS, default="other")
     s.add_argument("--said", help="the user's own words, if they help (also filtered)")
+    s.add_argument("--global-anyway", dest="global_anyway", action="store_true",
+                   help="store it even though it reads like a fact of one project")
     s.set_defaults(func=cmd_add_rule)
 
     s = sub.add_parser("rm-rule", help="remove a rule by id")

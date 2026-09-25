@@ -23,12 +23,14 @@ Spec summary:
   "fps": 30, "crf": 22,
   "look": "film" | "teal" | "clean", "grain": 0.008,
   "fade_out": 0.4, "audio_fade_out": 1.2,
+  "loop": false,                        # true: it closes on its own first frame (put both fades at 0)
   "bpm": 123.0, "beat0": 0.0,
   "segments": [
     {"src": "photo.jpg", "beats": 2, "focus": [0.5, 0.4], "kb": 0.06, "punch": 0.10},
     {"src": "clip.mov", "dur": 2.4, "start": 3.0, "speed": 0.5, "flash": true, "subs": true}
   ],
-  "captions": [{"t0": 0.0, "t1": 2.0, "text": "...", "style": "clean", "pos": "low"},
+  "captions": [{"t0": 0.0, "t1": 2.0, "text": "...", "style": "clean", "pos": "low",
+                "instant": true},                    # already up on its first frame: for the hook
                {"seg": 3, "text": "..."}],          # tied to the cut instead of to a second
   "sync": {"from": "voice/alignment.json"},          # subtitles taken from the voice, word by word
   "audio": [{"src": "voice/l0.wav", "at": 1.2, "gain": 1.0}],
@@ -373,6 +375,7 @@ def prepare_captions(caps):
                 t += d
         else:
             pieces.append({**common, "t0": c["t0"], "t1": c["t1"], "pop": c.get("pop", True),
+                           "instant": bool(c.get("instant")),
                            "text": c["text"],
                            "img": render_text(c["text"], style, c.get("size"), c.get("color"))})
     return pieces
@@ -381,11 +384,16 @@ def prepare_captions(caps):
 def paste_text(frame, piece, t):
     img = piece["img"]
     age = t - piece["t0"]
-    if piece["pop"] and age < 0.12:
+    # `instant`: no pop and no fade-in, so the text is already up on its FIRST frame. It is for the
+    # hook: 0.06 s of fade is two frames, but they are exactly the two frames where the scroll is
+    # decided, and on the first one the text did not exist yet. The fade-out is kept.
+    instant = piece.get("instant")
+    if piece["pop"] and not instant and age < 0.12:
         e = age / 0.12
         s = 0.86 + 0.14 * (1 - (1 - e) ** 3)
         img = cv2.resize(img, (max(2, int(img.shape[1] * s)), max(2, int(img.shape[0] * s))))
-    global_alpha = min(1.0, age / 0.06) * min(1.0, (piece["t1"] - t) / 0.06)
+    entrada = 1.0 if instant else min(1.0, age / 0.06)
+    global_alpha = entrada * min(1.0, (piece["t1"] - t) / 0.06)
     h, w = img.shape[:2]
     # Genuinely centred on the SCREEN (cx = W/2), not on the safe area (which is asymmetric:
     # 60 px on the left and 180 on the right). Centring on the safe area leaves captions
@@ -485,7 +493,7 @@ def segment_subtitles(s, g0, g1):
         t1 = min(g1, max(t1, t0 + min_dur))
         cap = {"t0": t0, "t1": t1, "text": e["text"], "style": cfg.get("style", "clean"),
                "pos": cfg.get("pos", "low"), "size": cfg.get("size", 52), "source": "clip"}
-        for k in ("color", "words", "pop", "dx", "dy"):
+        for k in ("color", "words", "pop", "instant", "dx", "dy"):
             if k in cfg:
                 cap[k] = cfg[k]
         out.append(cap)
@@ -584,7 +592,7 @@ def sync_captions(cfg, total):
                "style": cfg.get("style", c.get("style", "clean")),
                "pos": cfg.get("pos", c.get("pos", "low")),
                "size": cfg.get("size", c.get("size", 52))}
-        for k in ("color", "pop", "dx", "dy"):
+        for k in ("color", "pop", "instant", "dx", "dy"):
             if k in cfg:
                 cap[k] = cfg[k]
         if cap["t1"] > cap["t0"]:
@@ -923,6 +931,7 @@ def main():
     timeline = {
         "schema": "render-timeline/1", "video": str(out), "format": fmt, "size": f"{W}x{H}",
         "fps": fps, "duration": round(total, 3),
+        "loop": bool(spec.get("loop")),          # the video closes by returning to its first frame
         "fade_out": float(spec.get("fade_out", 0) or 0),
         "audio_fade_out": float(spec.get("audio_fade_out", 1.2) or 0),
         "shots": [dict({"i": i, "t0": round(t0, 3), "t1": round(t1, 3), "dur": round(t1 - t0, 3),

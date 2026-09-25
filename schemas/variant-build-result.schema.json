@@ -39,7 +39,7 @@
         "letter": { "type": "string", "pattern": "^[A-H]$" },
 
         "spec": { "$ref": "#/$defs/path", "description": "spec.json the engine rendered." },
-        "builder": { "$ref": "#/$defs/path", "description": "build.py that regenerates the spec and the pre-renders FROM SCRATCH. A spec pointing at a temporary you already deleted is not reproducible." },
+        "builder": { "$ref": "#/$defs/path", "description": "What regenerates the spec and the render FROM SCRATCH: the variant.json the shared builder (skills/video-engine/scripts/variant.py) reads, or a build.py for anything it cannot express. A spec pointing at a temporary you already deleted is not reproducible." },
         "mp4": { "$ref": "#/$defs/path", "description": "Clean 1080x1920 render, no copyrighted music." },
         "preview": { "$ref": "#/$defs/path", "description": "-preview.mp4 with the song, for listening only." },
         "light": { "$ref": "#/$defs/path", "description": "-light.mp4 at 720p, for sending over chat." },

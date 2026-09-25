@@ -27,6 +27,12 @@ What gets a concept sent back more often than anything else: it opens well, buil
    write goes in that language; the JSON keys and your reply to whoever invoked you do not.
 6. Read `references/concepts.md` for the arc, the close moulds and the duration table, and write into
    `schemas/concept.schema.json`.
+7. Read the **project facts** you were handed (`facts.py brief`): who was there, where, when. A
+   concept built on a premise the facts deny — "the trip I took alone", when a friend was along until
+   the last country — gets thrown out whole at the story-doctor, however good it is. A catalog
+   description tells you what is in a frame, never who that person is to the user: when a recurring
+   face matters to your story, the facts say who it is, and if they don't, the story must not claim
+   it.
 
 ## The arc is the concept
 

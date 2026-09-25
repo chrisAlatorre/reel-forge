@@ -189,6 +189,36 @@ verifiable fact (place names, prices, dates) — research those, don't ask and d
 one of their accounts, driving a third-party app by clicks, or including an identifiable minor, medical
 material, documents or anything that looks sensitive.
 
+## What the user tells you: a preference or a fact
+
+Two kinds of correction sound alike and live in different places. Mixing them is a bug that fires
+on the NEXT project:
+
+| The user says | It is | It goes to | Lives in |
+|---|---|---|---|
+| "I don't want to be in every shot", "not that voice", "no forced poses" | how they like videos | `preferences.py add-rule` / `set` | `~/.config/reel-forge/preferences.json`, **global** |
+| "that guy is my friend", "we split up in the last city", "that was the 3rd, not the 4th" | what **happened** on this project | `facts.py add` | `<project>/facts.json`, **this project only** |
+
+A trip fact filed as a preference gets applied to the next trip as if it were true there. This
+already happened: "never call the trip solo, the friend travelled along until the last city" was stored
+globally, and the next trip — with nobody along — would have been narrated around a friend who was
+not there. `preferences.py add-rule` now refuses sentences that read like events and points here.
+
+**At the start of every run, paste both blocks into every agent that writes words** (directors,
+story-doctor, builders, critic):
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/preferences.py" brief
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/facts.py" --project <project> brief
+```
+
+And **before anything is rendered, and again on what ships**, run
+`facts.py --project <project> check voice-script.json spec.json concept.json`. Exit 1 means a line
+contradicts something the user already corrected, and it does not ship.
+
+Both files are local and neither is ever part of the plugin: the plugin holds the machinery that
+reads them, never their contents.
+
 ## The arc, and how long a video runs
 
 The feedback that produced this section, verbatim: *"something is being developed and it gets cut too

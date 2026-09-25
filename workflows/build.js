@@ -11,6 +11,8 @@
 //                            variants: [{ letter: "A", what: "silent, 35 s", duration_s: 35 }, ...],
 //                            moments: ["d3-07", "v2-11", ...] }]     ← catalog ids
 //   project, root         where the project lives (see catalog.js)
+//   project_dir           the folder holding workspace/ and facts.json (default <root>/<project>)
+//   workspace, deliveries override the two folders, for a project that predates the layout
 //   version               delivery round, default "v1" (the previous one is never overwritten)
 //   variantsPerConcept    default 2, used only when a concept arrives with no variants written
 //   storyDoctor           default true: the story-doctor passes, before building and after rendering
@@ -70,8 +72,12 @@ const PROJECT = A.project || 'project'
 // REEL_FORGE_HOME wins if it is set. Pass it already resolved in args.root.
 const ROOT = A.root || '~/Movies/reel-forge'
 const VERSION = A.version || 'v1'
-const WORKSPACE = `${ROOT}/${PROJECT}/workspace`
-const DELIVERIES = `${ROOT}/${PROJECT}/deliveries/${VERSION}`
+// The project folder holds workspace/ and facts.json. A project that predates the standard layout
+// passes its own folders; otherwise they hang off <root>/<project>/ (REEL_FORGE_WORKSPACE and
+// REEL_FORGE_OUTPUT, resolved by the caller, arrive the same way).
+const PROJECT_DIR = A.project_dir || `${ROOT}/${PROJECT}`
+const WORKSPACE = A.workspace || `${PROJECT_DIR}/workspace`
+const DELIVERIES = A.deliveries || `${PROJECT_DIR}/deliveries/${VERSION}`
 const LEDGER = `${WORKSPACE}/run.json`
 const UNITS = `${WORKSPACE}/run`
 const SCHEMAS = '$CLAUDE_PLUGIN_ROOT/schemas'
@@ -419,6 +425,12 @@ because a contract copied into six prompts is a contract that drifts:
 - ${SCHEMAS}/variant-build-result.schema.json — what you write to \`result.json\` before answering, and
   validate: \`uv run "$CLAUDE_PLUGIN_ROOT/schemas/validate.py" result.json --type variant-build-result\`.
 
+**What is TRUE about this project** — who was there, where, when — is not in the catalog. It is in
+the project's facts, which the user confirmed, and nothing you write may contradict them:
+\`uv run "$CLAUDE_PLUGIN_ROOT/skills/sources/scripts/facts.py" --project ${PROJECT_DIR} brief\`
+Run it before you write a single line. The builder checks every line and caption against them before
+it renders anything, and stops if one contradicts them.
+
 Fixed facts for this concept:
 - Catalog: ${CATALOG} · Trends: ${TRENDS} · Common folder: ${commonDir(concept)}
 - Render: ${ENGINE} <spec.json>
@@ -566,38 +578,39 @@ The order of the steps is not decoration: **the voice comes before the text**, b
 derived from it. Each step is short enough to finish inside the 2-minute rule and is saved before the
 next one starts.
 
-1. Write \`build.py\` there: it generates \`spec.json\` and renders, and it has to rebuild everything
-   from scratch, with no dependency on a temporary that no longer exists. If a step fixes something the
-   engine gets wrong, that step goes INSIDE the script — a loose \`.sh\` with no execute bit already let
-   a clipped preview through on every rebuild. Lay out the segment grid as the arc, each segment
-   carrying its \`role\`: hook, promise, development beat by beat, the turn, and a close that holds.
-2. **If the variant is narrated**, this happens FIRST. Write \`voice-script.json\` in the one format
-   (${SCHEMAS}/voice-script.schema.json) and prove it parses before you rely on it:
-   \`uv run "$CLAUDE_PLUGIN_ROOT/skills/voices/scripts/narrate.py" voice-script.json --parse-only\`
-   The number of lines it prints must equal the number of lines you wrote. If it does not, your file is
-   in the wrong shape and the voice will silently not be there. Then generate the voice **line by line**
-   (\`l0.wav\`, \`l1.wav\`…, \`durations.json\` written last) with the voice THE VOICE section names, and
-   check the real durations against the script: \`start_s[i] + duration[i] < start_s[i+1]\`, or two lines
-   talk over each other.
-3. **Now the text**, taken from the audio that exists: \`transcribe.py --align\` over the generated voice
-   and \`"sync"\` in the spec, \`"subs"\` over a clip whose own audio is heard, \`"seg"\` when there is
-   neither — and \`"says"\` on the segments the voice names. Then render.
+1. **You do not write a build script.** Write \`variant.json\` in your folder and run the shared
+   builder, which does the rest the same way for every variant:
+   \`uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/variant.py" variant.json --plan\` first
+   (it prints every cut in seconds AND in beats — look at it), then without \`--plan\`. Its shape is in
+   the docstring of that file (\`sed -n 1,80p\`). Lay the shots out as the arc, hook to close. When
+   the concept has a song with a BPM, every shot holds a whole number of \`beats\` — the builder lands
+   every cut on the beat and the first shot absorbs the song's intro; that is the default and it is
+   the point. Name the sound under each shot (\`audio\`: its own track, \`from\` a scene's clip for a
+   photo, or \`continue\`). Write \`"project": "${PROJECT_DIR}"\` so the facts get checked.
+2. **If the variant is narrated**, write \`voice-script.json\` in the one format
+   (${SCHEMAS}/voice-script.schema.json), prove it parses
+   (\`uv run "$CLAUDE_PLUGIN_ROOT/skills/voices/scripts/narrate.py" voice-script.json --parse-only\`
+   prints as many lines as you wrote), and give each narrated shot its \`line\`. The builder generates
+   the voice (the default one THE VOICE section names; the local one if it is not available, with the
+   reason recorded), aligns it word by word, and takes the captions from it — nobody types seconds.
+3. **What the builder does, in order**: voice, grid, alignment, natural sound, the preview's music
+   bed, **the project's facts against every line and caption BEFORE anything renders** (exit 4: a line
+   contradicts what the user told us — rewrite the line), render, the 720p copies, the gate
+   (\`verify.py\` with \`--spec\` and \`--script\`), and \`framecheck.py\` over every rendered cut. It
+   writes everything to ${deliveryDir(concept)}/ with the timeline sidecar, and \`build.json\` in your
+   folder. It holds a lock (exit 3 means another build of your letter is running) and skips a delivery
+   that is already up to date.
 4. Pull an \`fps=2,tile=12x6\` strip of the result and **look at it with Read**: captions readable and
    wrapped where you meant, landing on the word being said, nothing covering a face, no crop cutting off
    a head, dates and places correct. Look at the **last** second especially: it has to end, not stop.
-5. Copy the delivery to ${deliveryDir(concept)}/ as \`${concept.id}-${v.letter}.mp4\`, plus the
-   \`-preview.mp4\` if it carries a song and a \`-light.mp4\` at 720p for sending over chat.
-6. **The delivery gate, with everything it can check:**
-   \`${VERIFIER} ${deliveryFile(concept, v)} --spec spec.json${concept.narration ? ' --script voice-script.json' : ''} --json ${concept.id}-${v.letter}-verify.json\`
-   and keep fixing until it passes. Nothing is delivered without it. Fix in \`build.py\` and re-render;
-   never patch the MP4 by hand. \`--script\` is the check nobody can do by looking at a strip — whether
-   the voice actually rises over the clip's own audio. The text and ending checks (\`text_sync\`,
-   \`voice_image\`, \`ending\`) read the \`<video>.timeline.json\` the engine leaves beside the render, so
-   **copy that sidecar out with the MP4**; without it those checks are skipped, and a skipped check
-   looks exactly like a passed one. If it cannot be made to pass with the material that exists, set
-   \`deliverable: false\`, leave \`verify_pass: false\` and explain in
-   \`notes\` what is missing — the reviewer decides, and it goes into the concept's README as a stated
-   limit. An unverified file is never quietly delivered.
+5. **Exit 1 is the gate failing**: the verify JSON beside the MP4 says why; fix it in \`variant.json\`
+   and run it again, never by patching the MP4. **\`framecheck_flagged\` in \`build.json\`** means a
+   cut has something between the lens and the subject: replace or reframe it, or argue for it in
+   \`notes\`. If it cannot be made to pass with the material that exists, set \`deliverable: false\`,
+   leave \`verify_pass: false\` and explain in \`notes\` — an unverified file is never quietly
+   delivered.
+6. Anything the builder cannot express (a pre-render, an effect it lacks) is done in \`common/\` and a
+   shot points at the file. Do not fork the builder.
 7. Write \`result.json\` in your folder against ${SCHEMAS}/variant-build-result.schema.json, validate it
    and only then answer.
 

@@ -318,9 +318,9 @@ def modal_windows():
     return out
 
 
-# Los avisos del servidor de CapCut NO son ventanas: son un "toast" que vive ~2 s dentro de la
-# ventana principal, unos 4-5 s despues de pulsar Generar. modal_windows() nunca lo ve, y por eso
-# classify() culpaba a la rejilla de voces de un rechazo que venia del servidor.
+# CapCut's server notices are NOT windows: they are a toast that lives ~2 s inside the main
+# window, some 4-5 s after pressing Generate. modal_windows() never sees it, which is why
+# classify() used to blame the voice grid for a refusal that came from the server.
 SERVER_TOASTS = (
     ("busy", ("demasiadas personas", "too many people", "try again later",
               "intenta de nuevo", "intentalo de nuevo", "inténtalo de nuevo")),
@@ -331,10 +331,10 @@ SERVER_TOASTS = (
 
 
 def ax_texts():
-    """Todo el texto visible de CapCut (AXValue de los AXStaticText), que ax_nodes() no recoge.
+    """Every piece of text CapCut shows (the AXValue of its AXStaticText), which ax_nodes() drops.
 
-    ax_nodes() solo guarda elementos con AXDescription; un toast no tiene descripcion, lleva el
-    mensaje en AXValue. Sin esto el aviso del servidor es invisible para el script.
+    ax_nodes() only keeps elements that carry an AXDescription; a toast has none, it keeps its
+    message in AXValue. Without this the server's notice is invisible to the script.
     """
     a = _ax_api()
     pid = None
@@ -360,9 +360,9 @@ def ax_texts():
 
 
 def read_toast(seconds=9.0):
-    """Vigila el toast del servidor durante `seconds`. Devuelve (clase, texto) o None.
+    """Watches for the server's toast for `seconds`. Returns (kind, text), or None.
 
-    Se muestrea rapido a proposito: el aviso dura ~2 s. Devuelve en cuanto lo encuentra.
+    It samples fast on purpose: the notice lasts ~2 s. It returns as soon as it finds one.
     """
     t0 = time.time()
     while time.time() - t0 < seconds:

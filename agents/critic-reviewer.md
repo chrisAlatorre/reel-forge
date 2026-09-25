@@ -74,8 +74,30 @@ builder's included. Then:
      same 360 at similar yaw, and with two photos from the same burst.
    - **A cut outside its window:** if a catalog range said 0-4 s and the spec used 4-5.7, what's on
      screen is no longer what the catalog promised. Verify every resource against its window.
+   - **Something between the camera and the subject.** This is the one that survives curation,
+     because the catalog entry describes what was HAPPENING and it is usually true. Measure it on
+     the rendered file, cut by cut, at the seconds the timeline gives you:
+
+     ```
+     uv run ${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/framecheck.py VARIANT.mp4 --from T0 --to T1
+     ```
+
+     A finding here is a real defect and you fix it by **reframing or replacing the cut**, not by
+     arguing with it. The failure that put this line here: a ship shot from inside a boat,
+     with two strangers' heads owning the bottom third and a window mullion across the middle, in a
+     delivered video. Every automatic check was green, because none of them was looking at that.
    - **Uneven look between variants:** compare the **same frame** across A, B, C. A `look` that washes
      out the hook in two of four deliveries is a defect of the set, not of one variant.
+   - **Something the user already told us is false.** Run the project's facts over what SHIPS — the
+     voice-script and the timeline, which carries every caption actually burned in:
+
+     ```
+     uv run ${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/facts.py --project <project> \
+         check voice-script.json VARIANT.timeline.json
+     ```
+
+     Exit 1 is a blocker. A delivered video once told the user's trip as a solo trip when a friend
+     was in half the shots; the user caught it, and the second time would be on us.
 3. **Text against sound and picture.** The gate measures it; you spot-check three captions per variant
    **with the audio playing**, because this is the defect a viewer feels without being able to name it:
    - The caption is on screen while that word is being said (0.25 s), not a beat late.

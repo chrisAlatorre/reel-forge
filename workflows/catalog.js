@@ -547,7 +547,19 @@ Your job:
 3. Mark the candidates for the first frame (hook 5) and count how many moments carry the subject.
 4. Say what is MISSING (\`gaps\`): an uncovered day, a clip whose audio was never reviewed, a stretch
    of the trip with no b-roll, a batch that returned nothing. That is what goes to the next round.
-5. Update ${LEDGER}: phase \`catalog\` → \`done\`, with \`${WORKSPACE}/catalog/catalog.json\` as its
+5. **Judge the rectangle, not just the moment.** The curators described what was HAPPENING; run the
+   frame check over the merged catalog, in one process, so it measures what the 9:16 crop will show:
+
+   uv run "$CLAUDE_PLUGIN_ROOT/skills/sources/scripts/framecheck.py" \\
+       --catalog ${WORKSPACE}/catalog/catalog.json --apply
+
+   \`--apply\` writes \`obstructions\` back only for the unambiguous case — bodies near the lens under
+   the subject — and caps that item's \`quality\` at 2 with the reason in \`notes\`. Everything else
+   it saw (a lone window edge, veiling glare) is in \`catalog.framecheck.json\` beside it, for the
+   directors to weigh. It prints what it flagged; report that list. A catalog once said "passenger
+   heads in the foreground" in plain words, still rated the clip 4, and the clip shipped.
+6. Validate the merged file: \`uv run ${SCHEMAS}/validate.py ${WORKSPACE}/catalog/catalog.json --type catalog-item\`.
+7. Update ${LEDGER}: phase \`catalog\` → \`done\`, with \`${WORKSPACE}/catalog/catalog.json\` as its
    artifact.
 Do not invent moments that are not in the batches.
 

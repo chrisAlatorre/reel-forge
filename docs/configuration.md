@@ -45,6 +45,22 @@ small, readable and safe to look at. The full story is in the
 Face embeddings are **not** kept here: they are biometric data and they stay in the project's
 `workspace/`, which can be deleted at any time.
 
+### Facts belong to the project, not to you
+
+One more file, and deliberately **not** in this folder:
+
+| File | Written by | What it holds |
+|---|---|---|
+| `<project>/facts.json` | `facts.py` | what is TRUE about one project: who was there, where, when — and the phrasings that would contradict it |
+
+A preference is true on every project ("don't put me in every shot"). A fact is true on one ("my
+friend travelled with me until the last city"). Stored with the preferences, a fact leaks into the next
+project as if it were true there, which is why `preferences.py add-rule` refuses sentences that read
+like events and points at `facts.py`. The file sits beside the project's `workspace/`, not inside
+it: the workspace is disposable, what the user told us is not. `0600`, never uploaded, and under the
+same privacy guard (no paths, identifiers or credentials) — though, unlike a preference, a fact may
+name people and places, because it never leaves the project folder.
+
 ### What `preferences.json` holds
 
 One file, written only by `preferences.py`, read at the start of every run by `preferences.py brief`.

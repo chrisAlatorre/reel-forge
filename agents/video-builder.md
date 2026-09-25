@@ -112,44 +112,63 @@ A **short variant is not the long one truncated**: it keeps the whole arc and lo
 
 ```
 <workspace>/concepts/<slug>/common/   already prepared — use it, never redo it
-<workspace>/concepts/<slug>/<LETTER>/ yours: build.py, spec.json, notes.md, tmp/
-<deliveries>/<slug>/                  <slug>-<LETTER>.mp4, -preview.mp4, -light.mp4, -verify.json
+<workspace>/concepts/<slug>/<LETTER>/ yours: variant.json, voice-script.json, notes.md, result.json
+                                      (the builder leaves build.json, spec.json, voice/, tmp/)
+<deliveries>/<slug>/                  <name>.mp4, -preview.mp4, -light.mp4, -verify.json,
+                                      -framecheck.json, -publish.md, -voice-script.json
 ```
 
-The **workspace** is reproducible and the **delivery** is flat. Everything rebuilds by running
-`build.py`; never leave a spec pointing at a temporary that can no longer be regenerated.
+**You do not write a build script.** You write `variant.json` and run the shared builder:
 
-1. Write `build.py`. It generates the spec and renders, and it rebuilds **everything** from scratch. If
-   a step fixes something the engine gets wrong, that step goes inside the script — a loose helper with
-   no execute bit already let a clipped preview through on every rebuild. Lay the segment grid out as
-   the arc: hook, promise, development beat by beat, the turn, and a close that holds.
-2. **If the variant is narrated, the voice happens here**, before any caption is written: script,
-   `--parse-only`, then the WAVs line by line with the default voice.
-3. **Then the text**, taken from the audio that exists: `transcribe.py --align` over the generated
-   voice and `"sync"` in the spec, `"subs"` over a clip whose own audio is heard, `"seg"` when there's
-   neither — plus `"says"` on the segments the voice names.
-4. Render, pull an `fps=2,tile=12x6` strip and **look at it with `Read`**: captions readable and wrapped
-   where you meant them, landing on the word being said, nothing over a face, no crop cutting off a
-   head, dates and places correct. Look hard at the **last second**: does it end, or does it stop?
-5. Three files out: the **clean** MP4 (no copyrighted song), the `-preview.mp4` with the song for review
-   only, and a `-light.mp4` at 720p for sending over chat.
-6. **The gate**, with everything it can check:
+```bash
+V="uv run ${CLAUDE_PLUGIN_ROOT}/skills/video-engine/scripts/variant.py"
+$V variant.json --plan     # the grid: every cut, in seconds and in beats. Look at it first.
+$V variant.json            # voice, grid, natural sound, facts check, render, copies, gate, framecheck
+```
 
-   ```bash
-   uv run ${CLAUDE_PLUGIN_ROOT}/skills/video-engine/scripts/verify.py <file.mp4> \
-       --spec spec.json [--script voice-script.json] --json <file>-verify.json
-   ```
+Every variant used to carry its own ~400-line build.py copied from the last one, and every copy got
+something different wrong: one aborted on a rebuild, one never ran the gate, one shipped a preview
+over its size ceiling, and **none** used the beat grid the engine had supported all along. The
+shape of `variant.json` is in the docstring of `variant.py` (read it: `sed -n 1,80p`). What you
+decide is only what is particular to your variant:
 
-   and keep fixing until it passes — in `build.py`, then re-render, never by patching the MP4.
-   **Nothing is delivered without it.** `--script` is the check nobody can do from a frame strip
-   (whether the voice rises over the clip's own audio). The `text_sync`, `voice_image` and `ending`
-   checks read the `<video>.timeline.json` the engine leaves next to the render, so **copy that sidecar
-   out with the MP4** — without it they come back `skip`, which looks exactly like `pass` and lets the
-   defect ship. If it can't be made to pass with the material that exists, say so with the reason
-   instead of shipping it: the reviewer decides, and it goes into the concept's README as a stated
-   limit.
-7. Write `result.json` against `${CLAUDE_PLUGIN_ROOT}/schemas/variant-build-result.schema.json`,
-   validate it (`schemas/validate.py result.json --type variant-build-result`) and only then answer.
+1. **The shots**, in order, each with the engine keys it needs (`focus`, `kb`, `punch`, `flash`,
+   `speed`, `says`…) plus how long it holds: `beats` when there is a song with a BPM (the default —
+   the grid lands every cut on the beat, and the FIRST shot also absorbs the song's intro), `dur` in
+   seconds only when there is no song, and `line` when the shot is narrated (the voice sets its length
+   and the cut is pushed to the next half-beat).
+2. **The sound under each shot** (`audio`): its own track at a LUFS level, a photo borrowing its
+   scene's ambience (`"from"`), or `"continue"` so a piece keeps playing across a cut. A photo with no
+   sound under it is a hole the gate will see.
+3. **The words**: `captions`, and the `voice-script.json` if it is narrated. A caption on the first
+   shot with `lead` ≤ 0.05 is put on screen from frame 1 — that is the hook, and it is the default.
+4. **The close**: a held last shot, or `{"loop_to_first": true, "beats": 2}` to end on the video's own
+   first frame (the gate then measures the seam instead of looking for a fade).
+
+The builder then does, every time, in this order: the voice (Valentino when Spanish and CapCut
+answers, the local voice otherwise, with the reason recorded), the grid, the word-by-word alignment,
+the natural-sound mix, the music bed for the preview only, **the project's facts against every line
+and caption before a single frame renders** (exit 4 if something contradicts them), the render, the
+720p copies, the gate, and `framecheck.py` over every rendered cut. It holds a lock, so two builds of
+one letter cannot overwrite each other, and it skips a delivery that is already up to date.
+
+**Your part after it runs:**
+
+- **Exit 0** — look at it anyway: pull a strip (`fps=2,tile=12x6`) and **look at it with `Read`**.
+  Captions landing on the word, nothing over a face, no head cut off, and the last second ending
+  rather than stopping.
+- **Exit 1** — the gate failed. The files are there and `<name>-verify.json` says why. Fix it in
+  `variant.json` and run it again; never patch the MP4.
+- **Exit 4** — a line contradicts what the user told us about the project. Rewrite the line.
+- **`framecheck_flagged` in `build.json`** — a cut has something between the lens and the subject.
+  Replace or reframe it unless you can say in `notes` why it is worth it.
+- **Anything the builder cannot express**, a pre-render or an effect it does not have: do it in
+  `common/`, save the file, and point a shot at it. Don't fork the builder.
+
+Then write `result.json` against `${CLAUDE_PLUGIN_ROOT}/schemas/variant-build-result.schema.json`
+(the builder's own `build.json` has the numbers you need; `builder` points at your `variant.json`), validate it, and answer. The
+`<name>-publish.md` the builder writes carries the publishing instructions — the untrimmed sound,
+the voice disclosure — for the concept README.
 
 ### Narration: one format, one default voice, and prove it parses
 

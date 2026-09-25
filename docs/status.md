@@ -271,7 +271,7 @@ Same machine, same CapCut **9.5.0**, **2026-09-24 22:40-23:10 (GMT-6)**, after s
 A brand-new project (`com.lveditor.draft/0924 (3)`) was built by the 9.5 profile end to end — left
 panel → "Texto predeterminado" → its `+`, the line pasted with `pbcopy` + Cmd+V (accents intact in
 `draft_info.json`), "Texto a voz", the voice clicked by AX name, "Generar contenido de voz"
-anchored at `(1634, 563)` — with the line *"Nadie te cuenta cómo se siente el primer día en Asia."*
+anchored at `(1634, 563)` — with the line *"Nadie te cuenta cómo se siente el primer día de un viaje."*
 
 | Voice | `tone_platform` | Result |
 |---|---|---|

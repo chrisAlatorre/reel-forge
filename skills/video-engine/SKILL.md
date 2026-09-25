@@ -92,6 +92,33 @@ A relative `"out"` (`"trip/day-one-A.mp4"`) hangs off `REEL_FORGE_OUTPUT`; an ab
 
 ---
 
+## Building a variant: `variant.py`, not a script of your own
+
+`render.py` turns a spec into a video. `variant.py` turns a **variant** into a delivery: it writes the
+spec for you and does everything around the render that every variant needs and that every
+hand-written build script used to get wrong in its own way.
+
+```bash
+uv run variant.py variant.json --plan   # every cut, in seconds and in beats — look at it first
+uv run variant.py variant.json          # voice → grid → alignment → natural sound → preview bed →
+                                        # facts check → render → 720p copies → gate → framecheck
+```
+
+`variant.json` names the shots, the sound under each one, the words and the song; the shape is in
+the script's docstring. What it guarantees, every time:
+
+| | |
+|---|---|
+| **Cuts on the beat** | With a song that has a BPM, shots hold whole `beats` on an absolute grid anchored at the song's first hit (`beat0`); the first shot absorbs the intro. Narrated shots take their length from the voice and the cut moves to the next half-beat. The engine had supported beats all along; no hand-written builder ever used them. |
+| **The hook on frame 1** | A caption on shot 0 with `lead` ≤ 0.05 is `instant`: no fade, no pop. |
+| **Real loops** | `{"loop_to_first": true}` on the last shot reverses the opening clip so the video's last frame IS its first; the gate then measures the seam. |
+| **The facts, before rendering** | With `"project"`, every line and caption is checked against `<project>/facts.json` first. Exit 4 renders nothing. |
+| **The same outputs** | Clean MP4, `-preview` and `-light` at 720p (so they fit their ceilings), the timeline sidecar, `-verify.json`, `-framecheck.json` and `-publish.md` with the publishing instructions (untrimmed sound, voice disclosure). |
+| **One build at a time** | A lock per variant (exit 3), and a delivery that is up to date is not rebuilt (`--force`). |
+
+Exit codes: 0 delivered and the gate passed · 1 the gate failed · 2 bad variant.json · 3 locked ·
+4 contradicts the project's facts.
+
 ## The full JSON spec
 
 ```jsonc

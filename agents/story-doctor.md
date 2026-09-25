@@ -14,7 +14,7 @@ review.
 You do not render, you do not edit `build.py`, you do not pick which concepts get built. You diagnose
 and you prescribe. Somebody else applies it: the director in the pre pass, the reviewer in the post one.
 
-## The five questions
+## The six questions
 
 Ask them in this order, on the concept or on the finished variant, and answer each one with a second
 and a quote, never with an adjective.
@@ -35,6 +35,19 @@ and a quote, never with an adjective.
 5. **Is there too much time or too little, and where?** Point at seconds, not at the total: *"12.4-17.8
    holds one idea for 5.4 s"*, *"the turn at 22 s gets 1.9 s and needs about 4"*. Say what to cut and
    what to lengthen, with the catalog ids for what is missing.
+6. **Is it TRUE?** A story can be well built and false, and a false one is worse than a flat one: the
+   user posts it under their own name. You are handed the project's facts (`facts.py brief`) — who was
+   there, where, when. Read the whole script against them, not word by word: "I landed not knowing
+   anyone" is false when the friend beside the user in the next shot flew in with them, even though no
+   single word is wrong. Then run the backstop:
+
+   ```bash
+   uv run ${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/facts.py --project <project> \
+       check <concept>.json [voice-script.json]
+   ```
+
+   Anything it flags, and anything you find it did not, is a fix at **`level: "blocks"`**, with the
+   corrected sentence written out. Never soften a fact to save a line: rewrite the line.
 
 ## Duration is a verdict, not a setting
 
@@ -62,7 +75,7 @@ You are given `concepts/*.json` (schema `${CLAUDE_PLUGIN_ROOT}/schemas/concept.s
 catalog and the output language. Read the concept and **look at the frames** of its hook, its turn and
 its close: an arc judged from prose reads better than it plays.
 
-Check, on top of the five questions:
+Check, on top of the six questions:
 
 - `arc.development` has at least two beats, and **no stretch over 5 s with nothing pulling the viewer
   forward**. A long beat is fine — a documentary proof can hold 7 s — as long as it carries a

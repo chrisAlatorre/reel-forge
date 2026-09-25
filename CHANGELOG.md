@@ -8,6 +8,91 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.6.0
+
+What the user tells you, split by what it is; one builder for every variant; and the frame check
+running on its own.
+
+### Added
+
+- **`facts.py` — what is TRUE about one project**, in `<project>/facts.json`, beside the workspace
+  and never in the plugin. "My friend travelled with me until the last city" is a fact of one trip;
+  stored as a global preference, as it once was, it would have been applied to the next trip as if
+  it were true there. A fact carries the phrasings it rules out (`--forbid`) and where they become
+  true again (`--allow-if`): `check` runs over every narration line and caption and exits 1 on a
+  contradiction. The story-doctor gets a sixth question — *is it true?* — and the directors, builders
+  and critic all get `facts.py brief`. Tested against a real script that had it wrong: it caught every
+  false line in it and passed the corrected rewrite.
+- **`skills/video-engine/scripts/variant.py` — the shared builder.** A builder agent writes a
+  declarative `variant.json` (shots, the sound under each, the words, the song) instead of its own
+  ~400-line build script. Cuts on the beat by default — the first shot absorbs the song's intro and
+  narrated cuts move to the next half-beat —, the hook on frame 1, `loop_to_first`, the natural-sound
+  mix, the preview bed looped on whole bars, the facts check **before** rendering (exit 4), 720p
+  copies that fit their ceilings, the gate, framecheck over every rendered cut, publishing notes, a
+  lock per variant (exit 3) and skipping an up-to-date delivery. It reproduced a hand-built variant
+  cut for cut.
+- **`framecheck.py --catalog --apply`**: the whole catalog in one process, run by the catalog
+  workflow right after the merge. Frames are read at 1280 px — every measurement is a share of the
+  frame — which took it from ~14 s to ~3 s a moment with the same verdicts.
+- **`tests/run.py`**: regression tests on synthetic fixtures (ffmpeg patterns, made-up sentences),
+  each named after a bug that shipped with the gate green: `start_s` read as 0, a rotated phone video
+  read sideways, the beat grid, the lock, facts vs preferences, the loop seam, and the selfie below.
+
+### Changed
+
+- **`preferences.py add-rule` refuses a sentence that reads like an event** and points at
+  `facts.py`; `--global-anyway` overrides it for the rare real rule that mentions a trip.
+- **A person facing the lens is not an obstruction.** The first frame check called a selfie with a
+  friend "someone blocking the shot". What blocks is bodies with their backs or sides to the camera:
+  the segmenter sees a person, the face detector sees no face. That is what the shot that started this had —
+  0.50 of the bottom third, not one face — and it is the only thing `--apply` writes back now. A lone
+  window edge stays a note in the sidecar.
+- The build workflow hands every builder `variant.py` and the facts brief, and takes `project_dir`,
+  `workspace` and `deliveries` for projects that predate the standard layout.
+
+## 0.5.0
+
+Never published on its own: it ships inside 0.6.0.
+
+Three things a vertical video needs, and one thing curation was never looking at.
+
+### Added
+
+- **`skills/sources/scripts/framecheck.py`** — what is in the rectangle, measured. Curation answers
+  *what was happening* and writes it down; nobody was answering *what the frame looks like*, and
+  that is what ships a bad shot. It judges the 9:16 crop, reports people by horizontal third (from
+  any angle — a face detector does not see the back of a head), long edges cutting the picture,
+  veiling glare and how much height is free. It reports; it never gates.
+- **`obstructions`** on the catalog item (`glass`, `frame`, `foreground_people`,
+  `foreground_object`, `dirt`, `reflection`). When it is not empty the schema requires `notes` and
+  caps `quality` at 2. The curators and the critic both run the check; the critic runs it on the
+  rendered file, because the shot that prompted all this passed curation and shipped.
+- **`"instant": true`** on a caption: no pop and no 0.06 s fade-in, so the text is already up on its
+  first frame. Those two frames are where the scroll is decided.
+- **`"loop": true`** in a spec: it reaches the timeline, and `verify.py`'s `ending` then measures the
+  SEAM — PSNR between the last frame and the first — instead of looking for a fade. Every looping
+  video used to be warned for "ending on a dry cut", which in a loop is the form, not a defect.
+
+### Fixed
+
+- `verify.py` and `transcribe.py` read a line's second as `t`/`at` with a default of 0, while the
+  contract calls it `start_s`. Every line aligned at second 0: subtitles piled up at the start and
+  `text_sync` passed with 0.00 s of drift because it compared the error against itself.
+- `capcut_voice.py` now reads CapCut's server toast (`ax_texts` + `read_toast`) instead of guessing:
+  it is not a window and keeps its message in `AXValue`, so `classify()` used to blame the voice
+  grid for a refusal that came from the server.
+
+### Numbers these were calibrated on
+
+Every threshold here came from measuring real material, and the ones that did not survive the
+measurement were dropped rather than kept as decoration:
+
+- loop seam floor **18 dB**: a closing loop scores 24.2, an ordinary ending 3.7, and the ceiling is
+  27.1 — what two CONSECUTIVE frames of one still shot score, because grain is drawn per frame.
+- `haze` **never decides on its own**: across nine real shots it does not separate dirty glass from
+  weather (a misty seascape 0.47, a dirty boat window 0.39). The two signals that do discriminate
+  are people in the bottom third and an edge crossing the frame.
+
 ## 0.4.1
 
 Two bugs that made a narrated video ship broken while the gate stayed green, and one diagnosis that
