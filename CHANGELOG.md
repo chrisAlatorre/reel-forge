@@ -8,6 +8,38 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.6.1
+
+What the first end-to-end run of 0.6.0 found.
+
+### Fixed
+
+- **`export.py` could hang forever.** `osxphotos --use-photokit` without the Photos permission does
+  not fail: it waits for a dialog nobody sees, at 0 % CPU. Run by an agent, it sat six minutes with
+  no output. The export now runs under a watchdog — no output and no new file for 120 s kills it — and
+  retries without PhotoKit, saying what that costs (files that live only in iCloud).
+- **`framecheck --apply` no longer demotes anything.** On the first full catalog it ran over (296
+  moments) it capped 7 at quality 2, and a look at each frame found about 2 real obstructions — tourists
+  in front of a temple, pedestrians in front of a tram. The other five were a night market, a concert
+  crowd and the subject's own legs in a POV: people who ARE the shot. It now leaves a "needs a look"
+  note and the curator decides.
+- **A fact must be what the user said, not what was inferred.** The run's own facts carried a split
+  date worked out from the catalog (the last photo together); a director then wrote "the 16th: our
+  last day together" as a caption — a claim nobody had confirmed. `facts.py` and the `sources`
+  skill now say it outright: a detail that was not given is left out, or the fact forbids stating it.
+- **The trends reference now asks for `beat0` and says the 30 s preview caps nothing.** A director
+  held a concept under 29.5 s because the song's preview was 30 s long, and another proposed
+  trimming the song so its first beat fell on frame 0 — which breaks the untrimmed-paste rule the
+  beat grid depends on.
+- **The workflows sent every agent to `/skills/...`.** They wrote `$CLAUDE_PLUGIN_ROOT` into the
+  commands they hand out, and that variable is not set in an agent's shell. They take `plugin_root`
+  now, and the orchestrator skill says to pass it.
+- **`validate.py` rejected dropped moments** for having no valid window, when a missing window is
+  often exactly why a moment was dropped. Items with `use: false` skip the window rules.
+- **The docs still told builders to write their own `build.py`** in 35 places — `/reel`, the
+  orchestrator, the references, the workflow's fix prompts, the architecture docs. They all point at
+  `variant.json` and `variant.py` now, and `/reel` hands the directors the project's facts.
+
 ## 0.6.0
 
 What the user tells you, split by what it is; one builder for every variant; and the frame check

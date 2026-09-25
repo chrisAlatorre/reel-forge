@@ -53,6 +53,11 @@ export const meta = {
 // ─────────────────────────────────────────────────────────────── inputs
 
 const A = args || {}
+// Where the plugin is installed. `$CLAUDE_PLUGIN_ROOT` is NOT set in the shell an agent runs its
+// commands in — a run that relied on it sent every agent to `/skills/...`. The caller passes the
+// resolved path (the orchestrator knows it); the literal stays only as a last resort.
+const PLUGIN_ROOT = A.plugin_root || '$CLAUDE_PLUGIN_ROOT'
+
 const PROJECT = A.project || 'project'
 // Project root. macOS ~/Movies/reel-forge, Linux ~/Videos/reel-forge, Windows
 // %USERPROFILE%\Videos\reel-forge, and REEL_FORGE_HOME wins if it is set.
@@ -61,10 +66,10 @@ const ROOT = A.root || '~/Movies/reel-forge'
 const WORKSPACE = `${ROOT}/${PROJECT}/workspace`
 const LEDGER = `${WORKSPACE}/run.json`
 const UNITS = `${WORKSPACE}/run`
-const SCHEMAS = '$CLAUDE_PLUGIN_ROOT/schemas'
-const REFS = '$CLAUDE_PLUGIN_ROOT/skills/reel-forge/references'
+const SCHEMAS = `${PLUGIN_ROOT}/schemas`
+const REFS = `${PLUGIN_ROOT}/skills/reel-forge/references`
 // The run ledger has no schema file of its own: its shape is written out in the orchestrator skill.
-const LEDGER_DOC = '$CLAUDE_PLUGIN_ROOT/skills/reel-forge/SKILL.md, section "Resuming a run"'
+const LEDGER_DOC = `${PLUGIN_ROOT}/skills/reel-forge/SKILL.md, section "Resuming a run"`
 const PLATFORM = A.platform || 'tiktok'
 const LANG = A.lang || 'en'
 const SUBJECT = A.subject || 'the user'
@@ -338,7 +343,7 @@ ${batch.files.map((f) => `- ${f}`).join('\n')}
 
 Steps (each one short enough to finish inside the 2-minute rule, and each one saved before the next):
 1. Contact sheets with numbered thumbnails covering the WHOLE batch, ~30 per sheet, and LOOK at them:
-   uv run "$CLAUDE_PLUGIN_ROOT/skills/sources/scripts/sheets.py" contact <list.json> --out <folder>
+   uv run "${PLUGIN_ROOT}/skills/sources/scripts/sheets.py" contact <list.json> --out <folder>
 2. Face crops for the candidates, to check the expression (same script, \`faces\` subcommand).
 3. One moment per photo that survives, appended to the partial as you go, with its focus point if the
    photo is horizontal (in 9:16 a landscape photo gets cropped: say in \`framing\` where the subject is).
@@ -550,14 +555,16 @@ Your job:
 5. **Judge the rectangle, not just the moment.** The curators described what was HAPPENING; run the
    frame check over the merged catalog, in one process, so it measures what the 9:16 crop will show:
 
-   uv run "$CLAUDE_PLUGIN_ROOT/skills/sources/scripts/framecheck.py" \\
+   uv run "${PLUGIN_ROOT}/skills/sources/scripts/framecheck.py" \\
        --catalog ${WORKSPACE}/catalog/catalog.json --apply
 
-   \`--apply\` writes \`obstructions\` back only for the unambiguous case — bodies near the lens under
-   the subject — and caps that item's \`quality\` at 2 with the reason in \`notes\`. Everything else
-   it saw (a lone window edge, veiling glare) is in \`catalog.framecheck.json\` beside it, for the
-   directors to weigh. It prints what it flagged; report that list. A catalog once said "passenger
-   heads in the foreground" in plain words, still rated the clip 4, and the clip shipped.
+   \`--apply\` leaves a "framecheck, needs a look" note on each moment with bystanders near the lens
+   and their backs to it; it never changes \`quality\` or \`obstructions\` — most of its flags on a
+   real catalog were crowds and POVs, people who ARE the shot. Look at each flagged frame and decide:
+   set \`obstructions\` (and \`quality\` ≤ 2, with the reason in \`notes\`) only where someone really
+   stands between the lens and the subject. Everything else it saw is in \`catalog.framecheck.json\`.
+   A catalog once said "passenger heads in the foreground" in plain words, still rated the clip 4,
+   and the clip shipped: the note is there so that cannot happen silently.
 6. Validate the merged file: \`uv run ${SCHEMAS}/validate.py ${WORKSPACE}/catalog/catalog.json --type catalog-item\`.
 7. Update ${LEDGER}: phase \`catalog\` → \`done\`, with \`${WORKSPACE}/catalog/catalog.json\` as its
    artifact.

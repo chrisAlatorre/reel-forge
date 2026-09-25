@@ -58,7 +58,7 @@ Agents you launch in parallel (`reel-forge:<name>`):
 | `creative-director` | Proposes **one** concept from an assigned angle, with second-by-second structure | Step 6, 4-8 in parallel |
 | `chief-editor` | Reads every concept together, picks for variety and says what to fix | Step 6, always 1 |
 | `story-doctor` | Fixes the arc — hook, promise, development, turn, **close** — and sets the seconds each variant needs; then watches the rendered variants and says which ones stop instead of ending | Steps 6c and 8, 1 per concept each time |
-| `video-builder` | Prepares the concept's `common/` folder, or builds **one** variant: `build.py`, spec, render, self-review, verification | Step 7, 1 for the common folder + 1 per variant |
+| `video-builder` | Prepares the concept's `common/` folder, or builds **one** variant: `variant.json` through the shared `variant.py`, self-review, verification | Step 7, 1 for the common folder + 1 per variant |
 | `critic-reviewer` | Compares the concept's variants against each other, re-runs the delivery gate and **fixes** by re-rendering | Step 8, 1 per concept |
 
 With plenty of material, steps 5, 7 and 8 run through the plugin's workflows, which read the run ledger
@@ -268,7 +268,9 @@ not the one that was cataloged.
 Two steps, and the order matters.
 
 **6a. Directors.** Launch **4 to 8 `creative-director` in parallel**, each with the full catalog, the
-trends, and **a different, explicit angle** that you assign: narrated documentary, pure natural sound,
+trends, the user's preferences and **the project's facts** (`preferences.py brief` and
+`facts.py --project <project> brief` — who was there, where, when; a premise the facts deny gets the
+whole concept thrown out), and **a different, explicit angle** that you assign: narrated documentary, pure natural sound,
 guide with prices, visual gag, POV, list with a payoff, block counter. They can't see each other: the
 variety comes from the angles you hand out, not from asking them for "something different". Each one
 returns **a single concept** with:
@@ -316,18 +318,21 @@ The variants change something you can notice: duration, with or without voice, h
 natural sound. One axis each, and **their lengths spread** — a short variant is a full arc with fewer
 beats, not the long one truncated. Each builder:
 
-1. Writes its `build.py`, which generates the JSON spec and renders with the `reel-forge:video-engine`
-   engine (`uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/render.py" spec.json`). The
-   `build.py` has to rebuild everything from scratch, with no dependency on temporaries. The segment
-   grid is laid out as the arc the story-doctor set, and it ends on **a close that holds**.
-2. If the variant is narrated, **generates the voice first** and only then the text: `transcribe.py
-   --align` over the generated WAVs, and `"sync"` in the spec taking the times from the voice itself.
+1. Writes its `variant.json` — the shots in the order of the arc the story-doctor set, the sound under
+   each one, the words and the song — and runs the shared builder on it:
+   `uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/variant.py" variant.json --plan` first, then
+   without `--plan`. Nobody writes a build script of their own any more: the builder lands every cut on
+   the song's beat, puts the hook on frame 1, generates the voice **before** the text and takes the
+   captions from it, checks the project's facts **before** rendering, renders, makes the 720p copies,
+   runs the gate and runs `framecheck.py` over every cut. The shape is in that file's docstring.
+2. If the variant is narrated, writes `voice-script.json` in the one format and gives each narrated
+   shot its `line`; the builder does the rest.
 3. Pulls its own frame strip and **looks at it**: text readable, landing on the word being said, not
    covering faces, crops that don't cut off heads, facts and dates correct — and the last second, which
    has to end rather than stop.
-4. **Runs the delivery gate on its own file** and keeps fixing until it passes (step 8).
-5. Leaves the project reproducible: a script that rebuilds everything from scratch, not a loose spec
-   pointing at temporaries.
+4. Fixes whatever the gate (exit 1), the facts (exit 4) or `framecheck` flagged, **in `variant.json`**,
+   and runs it again until it passes (step 8).
+5. Leaves the project reproducible: `variant.py variant.json` rebuilds it from scratch.
 
 Cross-cutting rules every builder respects:
 
@@ -373,7 +378,7 @@ uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/verify.py" <file.mp4> \
 Run it with every flag it can take, never bare, and with the `<video>.timeline.json` sidecar next to
 the MP4 — the text, voice-over-image and ending checks read it, and without it they come back `skip`,
 which looks exactly like `pass`. The builder runs it on its own variant; the reviewer runs it again on
-every delivered file, taking nobody's word for it. A variant that fails is fixed **inside its `build.py` and re-rendered**, never
+every delivered file, taking nobody's word for it. A variant that fails is fixed **inside its `variant.json` and re-rendered**, never
 patched on the MP4. If it cannot be made to pass with the material that exists, it is **not delivered**:
 it is marked non-deliverable and the concept's README says so plainly, with what was missing. A stated
 limit is worth more than a file nobody checked.
@@ -383,7 +388,7 @@ pass asks whether these are finished videos — does each one develop, does it *
 does its length fit what it is telling — and an ending that cuts off is a blocker, even though no command
 detects it. The **`critic-reviewer`** compares **across** variants, not just within each one: the same
 frame with a different treatment, a `look` that drifted by accident, the same shot repeated in two cuts.
-Their blockers are fixed together, inside each variant's `build.py`. On top of the gate:
+Their blockers are fixed together, inside each variant's `variant.json`. On top of the gate:
 
 - One frame strip per variant, plus the last 3 seconds at 8 fps, actually looked at.
 - Three captions per variant checked with the audio playing: on screen while the word is said, and what
@@ -423,7 +428,7 @@ the stories), what you assumed, **what did not pass the gate and what is still p
   agent left a half-written artifact, its `.partial.json` is what it got to; the unit stays pending.
 - **A variant won't pass the gate**: don't ship it anyway and don't quietly drop it. Say which one, why,
   and what it would take — in the concept's README and in the closing summary.
-- **A variant stops instead of ending**: it is a blocker like any other. Fix it inside its `build.py` —
+- **A variant stops instead of ending**: it is a blocker like any other. Fix it inside its `variant.json` —
   hold the closing shot, or add the beat the story-doctor named — and re-render. Never by freezing the
   last frame, which reads as a bug.
 - **The default voice isn't available** (no macOS, no CapCut, the preflight fails, the project

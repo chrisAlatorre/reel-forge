@@ -69,6 +69,13 @@ The run ledger (below) is the one file with no schema of its own yet; its shape 
 When you hand an agent a job, hand it the **path of the schema**, not a copy of the format. Copies
 drift; the one that drifts is the one that produces the batch you have to redo.
 
+## Running the workflows: pass `plugin_root`
+
+`$CLAUDE_PLUGIN_ROOT` is expanded inside this plugin's own skills and agents, but it is **not** set
+in the shell an agent runs its commands in. A workflow is plain JavaScript and expands nothing, so
+a run that relied on it would send every agent to `/skills/...`. Always call them with the
+resolved path: `Workflow({ scriptPath: "<root>/workflows/build.js", args: { plugin_root: "<root>", ... } })`.
+
 ## Resuming a run
 
 A round of 29 agents lost 7 of them because the machine went to sleep mid-run, and their work was gone.
@@ -364,7 +371,7 @@ On top of that, always:
 - **1 `critic-reviewer` per concept**, different from the builders, reviewing **every variant
   together**, comparing the same frame between them and fixing what blocks. It runs at the same time as
   the story-doctor's second pass and they look for different things: craft versus story. Their blockers
-  are fixed together, in one pass over the variant's `build.py`.
+  are fixed together, in one pass over the variant's `variant.json`.
 
 **How many variants per concept.** Two is the floor, not the rule: a concept with three genuinely
 different axes (sound, duration, cutting) earns three, and a round meant for comparison can ask for
@@ -412,7 +419,7 @@ that does not last what it was supposed to. The text and ending checks (`text_sy
 `ending`) read the `<video>.timeline.json` the engine leaves beside the render — **copy that sidecar out
 with the MP4**, because without it they come back `skip`, and a `skip` looks exactly like a `pass`.
 
-- The builder runs it on its own variant and keeps fixing — **inside `build.py`, then re-render**, never
+- The builder runs it on its own variant and keeps fixing — **inside `variant.json`, then re-render**, never
   by patching the MP4 — until it passes.
 - The reviewer runs it again on every delivered file. It takes nobody's word for it, the builder's
   included.
@@ -426,7 +433,7 @@ with the MP4**, because without it they come back `skip`, and a `skip` looks exa
   not allowed is a narrated variant delivered mute with nothing said about it.
 - **A video that stops instead of ending does not ship either.** That verdict comes from the
   `story-doctor`'s second pass, not from the gate: the gate only warns. Marked
-  `blocks`, it is fixed like any other blocker — inside `build.py`, then re-render.
+  `blocks`, it is fixed like any other blocker — inside `variant.json`, then re-render.
 
 ## Where everything is stored
 
@@ -453,7 +460,7 @@ The project root is `REEL_FORGE_HOME` if it is set; otherwise it depends on the 
       review.json             # the critic-reviewer's findings
       common/                 # prepared ONCE, before the builders: originals, stills, 360 renders,
                               # music bed, RESOURCES.json
-      A/  B/  C/              # one agent per letter: build.py, spec.json, voice-script.json,
+      A/  B/  C/              # one agent per letter: variant.json, spec.json, voice-script.json,
                               # voice/ (l0.wav…, alignment.json), result.json, notes.md
   deliveries/                 # ($REEL_FORGE_OUTPUT)
     v1/<concept>/
@@ -471,7 +478,7 @@ they are set; otherwise they hang off `<root>/<project>/`.
 - **One round, one version.** When the user asks for changes, a full `v2` comes out; `v1` is untouched.
   That way they can compare and go back.
 - **`workspace/` is rebuilt from the scripts.** Never leave a `spec.json` that depends on a temporary
-  file you already deleted: the builder (`build.py`) has to be able to regenerate everything from zero.
+  file you already deleted: `variant.py` has to be able to regenerate everything from zero out of the variant's `variant.json`.
 - **One README per concept**, with every variant. Not one per agent.
 - **`run.json` is not disposable.** If `workspace/` gets wiped, the next run starts from zero — which is
   correct, but say so before wiping it.

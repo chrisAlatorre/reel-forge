@@ -14,6 +14,9 @@ Two different kinds of correction look alike and must not be stored together:
 Storing the second kind as a preference is a bug with a delay: the next project inherits a fact
 about a trip it has nothing to do with, and applies it as if it were true.
 
+Only what the user SAID goes in — never what was inferred. A date read off the catalog and stored
+as a fact turns into a claim the video makes in the user's name that nobody confirmed.
+
 The file is local to the project, beside its workspace, never in the plugin and never uploaded:
 
     <project>/facts.json            (0600; the project is the folder that holds workspace/)

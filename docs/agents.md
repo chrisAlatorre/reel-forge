@@ -47,7 +47,7 @@ one complaint — a video that opens something, never develops it and stops mid-
 | `creative-director` | Propose **one** strong concept: an arc that promises, develops and lands, the seconds that story needs, second-by-second structure and 2-5 variants | `concepts/<slug>.json` | 4-8, each with a different angle |
 | `story-doctor` | Judge whether the video is **finished**: does the hook promise, is it paid, does the middle develop, does the ending land, and is the duration the one the story needs | `story/<concept>.json` (pre) and `story/<concept>-post.json` (post) | **1 per concept, per pass** |
 | `chief-editor` | Decide what gets built, protecting variety, and say what to fix | `selection.json` | 1, always |
-| `video-builder` | Render the variants, export clean + preview, and leave the script of the narration | MP4 + `build.py` + `spec.json` + `result.json` (+ `voice-script.json`) | **2 per concept**, one variant each |
+| `video-builder` | Render the variants, export clean + preview, and leave the script of the narration | MP4 + `variant.json` + `spec.json` + `result.json` (+ `voice-script.json`) | **2 per concept**, one variant each |
 | `critic-reviewer` | Find concrete defects, check the quota the concept declared, and **fix by re-rendering** | `review.json` + the corrected MP4 + the concept's README | **1 per concept**, sees all its variants together |
 
 ## How to scale the number of instances

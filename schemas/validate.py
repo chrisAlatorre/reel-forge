@@ -111,7 +111,9 @@ def check_catalog(items: list[dict]) -> list[str]:
             out.append(f"{tag}: duplicate id (also at position {seen[tag]}). One id, one moment.")
         seen[tag] = i
         s, e = it.get("start_s"), it.get("end_s")
-        if s is not None and e is not None:
+        # a dropped moment keeps its row (nothing is ever deleted) but it has no usable window by
+        # definition — often exactly WHY it was dropped — so the window rules do not apply to it
+        if s is not None and e is not None and it.get("use", True) is not False:
             if e <= s:
                 out.append(f"{tag}: end_s ({e}) is not after start_s ({s}).")
             elif e - s < 0.8 and it.get("use", True):

@@ -24,7 +24,7 @@ are in [`docs/parallelism.md`](../../../docs/parallelism.md).
 
 The last two run **at the same time**, on the same files, looking for different defects: the
 story-doctor asks whether it is a finished video, the reviewer whether it is a well-made one. Their
-blockers are then fixed in one pass over the variant's `build.py`.
+blockers are then fixed in one pass over the variant's `variant.json`.
 
 Never more agents than units of material: an agent with half a day of photos has nothing to compare
 against and repeats what the one next to it already said.
@@ -191,7 +191,7 @@ the output language, the `common/` folder already prepared and **its letter** wi
 > Your length is <n> s (±10 %); if the story needs another, change it and write down why — never hit a
 > number by trimming the close. Use only catalog ids and **respect the `start_s`/`end_s` windows**; if
 > you have to widen one, look at the strip first and declare it in `out_of_window`. On-screen text and
-> narration in <language tag>. Write `concepts/<concept>/<letter>/build.py` to generate the spec and
+> narration in <language tag>. Write `concepts/<concept>/<letter>/variant.json` and run `variant.py` on it to generate the spec and
 > render: it has to rebuild everything from scratch, with no dependency on temporaries. **If it is
 > narrated, the voice is generated before the text is written** — `voice-script.json`
 > (`schemas/voice-script.schema.json`) proved to parse, then the WAVs line by line with the default
@@ -221,7 +221,7 @@ from `delivery.md`.
 > in its own line. Count the cuts with the subject by hand and check the ratio against **the concept's
 > own `subject_quota`**, not against a fixed number. Write `review.json`
 > (`schemas/review-result.schema.json`): each problem with its exact second and its `severity`. What
-> blocks, you fix yourself — the correction goes inside the variant's `build.py` and you re-render. In
+> blocks, you fix yourself — the correction goes inside the variant's `variant.json` and you re-render. In
 > `workflows/build.js` that is the **Fix** stage, which is only paid for if something is marked
 > `blocks`.
 
@@ -234,7 +234,7 @@ It runs in parallel with the reviewer and owns one question: **is this a finishe
 > stalls), does it **land or does it stop** (an ending that cuts off mid-movement or mid-word is
 > `blocks`), and does the **duration fit** what it is telling — report it even when that means the
 > variant should be longer than it was asked to be. Across the set, say in `spread` whether every
-> variant came out the same length. Write the fixes as something a builder can apply to `build.py`:
+> variant came out the same length. Write the fixes as something a builder can apply to `variant.json`:
 > which shot, which second, how long it holds, each with its `level`. Write
 > `workspace/story/<concept>-post.json`; don't re-render anything yourself.
 

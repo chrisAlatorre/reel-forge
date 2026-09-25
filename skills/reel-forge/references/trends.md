@@ -63,7 +63,17 @@ Written-down BPM values are wrong half the time (double or half). Measure it:
    gets published**.
 2. `librosa.beat.beat_track` over that preview, and **confirm by counting**: if it says 70 and it sounds
    fast, it's 140.
-3. Save the measured BPM and what you measured it with.
+3. Save the measured BPM, **the second of the first beat (`beat0`)** and what you measured them with.
+   `variant.py` anchors its grid at `beat0`, so the video's first cut lands on the song's first hit
+   when the sound is pasted in the app from its second 0. Measure it with the start tempo near the
+   real one (`start_bpm`): librosa started at 70 reads a 143 BPM song as 70 and a 117 as 60. If two
+   start tempos give two answers that are not a clean double of each other, the BPM is **unreliable**
+   — say so, and nobody cuts to it.
+
+**The 30 s preview does not cap anything.** It is the review bed and the thing you measure; the
+video's length comes from its story. `variant.py` loops the bed on whole bars for the `-preview`,
+and in the app the full song plays. A concept that stops at 29.5 s "because the preview is 30 s
+long" was cut by a download limit, not by its story.
 
 The BPM gives you the cut grid: at 120 BPM a beat is 0.5 s, cuts every 2 beats = 1.0 s. Ranges that
 work: 85-95 for something ceremonial or documentary, 120-140 for a photo dump, 150-165 for a fast burst.

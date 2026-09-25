@@ -14,7 +14,7 @@
   voice-script.json            if any variant is narrated (the format is schemas/voice-script.schema.json)
 ```
 
-The variant's `spec.json`, its `build.py` and its voice folder stay in the workspace: the delivery
+The variant's `spec.json`, its `variant.json` and its voice folder stay in the workspace: the delivery
 folder holds what gets watched, the one file the user may have to edit (the voice script) and the two
 the gate needs. **The `timeline.json` travels with the MP4**: the text, voice-over-image and ending
 checks read it, and without it they are skipped — and a skipped check looks exactly like a passed one.
@@ -24,7 +24,7 @@ Windows `%USERPROFILE%\Videos\reel-forge`. `REEL_FORGE_OUTPUT` overrides the `de
 
 - **One round, one version.** Changes come out as a full `v2`. `v1` is never touched.
 - **One README per concept**, with every variant inside. Not one per agent.
-- The workspace (`workspace/`) can be deleted entirely and rebuilt by running the `build.py` scripts —
+- The workspace (`workspace/`) can be deleted entirely and rebuilt by running `variant.py` on each `variant.json` —
   but deleting it also throws away `workspace/run.json`, the ledger an interrupted run resumes from.
   Say so before wiping it.
 
@@ -44,7 +44,7 @@ difference is a caption that lands versus one that feels a beat late.
 Run twice, by two different agents:
 
 1. **The builder**, on its own variant, before copying anything into the delivery folder. It fixes
-   inside `build.py` and re-renders; it never patches the MP4.
+   inside `variant.json` and re-renders; it never patches the MP4.
 2. **The reviewer**, again, on every file that is actually in the delivery folder. It takes nobody's
    word for it, the builder's included. The report is saved next to the file.
 
@@ -117,7 +117,7 @@ output language, the "Not delivered" section — or a line of its own — says w
 - [x] narration audible, or the script ships alongside and parses; the voice used is named
 
 ## If you want changes
-What to touch and where: `workspace/concepts/<concept>/A/build.py`.
+What to touch and where: `workspace/concepts/<concept>/A/variant.json`.
 ```
 
 No personal paths and no library identifiers in the README. Catalog ids, yes.
@@ -173,7 +173,7 @@ ffmpeg -i v.mp4 -vf "fps=2,scale=216:384,tile=12x6" -frames:v 1 strip.jpg       
 - [ ] No document, work screen, licence plate or identifiable minor slipped in.
 - [ ] **Compare the same frame between A and B**: if the look or the crop changes the hook, one of them
       is wrong.
-- [ ] The `build.py` rebuilds the variant from scratch, with no deleted temporaries.
+- [ ] `variant.py variant.json` rebuilds the variant from scratch, with no deleted temporaries.
 
 ## How you hand it to the user
 

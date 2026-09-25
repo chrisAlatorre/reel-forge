@@ -13,7 +13,7 @@ gets decided.
    do a concept's two variants.
 4. **One render engine.** Every variant comes out of the same script (`skills/video-engine`). If a
    concept needs something different, the engine gets fixed, not copied.
-5. **Everything rebuilds from a script.** Every variant leaves its `build.py`, not just its `spec.json`:
+5. **Everything rebuilds from a script.** Every variant leaves its `variant.json`, not just its `spec.json`:
    a spec pointing at a deleted temporary is irreproducible.
 6. **Nothing ships unreviewed.** Every concept goes through a reviewer that compares its two variants.
 7. **Agents hand each other files, not prose.** Every artifact that crosses a phase is JSON with a
@@ -122,7 +122,7 @@ gets decided.
                                         │   8. COMMON + 9. BUILD
                                         │   (workflows/build.js)
                                         │   video-builder x1 per variant
-                                        │   build.py -> spec.json -> 1080x1920 render
+                                        │   variant.json -> spec.json -> 1080x1920 render
                                         │   + verify.py on every render
                                         v
                         ┌───────────────────────────────┐
@@ -230,7 +230,7 @@ each other is itself a finding, because the length is coming from a template and
 One `video-builder` per variant (handed out by `workflows/build.js`), with the same outline and freedom
 of execution. The shared work (music bed, 9:16 crops, light copies) is prepared **once** in `common/`;
 when each agent did it on its own, one used the raw track and the last seconds of its video came out
-silent. Each agent writes its `build.py`, which has to regenerate everything from scratch, and its
+silent. Each agent writes its `variant.json`, which the shared `variant.py` uses to regenerate everything from scratch, and its
 `result.json` with the counts and the measurements it actually ran.
 
 A narrated variant also writes its `voice-script.json`: every line with the second it comes in on, how
@@ -306,7 +306,7 @@ Everything an agent hands to another agent is **JSON with a schema in
 | `selection.json` | Chief editor | You and the builders | its own report |
 | `workspace/story/<concept>.json` | `story-doctor`, pre pass | Builders (its `blocks` are binding) | `story-review` |
 | `workspace/concepts/<concept>/common/` | Main thread | Every builder of that concept | `RESOURCES.json` |
-| `<letter>/build.py`, `spec.json` and `result.json` | Builder | Render engine and reviewer | `variant-build-result` |
+| `<letter>/variant.json`, `spec.json` and `result.json` | Builder | Render engine and reviewer | `variant-build-result` |
 | `<variant>.timeline.json` next to the MP4 | Render engine | `verify.py`, story doctor, reviewer | `render-timeline/1` |
 | `common/voice/alignment.json` | `transcribe.py --align` | The engine's `sync`, and `verify.py` | `caption-sync/1` |
 | `voice-script.json` next to the MP4 | Builder, when narrated | The narration step and the user | `voice-script` |

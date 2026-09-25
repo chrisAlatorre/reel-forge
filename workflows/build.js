@@ -10,6 +10,8 @@
 //   concepts              [{ id, title, hook, promise, close, structure, duration_s, music, narration,
 //                            variants: [{ letter: "A", what: "silent, 35 s", duration_s: 35 }, ...],
 //                            moments: ["d3-07", "v2-11", ...] }]     ← catalog ids
+//   plugin_root           the plugin's install path, resolved — REQUIRED in practice: $CLAUDE_PLUGIN_ROOT is not
+//                         set in the shell the agents run their commands in
 //   project, root         where the project lives (see catalog.js)
 //   project_dir           the folder holding workspace/ and facts.json (default <root>/<project>)
 //   workspace, deliveries override the two folders, for a project that predates the layout
@@ -64,6 +66,11 @@ export const meta = {
 // ─────────────────────────────────────────────────────────────── inputs
 
 const A = args || {}
+// Where the plugin is installed. `$CLAUDE_PLUGIN_ROOT` is NOT set in the shell an agent runs its
+// commands in — a run that relied on it sent every agent to `/skills/...`. The caller passes the
+// resolved path (the orchestrator knows it); the literal stays only as a last resort.
+const PLUGIN_ROOT = A.plugin_root || '$CLAUDE_PLUGIN_ROOT'
+
 const concepts = A.concepts || []
 if (!concepts.length) throw new Error('build.js: pass it args.concepts')
 
@@ -80,10 +87,10 @@ const WORKSPACE = A.workspace || `${PROJECT_DIR}/workspace`
 const DELIVERIES = A.deliveries || `${PROJECT_DIR}/deliveries/${VERSION}`
 const LEDGER = `${WORKSPACE}/run.json`
 const UNITS = `${WORKSPACE}/run`
-const SCHEMAS = '$CLAUDE_PLUGIN_ROOT/schemas'
-const REFS = '$CLAUDE_PLUGIN_ROOT/skills/reel-forge/references'
+const SCHEMAS = `${PLUGIN_ROOT}/schemas`
+const REFS = `${PLUGIN_ROOT}/skills/reel-forge/references`
 // The run ledger has no schema file of its own: its shape is written out in the orchestrator skill.
-const LEDGER_DOC = '$CLAUDE_PLUGIN_ROOT/skills/reel-forge/SKILL.md, section "Resuming a run"'
+const LEDGER_DOC = `${PLUGIN_ROOT}/skills/reel-forge/SKILL.md, section "Resuming a run"`
 const CATALOG = A.catalog || `${WORKSPACE}/catalog/catalog.json`
 const TRENDS = A.trends || `${WORKSPACE}/trends/trends.json`
 const PLATFORM = A.platform || 'tiktok'
@@ -92,8 +99,8 @@ const SUBJECT = A.subject || 'the user'
 
 // The render engine and the delivery verifier both live in the plugin's `video-engine` skill. If they
 // are named differently in your installation, pass them in args instead of touching this script.
-const ENGINE = A.engine || 'uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/render.py"'
-const VERIFIER = A.verifier || 'uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/verify.py"'
+const ENGINE = A.engine || `uv run "${PLUGIN_ROOT}/skills/video-engine/scripts/render.py"`
+const VERIFIER = A.verifier || `uv run "${PLUGIN_ROOT}/skills/video-engine/scripts/verify.py"`
 
 // VARIANTS. One agent each. Used only to invent letters when a concept arrives without them.
 const VAR_PER_CONCEPT = Math.max(1, A.variantsPerConcept || 2)
@@ -141,7 +148,7 @@ const VARIANT = {
   properties: {
     letter: { type: 'string' },
     spec: { type: 'string', description: 'path of the spec.json' },
-    builder: { type: 'string', description: 'path of the build.py that regenerates everything from scratch' },
+    builder: { type: 'string', description: 'path of the variant.json that regenerates everything from scratch (through variant.py)' },
     mp4: { type: 'string', description: 'path of the clean render, no copyrighted music' },
     preview: { type: 'string', description: 'path of the -preview.mp4 with the song, or "" if there is none' },
     light: { type: 'string', description: 'path of the 720p -light.mp4, or ""' },
@@ -280,7 +287,7 @@ const ARC_REVIEW = {
           duration_fits: { type: 'boolean', description: 'the length matches the story it is telling, neither padded nor truncated' },
           verdict: { type: 'string', enum: ['ship', 'rework', 'reject'] },
           ends_on: { type: 'string', description: 'what the last frame actually is, from looking at the last 0.6 s frame by frame' },
-          fixes: { type: 'array', items: FIX_ITEM, description: 'each one applicable to this variant’s build.py' },
+          fixes: { type: 'array', items: FIX_ITEM, description: 'each one applicable to this variant’s variant.json' },
         },
         required: ['letter', 'develops', 'lands', 'duration_fits', 'verdict'],
       },
@@ -418,16 +425,16 @@ because a contract copied into six prompts is a contract that drifts:
 - ${REFS}/audio.md — diegetic sound, the music bed, per-cut volume, narration.
 - ${REFS}/delivery.md — what a delivery consists of, the arc and sync checks, and the gate it has to pass.
 - ${REFS}/video360.md — only if the concept uses 360 material.
-- ${REFS}/editing.md and $CLAUDE_PLUGIN_ROOT/examples/spec-example.json — the render spec.
+- ${REFS}/editing.md and ${PLUGIN_ROOT}/examples/spec-example.json — the render spec.
 - ${SCHEMAS}/voice-script.schema.json — the exact shape of a narration script. **There is one format
   and it is this one.** Several narrated videos have already shipped with no voice because each agent
   invented its own script layout and the parser silently skipped every line.
 - ${SCHEMAS}/variant-build-result.schema.json — what you write to \`result.json\` before answering, and
-  validate: \`uv run "$CLAUDE_PLUGIN_ROOT/schemas/validate.py" result.json --type variant-build-result\`.
+  validate: \`uv run "${PLUGIN_ROOT}/schemas/validate.py" result.json --type variant-build-result\`.
 
 **What is TRUE about this project** — who was there, where, when — is not in the catalog. It is in
 the project's facts, which the user confirmed, and nothing you write may contradict them:
-\`uv run "$CLAUDE_PLUGIN_ROOT/skills/sources/scripts/facts.py" --project ${PROJECT_DIR} brief\`
+\`uv run "${PLUGIN_ROOT}/skills/sources/scripts/facts.py" --project ${PROJECT_DIR} brief\`
 Run it before you write a single line. The builder checks every line and caption against them before
 it renders anything, and stops if one contradicts them.
 
@@ -455,7 +462,7 @@ function voiceAndText(concept) {
 THE VOICE. ${spanish
     ? `The output language is ${LANG}, so the **default voice is CapCut's Valentino** — the one the trend
 uses. Generate with it:
-  uv run "$CLAUDE_PLUGIN_ROOT/skills/voices/scripts/narrate.py" voice-script.json --engine capcut --voice "Valentino" --speed 1.4
+  uv run "${PLUGIN_ROOT}/skills/voices/scripts/narrate.py" voice-script.json --engine capcut --voice "Valentino" --speed 1.4
 Check it is actually available first (\`capcut_voice.py --preflight\`): it is macOS-only, it drives the
 app by clicks and a saturated project stops producing WAVs in silence. **The local engines (qwen,
 voxcpm, piper) are the BACKUP**, not the default: if you fall back to one, say which voice you used and
@@ -473,7 +480,7 @@ the next change of duration.
 
 1. **Over narration → \`sync\`.** Generate the voice first, then align it and let the spec take the times
    from the voice itself:
-     uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/transcribe.py" --align <voice folder>/ --script voice-script.json
+     uv run "${PLUGIN_ROOT}/skills/video-engine/scripts/transcribe.py" --align <voice folder>/ --script voice-script.json
    writes \`alignment.json\`, and the spec carries \`"sync": {"from": "<voice folder>/alignment.json", ...}\`.
    Regenerate the alignment whenever the narration is regenerated: another take, another rhythm, and a
    stale alignment is subtitles from the previous version.
@@ -513,7 +520,7 @@ adds to it:
 - On-screen copy you propose goes in ${LANG}; the file itself is written in English.
 
 Write ${storyFile(concept)} through a temporary and a rename before you answer. Do not render, do not
-export, do not edit anybody's \`build.py\`.`
+export, do not edit anybody's \`variant.json\`.`
 }
 
 function commonPrompt(concept, story) {
@@ -580,7 +587,7 @@ next one starts.
 
 1. **You do not write a build script.** Write \`variant.json\` in your folder and run the shared
    builder, which does the rest the same way for every variant:
-   \`uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/variant.py" variant.json --plan\` first
+   \`uv run "${PLUGIN_ROOT}/skills/video-engine/scripts/variant.py" variant.json --plan\` first
    (it prints every cut in seconds AND in beats — look at it), then without \`--plan\`. Its shape is in
    the docstring of that file (\`sed -n 1,80p\`). Lay the shots out as the arc, hook to close. When
    the concept has a song with a BPM, every shot holds a whole number of \`beats\` — the builder lands
@@ -589,7 +596,7 @@ next one starts.
    photo, or \`continue\`). Write \`"project": "${PROJECT_DIR}"\` so the facts get checked.
 2. **If the variant is narrated**, write \`voice-script.json\` in the one format
    (${SCHEMAS}/voice-script.schema.json), prove it parses
-   (\`uv run "$CLAUDE_PLUGIN_ROOT/skills/voices/scripts/narrate.py" voice-script.json --parse-only\`
+   (\`uv run "${PLUGIN_ROOT}/skills/voices/scripts/narrate.py" voice-script.json --parse-only\`
    prints as many lines as you wrote), and give each narrated shot its \`line\`. The builder generates
    the voice (the default one THE VOICE section names; the local one if it is not available, with the
    reason recorded), aligns it word by word, and takes the captions from it — nobody types seconds.
@@ -654,9 +661,9 @@ What this run adds to your method:
   in it gets a fix at \`level: "blocks"\` — that is the defect this whole round was sent back for.
 - Compare the set: if every variant came out within a few seconds of the others, say so in \`spread\`.
   Their axis was supposed to make them different lengths.
-- Each fix is applicable to that variant's \`build.py\`: which shot, which second, how long it holds.
+- Each fix is applicable to that variant's \`variant.json\`: which shot, which second, how long it holds.
   A close that has to be extended is extended **with material**, never by freezing the last frame.
-- Do not re-render anything and do not edit anybody's \`build.py\`: the Fix stage applies what you and
+- Do not re-render anything and do not edit anybody's \`variant.json\`: the Fix stage applies what you and
   the reviewer found, in one pass, so two agents never correct the same variant in opposite directions.
 
 Write ${arcFile(concept)} through a temporary and a rename before you answer.`
@@ -681,7 +688,7 @@ answering. On top of the checklist, the five things that only exist at this leve
    \`${VERIFIER} <file.mp4> --spec <its spec.json> [--script voice-script.json]\` — with the
    \`<file>.timeline.json\` sidecar in place, or the text and ending checks silently skip.
    Take nobody's word for it, the builder's included. A variant that does not pass is not delivered:
-   either you fix it (inside its \`build.py\`, then re-render) or you mark it \`not_deliverable\` and
+   either you fix it (inside its \`variant.json\`, then re-render) or you mark it \`not_deliverable\` and
    **say so in the concept's README**, with what was missing. A file that quietly ships unverified is
    the worst outcome available here.
 3. **Narration.** For every variant marked narrated: the voice has to be audible in the MP4, or the
@@ -716,7 +723,7 @@ ${progress(`${concept.id}-fix`, `${deliveryDir(concept)}/README.md`)}
 ${problems.map((p) => `- [${p.variant}] ${p.what}${p.where ? ` (${p.where})` : ''}\n  Fix proposed by ${p.from || 'the reviewer'}: ${p.how_to_fix}`).join('\n')}
 
 Rules:
-- The correction goes INSIDE the variant's \`build.py\`, not by hand on the MP4.
+- The correction goes INSIDE the variant's \`variant.json\`, not by hand on the MP4.
 - One fix at a time, re-render, measure again. Two fixes at once hide which one failed.
 - **A close that has to be extended is extended with material, not with a freeze**: hold the closing
   shot, or add the beat the story-doctor named. Stretching the last frame reads as a bug.
@@ -878,7 +885,7 @@ them in \`missing\` so the builders know.`,
         severity: 'blocks',
         what: 'it does not pass the delivery gate (verify.py)',
         where: v.verify_report || v.mp4,
-        how_to_fix: 'read the verifier report, fix it inside build.py, re-render and re-run the gate',
+        how_to_fix: 'read the verifier report, fix it inside variant.json, re-render and re-run the gate',
         from: 'the gate',
       }))
     const blockers = [...fromArc, ...fromReview, ...failedGate]

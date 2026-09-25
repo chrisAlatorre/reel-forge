@@ -198,7 +198,7 @@ And if it ever gets added, it should follow these rules, which came out of a "th
   difference eats a whole day. The metadata's capture date wins.
 - **A 0.39 s stamp.** Invisible. Minimum ~0.8 s and it comes in with the cut.
 - **Deleting the pre-renders without the builder regenerating them.** The specs pointed at temporaries
-  and the project became irreproducible. Always rebuild from `build.py`, never from a loose spec.
+  and the project became irreproducible. Always rebuild from `variant.json` (`variant.py`), never from a loose spec.
 - **A helper script with no execute permission** that nobody was calling: the preview kept coming out
   clipped on every rebuild. If a step fixes something, it goes inside the script that renders, not in
   the README.

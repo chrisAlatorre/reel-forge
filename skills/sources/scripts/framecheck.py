@@ -381,9 +381,10 @@ def _resolve(root: Path, rel: str) -> Path:
 def check_catalog(catalog: Path, root: Path, samples: int, ratio, apply: bool, only=None):
     """Every usable photo and video window in a catalog, in ONE process, so the models load once.
 
-    With `apply`, the unambiguous cases are written back into the catalog: bodies close to the lens
-    under the subject. A lone edge — a train window with the country going past — is reported in the
-    sidecar and left to the curator, because that one is a judgement and not a defect.
+    With `apply`, the moments with bodies near the lens and their backs to it get a note in the
+    catalog ("framecheck, needs a look"), which is what the directors and the critic read. It never
+    changes `quality` or `obstructions`: measured on a real catalog, most of those flags were people
+    who ARE the shot. Everything else it saw is in the sidecar.
     """
     doc = json.loads(catalog.read_text(encoding="utf-8"))
     items = _items(doc)
@@ -411,15 +412,15 @@ def check_catalog(catalog: Path, root: Path, samples: int, ratio, apply: bool, o
               f"{'clean' if v['clean'] else ', '.join(v['obstructions']) or 'look at it'}",
               file=sys.stderr, flush=True)
         if apply and "foreground_people" in v["obstructions"]:
-            merged = sorted(set(it.get("obstructions") or []) | set(v["obstructions"]))
-            if merged != sorted(it.get("obstructions") or []):
-                it["obstructions"] = merged
-                note = ("framecheck: " + "; ".join(f[:140] for f in v["findings"][:2]))
-                if isinstance(it.get("quality"), int) and it["quality"] > 2:
-                    note += (f" Quality capped from {it['quality']} to 2 — raise it back only with a "
-                             "reason here (how a crop removes it, or why it is worth it anyway).")
-                    it["quality"] = 2
-                it["notes"] = (it.get("notes", "").rstrip() + " " + note).strip()
+            # Annotate, never demote. On the first full catalog this ran over (296 moments), 7 got
+            # flagged and about 2 were real — tourists in front of a temple, pedestrians in front of
+            # a tram. The rest were a night market, a concert crowd and the subject's own legs in a
+            # POV: people who ARE the shot. Pixels cannot tell which, so the tool leaves a note the
+            # directors and the critic read, and the curator decides `obstructions` and `quality`.
+            note = ("framecheck, needs a look: " + "; ".join(f[:140] for f in v["findings"][:2])
+                    + (f" (at {v['at_s']} s)" if v.get("at_s") is not None else ""))
+            if "framecheck, needs a look" not in (it.get("notes") or ""):
+                it["notes"] = ((it.get("notes") or "").rstrip() + " | " + note).strip(" |")
                 changed += 1
     if apply and changed:
         tmp = catalog.with_suffix(".tmp")
@@ -441,7 +442,8 @@ def main():
     ap.add_argument("--root", help="catalog mode: the folder item paths are relative to "
                                    "(default: the project, two levels above workspace/catalog/)")
     ap.add_argument("--apply", action="store_true",
-                    help="catalog mode: write `obstructions` back for the unambiguous cases")
+                    help="catalog mode: leave a 'needs a look' note on moments with bystanders "
+                         "near the lens (never changes quality)")
     ap.add_argument("--ids", help="catalog mode: only these ids, comma-separated")
     ap.add_argument("--json", dest="json_out")
     a = ap.parse_args()
@@ -458,7 +460,7 @@ def main():
         side.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
         flagged = {k: v for k, v in report.items() if v.get("obstructions")}
         print(json.dumps({"catalog": str(cat), "checked": len(report), "flagged": len(flagged),
-                          "written_back": changed, "sidecar": str(side),
+                          "annotated": changed, "sidecar": str(side),
                           "flagged_ids": {k: v["obstructions"] for k, v in flagged.items()}},
                          ensure_ascii=False, indent=1))
         return

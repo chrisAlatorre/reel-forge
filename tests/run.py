@@ -235,6 +235,21 @@ def loop_seam_is_high_when_the_last_frame_is_the_first(tmp):
     assert bad is not None and bad < good - 5, (good, bad)
 
 
+# --------------------------------------------------------------------------- export
+
+@test
+def a_silent_idle_export_is_killed_not_waited_on_forever(tmp):
+    """osxphotos --use-photokit without the Photos permission does not fail: it waits for a dialog
+    nobody sees, at 0 % CPU, forever. An export run by an agent sat there for six minutes."""
+    import export
+    export.STALL_S = 4
+    t0 = time.time()
+    code, stalled = export.run_watched(["sleep", "60"], tmp)
+    assert stalled and time.time() - t0 < 20, (code, stalled, time.time() - t0)
+    code, stalled = export.run_watched(["sh", "-c", "for i in 1 2 3; do echo x; sleep 1; done"], tmp)
+    assert not stalled and code == 0
+
+
 # --------------------------------------------------------------------------- runner
 
 def main():

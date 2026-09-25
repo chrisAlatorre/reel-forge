@@ -496,10 +496,13 @@ $FC --catalog workspace/catalog/catalog.json --apply   # the whole catalog, ~3 s
 ```
 
 **Catalog mode is how it normally runs**: the catalog workflow calls it right after the merge. With
-`--apply` it writes `obstructions` back only for the case that is never a judgement — bodies near the
-lens under the subject — and caps that item's `quality` at 2 with the reason in `notes`. What is a
-judgement (a lone window edge: a bullet train with the country going past is a good shot) goes only
-into `catalog.framecheck.json` beside the catalog, for the directors to weigh. Frames are read at
+`--apply` it leaves a note on each moment with bodies near the lens and their backs to it
+(`framecheck, needs a look: …`), which the directors and the critic read — and it **never** changes
+`quality` or `obstructions`. That was measured, not assumed: on the first full catalog it ran over
+(296 moments) it flagged 7, and about 2 were real — tourists in front of a temple, pedestrians in
+front of a tram. The rest were a night market, a concert crowd and the subject's own legs in a POV:
+people who ARE the shot. Pixels cannot tell those apart; the curator can. Everything else it saw (a
+lone window edge, veiling glare) goes into `catalog.framecheck.json` beside the catalog. Frames are read at
 1280 px tall, since every measurement is a share of the frame; on 4K sources that took it from ~14 s
 to ~3 s a moment with identical verdicts.
 
@@ -737,6 +740,12 @@ $F show · $F rm f-002 · $F adopt-rule r-006   # adopt-rule: move a misfiled pr
 |---|---|
 | "that's my friend, not a stranger", "we split up in the last city", "that was the 3rd" | `facts.py add` |
 | "I don't want to appear so much", "not that voice", "no forced poses" | `preferences.py` |
+
+**Only what the user said goes in, never what you worked out.** A date read off the catalog —
+"the last photo together is from the 16th, so they split on the 16th" — is an inference, and
+stored as a fact it becomes a claim the video makes in the user's name ("the 16th: our last day
+together") that nobody confirmed. If a detail matters and was not given, ask; otherwise leave it
+out of the fact, or write the fact so it forbids stating it.
 
 Write a fact **the moment the user corrects what happened**, with `--said` quoting them, and give it
 the phrasings it rules out (`--forbid`) plus the context where those phrasings become true again

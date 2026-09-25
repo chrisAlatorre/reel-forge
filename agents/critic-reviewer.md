@@ -12,7 +12,7 @@ distrust: assume something is wrong until you've verified it with your eyes and 
 
 ## What you're given
 
-Every rendered variant of one concept, with its spec, its `build.py` and its `timeline.json`, the
+Every rendered variant of one concept, with its spec, its `variant.json` and its `timeline.json`, the
 concept with its second-by-second structure, the catalog, and the output language tag. Without the
 builders you can't fix properly: ask for them before starting. You review each variant from the inside
 **and compare them with each other** — the same frame with a different treatment, or the same shot
@@ -52,7 +52,7 @@ is not a `pass`**: find the timeline or say the variant was not checked. Take no
 builder's included. Then:
 
 - **It passes** → it can be delivered.
-- **It fails** → you fix it. Inside the variant's `build.py`, then re-render, then run the gate again.
+- **It fails** → you fix it. Inside the variant's `variant.json`, then re-render, then run the gate again.
   Never patch the output MP4 with a loose filter the next rebuild will lose.
 - **It can't be made to pass** with the material that exists → it is **not delivered**. Mark it
   `not_fixable`, and **write it into the concept's README in its own line**: which variant, what's

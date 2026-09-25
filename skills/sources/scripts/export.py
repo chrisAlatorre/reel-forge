@@ -37,6 +37,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 import sys
 from pathlib import Path
 
@@ -117,17 +118,60 @@ def export_originals(ids, dest, lib_path=None, dry_run=False, extra=None):
         cmd.append("--dry-run")
     cmd += extra or []
 
-    process = subprocess.run(cmd, text=True)
+    code, stalled = run_watched(cmd, dest)
+    fallback = None
+    if stalled and "--use-photokit" in cmd:
+        # PhotoKit needs the Photos permission for the process that runs it. When nobody granted it
+        # — an agent in the background, a shell the user never approved — osxphotos does not fail:
+        # it waits for a dialog nobody sees, at 0 % CPU, forever. That is what this catches.
+        fallback = ("PhotoKit stalled (no output and no new file for "
+                    f"{STALL_S} s): most likely this process has no Photos permission. Retried "
+                    "without --use-photokit; files that live only in iCloud may be missing — grant "
+                    "Photos access to the terminal in System Settings > Privacy to get them.")
+        print(f"export: {fallback}", file=sys.stderr, flush=True)
+        cmd = [c for c in cmd if c != "--use-photokit"]
+        code, stalled = run_watched(cmd, dest)
     return {
-        "ok": process.returncode == 0,
+        "ok": code == 0 and not stalled,
         "command": " ".join(cmd),
         "dest": str(dest),
         "report": str(dest / "_report.csv"),
         "n_uuids": len(ids),
+        "fallback": fallback,
         "note": ("--use-photokit is what makes macOS genuinely ask iCloud for the photo. Without "
                  "it, files that only exist in the cloud come out empty or don't come out at all. "
                  "With a lot of files this is slow: it's the network, not the CPU."),
     }
+
+
+STALL_S = 120
+
+
+def run_watched(cmd, dest):
+    """Runs osxphotos and kills it if it goes quiet: no line of output and no new file in
+    STALL_S seconds. Returns (exit code, stalled?). Slow is fine; silent and idle is not."""
+    import threading
+    proc = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            stdin=subprocess.DEVNULL)
+    last = [time.time()]
+
+    def pump():
+        for line in proc.stdout:
+            last[0] = time.time()
+            print(line, end="", flush=True)
+
+    threading.Thread(target=pump, daemon=True).start()
+    seen = -1
+    while proc.poll() is None:
+        time.sleep(5)
+        n = sum(1 for _ in Path(dest).rglob("*") if _.is_file())
+        if n != seen:
+            seen, last[0] = n, time.time()
+        if time.time() - last[0] > STALL_S:
+            proc.kill()
+            proc.wait()
+            return proc.returncode, True
+    return proc.returncode, False
 
 
 def main():
