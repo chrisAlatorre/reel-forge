@@ -446,7 +446,21 @@ def generate(engine, lines, folder, speed, voice, language=None):
         # language ends up narrated in another.
         if language:
             cmd += ["--language", language]
-    subprocess.run(cmd, check=True)
+    r = subprocess.run(cmd)
+    if r.returncode == 0:
+        return
+    if engine == "capcut" and r.returncode == 6:
+        # capcut_voice.py exit 6: CapCut wants an account or a paid plan for text to speech. It
+        # already printed the detail; what this has to add is the way out, because a traceback
+        # here used to read like a bug in the plugin.
+        die("CapCut will not generate the voice without an account (capcut_voice.py exit 6). "
+            "Nothing was bought and nothing was typed.\n"
+            "  Either sign in to CapCut by hand and run this again, or narrate with the local "
+            f"voice:\n    uv run {Path(__file__).name} <script.json> <video> <out> --engine qwen\n"
+            "  If you take the local one, the variant's README has to say so — "
+            "`resolve_voice.py --lang es-MX --local-only` prints the sentence.", 6)
+    die(f"the synthesizer failed (exit {r.returncode}). Its own message is above it.",
+        r.returncode or 1)
 
 
 def ffprobe(*args):

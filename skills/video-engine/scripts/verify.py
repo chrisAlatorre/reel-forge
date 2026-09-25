@@ -101,10 +101,18 @@ def parse_script(path):
     """[(second, text)] from a voice script: the JSON contract, or the old plain text."""
     raw = Path(path).read_text(encoding="utf-8", errors="ignore")
     if str(path).lower().endswith(".json") or raw.lstrip().startswith("{"):
-        # The `voice-script` contract (schemas/voice-script.schema.json): {"lines": [{"t", "text"}]}
+        # The `voice-script` contract (schemas/voice-script.schema.json) calls the second
+        # **`start_s`**; `t`/`at` are what the older hand-written scripts used. Reading only `t`
+        # put every line at 0, and `voice_audible` then measured the same window 22 times and
+        # called a perfectly audible narration weak (caught 24 sep 2026).
         data = json.loads(raw)
         lines = data.get("lines", data) if isinstance(data, dict) else data
-        return [(float(ln.get("t", ln.get("at", 0))), str(ln["text"]).strip())
+        def second(ln):
+            for k in ("start_s", "t", "at"):
+                if ln.get(k) is not None:
+                    return float(ln[k])
+            return 0.0
+        return [(second(ln), str(ln["text"]).strip())
                 for ln in lines if isinstance(ln, dict) and str(ln.get("text", "")).strip()]
     for candidate in (os.environ.get("REEL_FORGE_VOICE_SCRIPTS"),
                       Path(__file__).resolve().parent.parent.parent / "voices" / "scripts"):

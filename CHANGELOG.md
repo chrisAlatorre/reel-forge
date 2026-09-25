@@ -8,6 +8,27 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.4.1
+
+Two bugs that made a narrated video ship broken while the gate stayed green, and one diagnosis that
+sent you to fix the wrong thing.
+
+### Fixed
+
+- **`start_s` is finally read.** The `voice-script` contract
+  (`schemas/voice-script.schema.json`, `narrate.py`) names the second of each line `start_s`, but
+  `transcribe.py` and `verify.py` (`parse_script`) read `t` / `at` with a default of 0. A valid
+  script therefore aligned every line at second 0: the subtitles piled up in the first seconds and
+  `text_sync` reported 0.00 s of drift, because it compared the error against itself. `voice_audible`
+  failed the other way, measuring one window over and over and calling an audible narration weak.
+  Both now try `start_s`, `t`, `at`, in that order.
+- **CapCut's server messages are read instead of guessed.** The "too many people are using this
+  feature" notice is not a window — `modal_windows()` never saw it — and it keeps its text in
+  `AXValue`, which `ax_nodes()` does not collect. New `ax_texts()` and `read_toast()` catch it in the
+  9 s after the Generate click, and `classify()` now reports a server refusal as such instead of
+  blaming the click in the voice grid. A refused line stops the batch at once (exit 4, or exit 6 when
+  the notice talks about credits) rather than costing two retries and a new project that cannot help.
+
 ## 0.4.0
 
 There is no 0.3.0: the work planned for it grew into this release and went out under one version.

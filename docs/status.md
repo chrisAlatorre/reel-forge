@@ -239,12 +239,74 @@ otherwise and were corrected in this pass.
 | `narrate.py script.md --parse-only` | 3 lines with their seconds; the `Notes:` block dropped | 0.1 s |
 | `narrate.py script.md in.mp4 out.mp4 --engine piper` | audio and video both exactly 14.100 s | 2.0 s |
 | `narrate.py script-es.md … --language es-MX` | Spanish, accents and `Notas:` respected, duration kept | 1.0 s |
-| `capcut_voice.py --calibrate` | takes the screenshot and prints the eight click points | 1 s |
+| `capcut_voice.py --calibrate` | on CapCut **9.5.0**: resolves all 9 UI anchors by name in the accessibility tree, plus the screenshot | 2 s |
 | `capcut_voice.py --split joined.wav ./split-out` | cuts a single WAV into `l0.wav`/`l1.wav` + `durations.json` by silence | 0.4 s |
 
-The click-driven CapCut path (`--prepare`) is still unrun: it takes over the desktop and needs an
-open CapCut project with a text clip. `--calibrate` proving that the screenshot and the coordinate
-table work is as far as this pass went.
+#### The CapCut path, re-calibrated for 9.5.0 — the sign-in wall, and what a signed-in session showed
+
+Run on 2026-09-24 against CapCut **9.5.0** (es-MX), the version now installed; the script had been
+written for 7.5.x. The full cycle was driven for real:
+
+| Step | Result |
+|---|---|
+| Version detection | `9.5.0` → profile `9.5` (`ax`); an unknown family exits **3** with instructions |
+| Draft discovery | finds the 9.x flat layout (`com.lveditor.draft/0924 (2)`). The old `*/*` glob only saw date-nested 7.5 drafts and silently watched a months-old project |
+| Select the text clip | by AX name (`MTLSTextP:…`), no timeline scrolling |
+| Paste the line | **the accented Spanish line lands intact** in `draft_info.json` — this was the reported breakage |
+| Open "Texto a voz" | by AX name (`text_tts`) |
+| Find Valentino | found by name as **`Valentino💌`**, scrolled to and clicked |
+| Press "Generar contenido de voz" | anchored at `(1634, 564)`; pressed |
+| Generate | **CapCut opens a sign-in sheet and writes nothing** → exit **6**, one actionable message, no password typed, nothing bought |
+
+Reproduced with a second, ordinary voice: the wall is on text-to-speech as a whole, not on
+Valentino. So `--prepare`/a full batch remain **unverified end to end** — not because the script
+takes over the desktop (it does, and that part ran), but because the app now requires an account.
+
+##### Re-checked the same evening, signed in: the wall is gone, Valentino is not
+
+Same machine, same CapCut **9.5.0**, **2026-09-24 22:40-23:10 (GMT-6)**, after signing in by hand.
+**Pro is active**: every Pro diamond in the catalog now carries a checkmark and the floating
+*"Únete a Pro para usar esta función con créditos"* banner is gone.
+
+A brand-new project (`com.lveditor.draft/0924 (3)`) was built by the 9.5 profile end to end — left
+panel → "Texto predeterminado" → its `+`, the line pasted with `pbcopy` + Cmd+V (accents intact in
+`draft_info.json`), "Texto a voz", the voice clicked by AX name, "Generar contenido de voz"
+anchored at `(1634, 563)` — with the line *"Nadie te cuenta cómo se siente el primer día en Asia."*
+
+| Voice | `tone_platform` | Result |
+|---|---|---|
+| **Georgie** | `sami` | **generated** — `textReading/6ab5fc96….wav`, 33 KB, and a "Texto a voz Georgie" track on the timeline |
+| **Nandez** | `11labs` | **generated** — `textReading/6ab5fdae….wav`, 2.97 s, 130 kbps |
+| **Valentino💌** | — | **nothing.** "Generando la voz…" appears, then a toast: *"En estos momentos, hay demasiadas personas usando esta función. Intenta de nuevo más tarde."* No WAV, no sign-in sheet, no paywall |
+
+Valentino was retried **9 times over ~25 minutes**, on the empty project and after the other two
+voices had generated: identical every time. So this is neither the account wall nor a Pro/credits
+wall — a paid `11labs` voice generated minutes earlier in the same session — but a **server-side
+refusal on that one voice**. Everything the script drives works; what is closed is Valentino.
+
+Two things this taught the script, both **fixed the same night**:
+- The toast is **not a window**, so `modal_windows()` never saw it, and it keeps its message in
+  `AXValue`, which `ax_nodes()` does not collect (it only keeps elements with an `AXDescription`).
+  New `ax_texts()` walks the tree reading `AXValue`; new `read_toast()` polls it for 9 s after the
+  Generate click, which covers the ~2 s the toast is up, about 4-5 s in.
+- `classify()` used to read "the text arrived, no audio uses Valentino" and blame the voice click.
+  It now checks the toast first: a "too many people / try again later" or a network message is a
+  `server` verdict (exit 4), one about credits or a limit is `login` (exit 6). The per-line retry
+  and the new-project recovery are both skipped when the server already said no — before this, one
+  refused line cost two attempts plus a brand-new project that could not help.
+
+Similarity, measured tonight with the same ECAPA chain (`referencia_ximena_voz_aislada.wav`,
+same-audio control **0.935**): the historical Valentino sample at 1.4x still scores **0.901**,
+while tonight's **Nandez** scores **0.251** and **Georgie** **-0.013**. Valentino is the voice the
+reference is; no other tile in the catalog substitutes for it.
+
+Screenshots and WAVs: `/private/tmp/claude-502/valentino-prueba/`.
+
+What *was* verified about the audio half, on the 28 Valentino WAVs this machine generated under 7.5:
+three distinct lines pushed through the current `loudnorm_2pass` at 1.4x score **0.894 / 0.889 /
+0.896** against `referencia_ximena_voz_aislada.wav` (ECAPA cosine; same-audio control 0.935, and the
+same audio at 1.0x scores 0.775). The conversion and the 1.4x are correct; only CapCut's generation
+is closed.
 
 ### Every script compiles and answers `--help`
 
@@ -298,12 +360,12 @@ agent actually uses it. Read this as "the plumbing holds, nobody has run water t
 | **The arc** (`arc` in the concept contract) | `validate.py` accepts a good one and names 8 defects in a broken one; the canonical example in `creative-director.md` validates | That a `creative-director` actually writes one worth building, and that the arc makes the finished video feel whole |
 | **The story-doctor** | Its agent file, its schema and its checks agree; its own documented output validates; `build.js` wires both passes with their own resume units | It has never been invoked. Its verdicts, its blocking fixes and whether the builder obeys them are unproven |
 | **Dynamic durations** | `target_duration_s` + `duration_rationale` are required; the schema demands a `turn` past 35 s; `validate.py` flags variants that all land within 4 s of each other | That a run actually produces a 14 s video next to a 52 s one. Every v6 delivery is 9-32 s, which is the problem this was built for |
-| **Valentino by default** | `resolve_voice()` returns CapCut/Valentino/1.4x for `es` and `es-MX`, local for `en-US`, and carries `disclose` when it falls back | The full CapCut click path (`capcut_voice.py --prepare`) is still unrun — it takes over the desktop. No 0.4.0 video has been narrated by Valentino yet |
+| **Valentino by default** | `resolve_voice()` returns CapCut/Valentino/1.4x for `es` and `es-MX`, local for `en-US`, and carries `disclose` when it falls back. The 9.5 UI path was re-calibrated and, **signed in (24 sep 2026, Pro active)**, driven end to end: it generated real WAVs with Georgie and with Nandez | **Valentino itself is refused by CapCut's server** — 9 tries, always *"En estos momentos, hay demasiadas personas usando esta función"* and no WAV. No 0.4.0 video has been narrated by Valentino yet, and Spanish runs still take the local fallback with the disclosure sentence |
 | **Synced captions** | A real render with `sync` produced captions at 0.00 s drift; a deliberately broken timeline was caught at 0.55 s | `transcribe.py --align` against a **real** TTS WAV. The alignment used in the test was hand-written to the contract, not produced by whisper |
 | **`voice_image`** (the voice names it, the shot shows it) | Caught both defects: a phrase never spoken, and a phrase spoken while another shot is up | No agent has written a `says` yet: the field exists and nothing fills it in production |
 | **Resuming** | The units are on disk per agent, including the two story passes | `resumeFromRunId` has never been exercised |
 | **Preferences and history** | `preferences.py` and `history.py` answer `--help` and refuse paths and identifiers | Nothing has written to them from a run, and no `bias --apply` has ever steered a proposal |
-| **`capcut_voice.py --prepare`** | It drives CapCut by clicking and takes over the desktop; it needs an open project with a text clip. `--calibrate` and `--split` were both run | `--calibrate` first, then `--prepare` with CapCut open |
+| **A finished CapCut batch** | The whole cycle was driven on 9.5.0 **signed in** and produced real audio twice (Georgie, Nandez), verified in `draft_info.json` and in `textReading/`; `--calibrate`, `--preflight` and `--split` all run | A batch **with Valentino**, which the server currently refuses. Retry `capcut_voice.py lines.json out/ --voice Valentino` another day — it resumes; `--voice Nandez` proves the machinery today but is a different voice (ECAPA 0.251 against the reference) |
 | **`voice.py --engine qwen/voxcpm`** | The models are a ~4 GB download and need Apple Silicon with MLX | `voice.py lines.json out --engine qwen`; `piper` is the cross-platform path and it **was** run, in two languages |
 | **`--create-voice` (VoiceDesign)** | Same ~4 GB download | `--create-voice narrator --description "…" --seed 11` |
 | **Linux and Windows** | The review was on macOS 26.6.2 | `render.py` and `sheets.py` matter most there |

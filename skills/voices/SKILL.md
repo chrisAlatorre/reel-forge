@@ -9,8 +9,16 @@ Two paths, and which one runs is **not** the caller's whim: `scripts/resolve_voi
 
 | Path | What it is | When |
 |---|---|---|
-| **App** (`scripts/capcut_voice.py`) | drives CapCut by clicks and collects the WAV | **the default for Spanish**, with **Valentino at 1.4x** |
+| **App** (`scripts/capcut_voice.py`) | drives CapCut and collects the WAV | **the default for Spanish**, with **Valentino at 1.4x** |
 | **Local** (`scripts/voice.py`) | open-weight models, run on the machine, clear license | every other language, and the fallback when CapCut is not there |
+
+> **Since CapCut 9.5 the app path needs a signed-in CapCut account.** Signed in (checked
+> **24 sep 2026**, 9.5.0, es-MX, Pro active) the wall is gone and text to speech **generates for
+> real** — but **Valentino itself is refused by CapCut's server** with *"En estos momentos, hay
+> demasiadas personas usando esta función. Intenta de nuevo más tarde."* On a machine nobody has
+> signed in on it still stops at **exit 6** and Spanish narrates locally, with the disclosure
+> sentence in the README. Details, and everything else that moved between 7.5 and 9.5, in
+> *The CapCut path* below.
 
 Both leave **the same contract**: `l0.wav, l1.wav… + durations.json` in a folder, 48 kHz mono,
 −16 LUFS. Anything that consumes narration (the editing engine, `narrate.py`) works the same with
@@ -34,7 +42,11 @@ The order, and it is not negotiable:
    language is **not** used silently: it is reported and the resolution carries on.
 2. **CapCut's Valentino at 1.4x**, whenever the output language is Spanish and CapCut is installed.
    That is the voice the Spanish-speaking side of the platform actually sounds like; a local voice
-   there reads as a robot next to it.
+   there reads as a robot next to it. On CapCut 9.5 this branch only produces audio if the app is
+   **signed in**: otherwise `capcut_voice.py` exits 6 and the run falls to branch 3, which is a
+   fallback and has to be disclosed like any other. Signed in, generation works — but as of
+   **24 sep 2026** Valentino specifically comes back with a server-side "too many people are using
+   this feature" and writes nothing, so branch 3 is still what a Spanish run gets today.
 3. **A local engine** — `qwen` on Apple Silicon, `piper` anywhere else.
 
 Branch 3 on a Spanish run is a **fallback**, and the delivery may not hide it. `resolve_voice()`
@@ -211,23 +223,61 @@ timbre of the apps' TTS), `announcer` (historical, with echo: don't use it).
 
 ## The CapCut path — Valentino (macOS only)
 
-**This is the default for Spanish.** `resolve_voice.py` sends any Spanish run here as long as
-CapCut is installed, with the voice **Valentino** at **1.4x**.
+**This is the default for Spanish** — when it is available at all. `resolve_voice.py` sends any
+Spanish run here as long as CapCut is installed, with the voice **Valentino** at **1.4x**.
 
-**What it is.** The voices in CapCut's catalog are ByteDance's and only exist inside the app: there is no
-public API. `scripts/capcut_voice.py` automates the desktop application — it pastes each line into a text
-clip, picks the voice and presses "Generate voice content" — and collects the WAV.
+> **Works with a signed-in account — except Valentino (re-checked 24 sep 2026, 9.5.0, es-MX).**
+>
+> Signed out, the wall from earlier that day is real: "Generar contenido de voz" opens the sign-in
+> sheet (TikTok / QR / Apple / Facebook / Google), writes nothing, and the catalog floats a
+> *"Únete a Pro para usar esta función con créditos"* banner over its last row. On 7.5 this worked
+> with **no account at all**.
+>
+> Signed in by hand, with Pro active — the Pro diamonds now carry a **checkmark**, i.e. unlocked,
+> and the banner is gone — the same run **generates for real**: on a brand-new project the text
+> landed with its accents, the voice tile was clicked by name and CapCut showed *"Generando la
+> voz…"*, then wrote `textReading/<hash>.wav` and put a "Texto a voz <name>" track on the timeline.
+> Verified with **Georgie** (`tone_platform: sami`) and **Nandez** (`tone_platform: 11labs`).
+>
+> **Valentino💌 is the one voice that does not come back.** Nine attempts over ~25 minutes, on a
+> fresh project and on one that had just generated with two other voices: the "Generando la voz…"
+> dialog appears and is then replaced by a toast, *"En estos momentos, hay demasiadas personas
+> usando esta función. Intenta de nuevo más tarde."*, and no WAV is written. It is **not** the
+> sign-in sheet and **not** a paywall — a paid 11labs voice (Nandez) generated in the same session,
+> minutes apart. Treat it as a **server-side refusal on that specific voice**: retry another day
+> before concluding anything, and until then Spanish runs keep narrating with the local voice and
+> the variant's README carries the disclosure sentence.
+>
+> **The script now reads that toast** (fixed 24 sep 2026). It is not a window, so `modal_windows()`
+> never saw it, and it carries its message in `AXValue`, which `ax_nodes()` does not collect — which
+> is why `classify()` used to blame the voice grid for a refusal that came from the server.
+> `ax_texts()` walks the tree reading `AXValue`, `read_toast()` polls it for 9 s after the Generate
+> click (the toast appears at ~4-5 s and lasts ~2 s), and `classify()` reads it before anything
+> else. A `busy` toast now stops the batch at once with the real reason, instead of retrying every
+> line twice and then opening a new project that cannot help. Exit 4 for "busy"/"network", exit 6
+> when the toast talks about credits or a limit.
 
-**Why it works without exporting anything.** CapCut writes the text-to-speech audio straight into the
-project folder, before any export:
+**What it is.** The voices in CapCut's catalog are ByteDance's — and, for the newer ones,
+ElevenLabs' served through CapCut (`tone_platform: "11labs"` in the project file) — and only exist
+inside the app: there is no public API. `scripts/capcut_voice.py` automates the desktop
+application — it pastes each line into a text clip, picks the voice and presses "Generar contenido
+de voz" — and collects the WAV.
+
+**Why it works without exporting anything.** CapCut writes the text-to-speech audio straight into
+the project folder, before any export:
 
 ```
-~/Movies/CapCut/User Data/Projects/com.lveditor.draft/<MM>/<DD>/textReading/<hash>.wav
+<drafts>/<project>/textReading/<hash>.wav
 ```
 
 (there's a copy in `.../User Data/Cache/ttsTemp/`). It's a 128 kbps MP3 inside a `.wav` container,
-44.1 kHz mono. You just copy it and run it through ffmpeg: no video export, no watermark. The folder can
-be moved with `$CAPCUT_DRAFTS`.
+44.1 kHz mono. You just copy it and run it through ffmpeg: no video export, no watermark.
+
+**Where `<drafts>` is, and it changed.** Up to 7.5 CapCut nested drafts **by date**,
+`…/com.lveditor.draft/<MM>/<DD>/`. Since 9.x each project is a folder of **its own name** right
+under the root, `…/com.lveditor.draft/0924 (2)/`. The script globs both; a script that only globs
+`*/*` silently watches a months-old draft and waits forever for a WAV. Move the root with
+`$CAPCUT_DRAFTS`.
 
 ### How it's used
 
@@ -236,63 +286,87 @@ C=${CLAUDE_PLUGIN_ROOT}/skills/voices/scripts/capcut_voice.py
 
 uv run $C --prepare                   # prints the manual steps and positions the window
 uv run $C lines.json voices/ --speed 1.4 --voice "Valentino"    # Valentino at 1.4x = the default
-uv run $C --preflight                 # only the checks: CapCut, window, permissions, project state
-uv run $C --calibrate                 # screenshot with the current coordinates
+uv run $C --preflight                 # only the checks: version, window, permissions, project
+uv run $C --calibrate                 # resolves every UI anchor by name and says which ones are gone
 ```
 
 Manual preparation, **once per batch** (~1 minute):
 
-1. **A NEW project** (File → New project). No video needs to be added.
-2. Text → Add text → the `+` button on "Default text".
-3. Right panel, **Text** tab: paste the first sentence with **Cmd+V**.
-4. **Text to speech** tab → category chip → click the voice → **Generate voice content**. An audio track
-   with the voice's name has to appear.
-5. Drag the divider between the player and the timeline until the "Generate voice content" button sits
-   where `P['generate']` says (check it with `--calibrate`).
+1. **A NEW project** (Archivo → Nuevo proyecto). No video needs to be added.
+2. Texto → hover "Texto predeterminado" → its `+` button.
+3. Right panel, **Texto** tab: paste the first sentence with **Cmd+V**.
+4. **Texto a voz** tab → find the voice → **Generar contenido de voz**. An audio track with the
+   voice's name has to appear. **On 9.5 this is the step that demands an account.**
 
-After that, the script runs the full cycle per line: scroll the timeline up → select the text clip →
-paste → Text to speech tab → chip → click the voice → Generate → wait for the WAV → convert it. ~25 s per
-line. **It resumes on its own**: if `lN.wav` already exists it skips it.
+There is no divider to drag any more: the Generate button is anchored to the window's right edge
+and to the top of the timeline, so moving the player/timeline split no longer needs a calibration.
 
-Note: **the voice is chosen by the click coordinate**, not by `--voice`. That parameter only makes the
-messages and the diagnostics name the right voice. To change voice, recalibrate `P['voice']` (and
-`P['narration_chip']` if it's in another category) with `--calibrate`.
+After that, the script runs the full cycle per line: select the text clip → paste → Texto a voz tab
+→ find the voice by name → click it → Generar → wait for the WAV → convert it. **It resumes on its
+own**: if `lN.wav` already exists it skips it.
 
-Speed is applied **outside** CapCut with `atempo` (which preserves pitch). `1.4` is the pace of the
-documentary-narration trend.
+### 7.5 → 9.5: what moved, and how the script survives it
+
+The script carries **one profile per version family** and refuses to guess. `capcut_version()`
+reads `CapCut.app`'s `CFBundleShortVersionString`; an unknown family is a **hard stop with
+instructions** (exit 3), never a silent half-run. `--assume-version 9.5` overrides it after you
+have checked the panel with `--calibrate`.
+
+| | 7.5.x (`coords`) | 9.5.x (`ax`) |
+|---|---|---|
+| How elements are found | fixed pixel coordinates in `P75` | **by name in the accessibility tree** |
+| Right panel tabs | Text / … at `(1141, 90)` / `(1398, 90)` | `text_text`, `text_animation`, `text_tracking`, `text_tts`, `text_digital_human` |
+| The script box | a pixel, `(1417, 197)` | `automationtextArea` |
+| The text clip on the timeline | scroll the timeline up a lot, then click `(450, 888)` | `MTLSTextP:<the clip's own text>` — clicked by name, and it doubles as the check that the paste landed |
+| The voice | a memorised grid cell in the "Narración" category | `OnlineResourceInfoView:<name>`, scrolled to and clicked by name |
+| Valentino's name | `Valentino` | **`Valentino💌`** (the match is a case-insensitive substring, so `--voice Valentino` still finds it) |
+| Where Valentino lives | "Narración", 4th row 4th column | **not in "Narración" any more.** The catalog is one long list: the category chips (Voces personalizadas, En tendencia, NUEVO, TikTok, Narración, Personaje, Mujer, Hombre, Canción meme) come first, then a section per language. It sits at the very **end of the Spanish section** — ~34 wheel steps from the "Español" chip, ~114 from the top |
+| "Generate voice content" | `(1634, 739)` after dragging the divider by hand | anchored: window right − 94, timeline top − 25 → `(1634, 564)` on a 1728-point window |
+| Drafts folder | `com.lveditor.draft/<MM>/<DD>/` | `com.lveditor.draft/<project name>/` |
+| File → New project | `menu bar item 1` (which on 9.5 is the *app* menu, i.e. "Acerca de") | found by menu-item **name** ("Nuevo proyecto" / "New project"), Cmd+N as the fallback |
+| Main window | `window 1` | `window 1` is often one of two tiny helper dialogs; the standard window is picked by `subrole is "AXStandardWindow"` |
+| Search box in the panel | none | there is one, and **it does not filter** (it stayed inert with and without Enter). Don't build on it |
+| Cost | generated free, no account | **account required**, voices marked Pro/credits |
+
+Other 9.5 details worth knowing:
+
+- The voice names in the accessibility tree are **localised** (`Chico sigiloso`) even when the tile
+  draws the English one (`Sneaky Guy`). Match what `--calibrate` prints, not what you read on screen.
+- A **"Únete a Pro" banner floats over the bottom of the voice grid**, covering the last row —
+  which is exactly where Valentino is. The script clicks the top strip of the tile instead of its
+  centre; that is what `VOICE_BAND` and the `pos.y + 8` fallback are for.
+- The **"Actualizar la voz según el guion" checkbox is still gone** (it went in 7.5 and 9.5 did not
+  bring it back), so every line needs its own Generate, and the voice has to be re-clicked first or
+  the button stays disabled.
+- **Every generation still adds a new audio track.** That's fine: the WAV is collected from
+  `textReading/`.
 
 ### Rules that cost blood
 
 - **A new project per batch.** A project with ~110 regenerations on it stops writing WAVs: the
-  "Generating the voice…" dialog appears, closes, and no file shows up, **with no error message at all**.
-  The free voices kept working in that same project, so it looks like a per-project cap on the premium
-  voices. A new project generated on the first try.
+  "Generando la voz…" dialog appears, closes, and no file shows up, **with no error message at all**.
 - **Never type with `osascript ... keystroke`**: CapCut eats the spaces and the accents
-  ("Everysummer,aspecimen…"). Always `pbcopy` + Cmd+V.
-- **Everything goes through coordinate clicks.** There is no API and no usable accessibility tree. The
-  script pins the window at `(0, 33)` with size `1728x999` via AppleScript before every pass. With a
-  different screen or version, `--calibrate` leaves a screenshot and the coordinates of the `P`
-  dictionary.
+  ("Cadaverano,unejemplar…"). Always `pbcopy` + Cmd+V. (Verified again on 9.5: the pasted line,
+  accents and all, lands in `draft_info.json` intact.)
 - **Watch the Dock:** a click near the bottom edge brings another app to the front.
-- **The voice panel redraws** (sometimes one column, sometimes a grid) and scrolls back to the top when
-  you re-enter. That's why the cycle always presses the category chip before looking for the voice: it
-  leaves the list in a known place.
-- **The Generate button gets disabled** once the clip already has a voice; it re-enables when you click
-  the voice in the catalog again.
-- **Every generation adds a new audio track** (recent versions removed the "Update the voice from the
-  script" checkbox). That's why the script scrolls a long way up before each click: with 20 tracks, a
-  short scroll leaves the click on an audio track and the text gets pasted in the wrong place.
+- **`cliclick` cannot scroll**; the script uses Quartz (`CGEventCreateScrollWheelEvent`).
+- **Speed is applied outside CapCut** with `atempo` (which preserves pitch). `1.4` is the pace of
+  the documentary-narration trend, and it is not cosmetic: measured against the reference TikTok,
+  the same audio scores **0.775** at 1.0x and **0.89–0.90** at 1.4x (ECAPA cosine, ceiling 0.935).
 
 ### When no audio comes out
 
-The script reads the project's `draft_info.json` and tells the two failures apart without guessing:
+The script reads the project's `draft_info.json` and tells the failures apart without guessing:
 
-- **the text did NOT reach the clip** → the clicks are landing wrong: `--calibrate` and adjust `P`.
-- **the text did arrive but no track uses that voice** → the click in the grid landed outside.
-- **the text arrived and the voice is right, but there's no WAV** → the project is burnt: create a new
-  one. To confirm, apply a free voice by hand: if that one generates, the cap is on the premium voices.
+- **the text did NOT reach the clip** → the clicks are landing wrong: `--calibrate` and see which
+  anchor says MISSING.
+- **the text did arrive but no track uses that voice** → the voice click landed outside, or the
+  catalog renamed it.
+- **the text arrived and the voice is right, but there's no WAV** → the project is burnt: create a
+  new one.
+- **a modal opened instead** → the account/credits wall. Stop.
 
-Plan B if the interface moved the buttons: paste **the whole script at once** (one line per paragraph),
+Plan B if the interface moves again: paste **the whole script at once** (one line per paragraph),
 generate once and cut by silences.
 
 ```bash
@@ -303,27 +377,26 @@ It prints how many chunks it detected so you can compare against the number of l
 
 ### It fails loudly, with a code, never in silence
 
-The two failures that used to look identical are now told apart by reading the project's own
-`draft_info.json`, and each leaves a different exit code:
-
 | Code | What happened | What to do |
 |---|---|---|
-| 3 | **the interface moved**: the text never reached the clip, or the voice-grid click landed outside | `--calibrate` and fix `P`; retrying changes nothing |
-| 4 | **the project is saturated** and a brand-new project did not fix it either | check by hand with a voice with no diamond badge |
+| 3 | **the interface moved**, or the installed CapCut has no profile here | `--calibrate`; retrying changes nothing |
+| 4 | **the project is saturated** and a brand-new project did not fix it either | check by hand |
 | 5 | environment: no cliclick, no CapCut, no drafts folder, no Accessibility permission | the message names the missing piece |
+| 6 | **CapCut demands an account or a Pro/credits plan** | sign in by hand, or take the local path. The script never signs in or pays |
 
 Saturation is the only one it retries: it creates a new project, rebuilds the text clip, verifies
 against `draft_info.json` that the text actually landed, and carries on — **once per run**. What was
 already generated stays on disk and `durations.json` is deliberately not written, which is how
-`narrate.py` knows the folder is incomplete and how a re-run resumes.
+`narrate.py` knows the folder is incomplete and how a re-run resumes. `narrate.py` turns exit 6 into
+one clean line naming the local fallback instead of a traceback.
 
 ### The warning you owe the user
 
-This path **depends on CapCut's interface and it will break**. It already happened once mid-batch, and
-silently. It also depends on Valentino still being in their country's catalog. If it breaks and there's
-no time to recalibrate, deliver the video **without voice** plus the `voice-script` with the timings,
-and let the user add it in the app. Otherwise the local path takes over, and the variant's README
-says which voice actually read it.
+This path **depends on CapCut's interface and it will break**. It has now broken twice: once
+mid-batch in 7.5, and again at 9.5, where it stopped being free. It also depends on Valentino still
+being in their country's catalog. If it breaks and there's no time to recalibrate, deliver the video
+**without voice** plus the `voice-script` with the timings, and let the user add it in the app.
+Otherwise the local path takes over, and the variant's README says which voice actually read it.
 
 ## Marks for the subtitles: `wordmarks.py`
 
@@ -450,3 +523,8 @@ passed on purpose.
     the beginning, the middle and the landing, estimate it, and let the edit be that long.
 12. Cutting a spoken viral audio on a BPM grid instead of on `sound_map.py`'s phrase starts, which
     is how a punchline ends up split across a cut.
+13. Running the CapCut path against a version it has no profile for. It refuses on purpose: on 9.5
+    the 7.5 coordinates pasted into empty space and the batch produced nothing, silently, twice.
+    `--calibrate` first.
+14. Reading Valentino's position off an old note. Since 9.5 it is `Valentino💌`, it is not in
+    "Narración", and it is found **by name** — never by remembering a grid cell.

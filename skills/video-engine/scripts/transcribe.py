@@ -309,7 +309,9 @@ def read_script(path):
         for i, ln in enumerate(lines):
             if not isinstance(ln, dict) or not str(ln.get("text", "")).strip():
                 continue
-            out.append({"t": float(ln.get("t", ln.get("at", 0))), "text": str(ln["text"]).strip(),
+            out.append({"t": float(next((ln[k] for k in ("start_s", "t", "at")
+                                         if ln.get(k) is not None), 0.0)),
+                        "text": str(ln["text"]).strip(),
                         "file": ln.get("file"), "i": i})
         return out, (data.get("lang") if isinstance(data, dict) else None)
     # Old plain-text script: "<second>  <sentence>", stopping at a Notes heading.
