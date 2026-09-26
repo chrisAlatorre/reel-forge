@@ -34,7 +34,8 @@ A usable Live comes back as `{"mov", "start_s", "end_s", "still_s", "motion", "u
 movie, so a shot can play the movement and **land on the still** (the engine's `tail: "still"`).
 
 `scan` and `analyze --apply` only ADD a `live` object to catalog items; they never change a rating.
-Photos only: reading the library is read-only (sqlite), exporting uses osxphotos like export.py.
+Photos only: reading the library is read-only (sqlite); iCloud-only movies are exported by the Photos
+app itself (AppleScript, `using originals`), because osxphotos brings the still and not the movie.
 """
 from __future__ import annotations
 
@@ -271,21 +272,29 @@ def cmd_export(a):
         else:
             missing.append(lv["uuid"])
     if missing and not a.no_icloud:
-        # iCloud-only companions: osxphotos downloads the Live Photo and writes the .mov beside it
-        osx = shutil.which("osxphotos") or str(Path.home() / ".local/bin/osxphotos")
+        # iCloud-only companions. osxphotos --download-missing brings the still and NOT the movie
+        # (tried: 320 Live Photos, 15 HEICs, 0 movies), so ask Photos itself: exporting a Live
+        # Photo "using originals" writes the .HEIC and the .mov, downloading them if needed.
         tmp = dest / "_icloud"
-        tmp.mkdir(exist_ok=True)
-        ids = tmp / "uuids.txt"
-        ids.write_text("\n".join(missing))
-        subprocess.run([osx, "export", str(tmp), "--uuid-from-file", str(ids), "--download-missing",
-                        "--skip-edited", "--filename", "{uuid}", "--update", "--no-progress"],
-                       check=False)
-        for u in list(missing):
-            got = next((p for p in tmp.glob(f"{u}*") if p.suffix.lower() == ".mov"), None)
+        for k, u in enumerate(list(missing)):
+            one = tmp / u
+            one.mkdir(parents=True, exist_ok=True)
+            try:
+                subprocess.run(["osascript", "-e", f"with timeout of {a.timeout} seconds",
+                                "-e", f'tell application "Photos" to export {{media item id "{u}/L0/001"}} '
+                                      f'to (POSIX file "{one}" as alias) with using originals',
+                                "-e", "end timeout"], capture_output=True, text=True,
+                               timeout=a.timeout + 15)
+            except subprocess.TimeoutExpired:
+                print(f"live: {u} timed out in Photos (is it stuck? see export.py)", file=sys.stderr)
+            got = next((p for p in one.iterdir() if p.suffix.lower() == ".mov"), None)
             if got:
                 shutil.move(str(got), dest / f"{u}.live.mov")
                 missing.remove(u)
                 copied += 1
+            shutil.rmtree(one, ignore_errors=True)
+            if k % 20 == 19:
+                print(f"live: {k + 1}/{len(todo)} asked of Photos, {copied} movies so far", flush=True)
         for it in todo:
             f = dest / f"{it['live']['uuid']}.live.mov"
             if f.exists():
@@ -336,6 +345,7 @@ def main():
     e.add_argument("--only-used", action="store_true", help="skip items marked use:false")
     e.add_argument("--min-quality", type=int, help="only items rated at least this (favourites always)")
     e.add_argument("--no-icloud", action="store_true", help="only what is already on this Mac")
+    e.add_argument("--timeout", type=int, default=120, help="seconds Photos gets per iCloud download")
     z = sub.add_parser("analyze", help="measure the movement and find the usable window")
     z.add_argument("movs", nargs="*")
     z.add_argument("--catalog")

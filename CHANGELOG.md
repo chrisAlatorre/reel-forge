@@ -8,6 +8,15 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.8.1
+
+### Fixed
+
+- **`live.py export` brought no movies from iCloud.** `osxphotos --download-missing` downloads the
+  still of a Live Photo and not its movie (a real run: 320 photos asked, 15 stills, 0 movies). The
+  iCloud-only ones are now exported by the Photos app itself, one per call, `using originals`, which
+  writes the `.HEIC` and the `.mov` (same run: 320 of 320). `--timeout` sets the seconds per download.
+
 ## 0.8.0
 
 **Breaking: what counts as a variant.** A pair of variants now has to differ in its middle: under 60 %
