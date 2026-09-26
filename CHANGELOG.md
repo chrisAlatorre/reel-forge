@@ -8,6 +8,20 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.6.2
+
+What the build phase of the same run found.
+
+### Fixed
+
+- **Two builders drove CapCut at the same time.** Their clicks interleaved, neither got audio, and
+  the diagnosis they wrote into the README blamed the voice grid and a missing sign-in — neither was
+  true. `capcut_voice.py` now takes a machine-wide lock for its whole batch; a second caller waits for
+  it (`REEL_FORGE_CAPCUT_WAIT`, default 30 min) instead of clicking into somebody else's session.
+- **`variant.py` wrote `engine: "local"` into the voice-script**, which is not in the schema: every
+  narrated delivery failed its own contract, the builders fixed it by hand, and each rebuild broke it
+  again. It writes the engine's real name (`qwen`, `voxcpm`, `piper`).
+
 ## 0.6.1
 
 What the first end-to-end run of 0.6.0 found.

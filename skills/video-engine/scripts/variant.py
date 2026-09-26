@@ -340,7 +340,9 @@ class Variant:
             ff("-i", src, "-af", f"atempo={tempo:.4f},loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "48000", dst)
             durs[f"l{i}"] = round(duration(dst), 3)
         atomic_json(dfile, durs)
-        info = {"engine": "local", "voice": local, "speed": speed, "fallback": True,
+        # the engine's real name (qwen, voxcpm, piper): "local" is not in voice-script.schema.json,
+        # and writing it made every narrated delivery fail its own contract on each rebuild
+        info = {"engine": v.get("local_engine", "qwen"), "voice": local, "speed": speed, "fallback": True,
                 "disclose": ("Narrated with the local voice, not with CapCut's Valentino"
                              + (f": {why}" if why else ".") +
                              " The trend voice can be swapped in without re-rendering: every line "

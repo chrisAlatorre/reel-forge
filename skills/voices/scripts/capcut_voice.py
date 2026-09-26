@@ -943,6 +943,31 @@ def preflight(voice: str = DEFAULT_VOICE, long_batch: bool = True, assumed=None)
     return tr
 
 
+def machine_lock(timeout_s=int(os.environ.get("REEL_FORGE_CAPCUT_WAIT", "1800"))):
+    """One CapCut driver per machine. Two builders drove the same CapCut window at once in a real
+    run: their clicks interleaved, neither got audio, and the diagnosis blamed the voice grid. The
+    lock is taken for the whole batch; a second caller WAITS for it (up to `timeout_s`) instead of
+    clicking into somebody else's session."""
+    import fcntl
+    root = Path(os.environ.get("REEL_FORGE_CACHE") or Path.home() / ".cache/reel-forge")
+    root.mkdir(parents=True, exist_ok=True)
+    fh = open(root / "capcut.lock", "a+")
+    t0 = time.time()
+    while True:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fh.seek(0); fh.truncate(); fh.write(f"pid {os.getpid()}"); fh.flush()
+            return fh
+        except BlockingIOError:
+            if time.time() - t0 > timeout_s:
+                die(f"CapCut has been busy with another batch for {timeout_s // 60} min "
+                    f"({root / 'capcut.lock'}). Two drivers at once corrupt each other's clicks; "
+                    "run this again when the other one is done.", EXIT_ENV)
+            if int(time.time() - t0) % 60 < 5:
+                print("· CapCut is being driven by another batch: waiting for it", flush=True)
+            time.sleep(5)
+
+
 def main():
     ap = argparse.ArgumentParser(description="CapCut's narrator voice, driven by clicks (macOS)")
     ap.add_argument("lines", nargs="?", help="JSON file with the list of sentences")
@@ -966,6 +991,7 @@ def main():
     ap.add_argument("--threshold", default="-38dB")
     ap.add_argument("--min-silence", type=float, default=0.45)
     a = ap.parse_args()
+    _lock = machine_lock()   # noqa: F841 — held until the process exits; see machine_lock()
     if a.prepare:
         return prepare()
     if a.calibrate:
