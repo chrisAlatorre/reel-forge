@@ -32,8 +32,8 @@ Configured with environment variables; otherwise the defaults are used:
 | `REEL_FORGE_CACHE` | `~/.cache/reel-forge` | person-detection model (downloads itself) |
 | `REEL_FORGE_LABEL_FONT` | `$REEL_FORGE_CACHE/fonts/Montserrat[wght].ttf` | ttf for the sheet labels; downloaded by `${CLAUDE_PLUGIN_ROOT}/skills/video-engine/scripts/resources.py` (optional) |
 
-`REEL_FORGE_HOME` is `~/Movies/reel-forge` on macOS, `~/Videos/reel-forge` on Linux and
-`%USERPROFILE%\Videos\reel-forge` on Windows. The full variable list is in `docs/configuration.md`.
+`REEL_FORGE_HOME` is `~/Movies/Reel Forge` on macOS, `~/Videos/Reel Forge` on Linux and
+`%USERPROFILE%\Videos\Reel Forge` on Windows. The full variable list is in `docs/configuration.md`.
 
 ## Flow
 
@@ -80,8 +80,8 @@ It costs ~10 s per sheet with person detection.
 
 ```json
 {
-  "src": "~/Movies/reel-forge/360/VID.insv",
-  "out": "~/Movies/reel-forge/360/output/shot-1.mp4",
+  "src": "~/Movies/Reel Forge/360/VID.insv",
+  "out": "~/Movies/Reel Forge/360/output/shot-1.mp4",
   "start": 12.0, "dur": 12, "fps": 30, "speed": 1.0, "audio": true,
   "stab": "visual", "mode": "heading", "level": "auto", "blur": 0.35,
   "keys": [

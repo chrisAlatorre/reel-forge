@@ -398,13 +398,15 @@ Their blockers are fixed together, inside each variant's `variant.json`. On top 
   cleanly and is named in the README. A narrated variant delivered mute with nothing said about it is
   a defect, not a limitation.
 
-Delivery goes to `<root>/<project>/deliveries/<version>/`, where `<root>` is `REEL_FORGE_HOME` if set,
-and otherwise `~/Movies/reel-forge` on macOS, `~/Videos/reel-forge` on Linux and
-`%USERPROFILE%\Videos\reel-forge` on Windows:
+Delivery goes to `<root>/<project title>/<version>/<concept>/`, where `<root>` is `REEL_FORGE_HOME` if
+set, and otherwise the user's videos folder + `Reel Forge` (`~/Movies/Reel Forge` on macOS,
+`%USERPROFILE%\Videos\Reel Forge` on Windows, `$XDG_VIDEOS_DIR/Reel Forge` on Linux). Inside each
+concept's folder **only the upload-ready videos sit loose**; everything else goes in `resources/`:
 
-- Clean 1080x1920 MP4s, compressed enough to stay under ~30 MB.
-- Light 720p copies for sending over chat.
-- A single `README.md` per concept: what each variant is **with its duration and why it runs that long**,
+- **Upload-ready MP4s** in the concept's folder, encoded by `upload.py` (1080x1920 H.264 High, BT.709,
+  ~14 Mbps cap, AAC 256 kbps) so the platform's own re-encode starts from a clean file.
+- In `resources/`: the light 720p copies, the previews with the song, the reports and the build.
+- A single `README.md` per concept, **in `resources/`**, reminding the user to turn on "Upload in HD": what each variant is **with its duration and why it runs that long**,
   which voice each narrated variant used, which sound to add in the app, the suggested hashtags (3-5, in
   the output language) and, if there is narration without an embedded voice, the script with its
   timings.

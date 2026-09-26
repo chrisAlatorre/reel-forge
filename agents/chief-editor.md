@@ -43,11 +43,18 @@ seconds, only you can notice.
 6. **Variety across the set**, on two axes:
    - *Format*: different `family`, different rhythms, different sounds. Cover at least two audio layers
      (song / natural sound / voice). Four beat-cut photo dumps is a bad selection.
-   - *Length*: **if every chosen concept lands within 5 s of the others, you chose badly.** A delivery
+   - *Length*: **the user's length preference comes first** (`preferences.py brief` says it in
+     seconds). With `long`, a round of 15-30 s videos is a bad selection however good each idea is.
+     And **if every chosen concept lands within 5 s of the others, you chose badly.** A delivery
      of 14 s, 28 s and 52 s teaches the user something about their own material; three 25-second videos
      teach them nothing. Push one concept long and one short, and say in `variety.durations_s` why each
      length is the one its story needs.
-7. **Subject dosage.** Check each concept against **its own** `subject_quota`, not a fixed number.
+7. **Variants a viewer can tell apart.** Inside each concept, every variant after the `base` changes
+   the hook, the close, the voice or at least 40 % of the shots. "Same cuts, other song" and "the same
+   video shorter" are not variants — the clean files carry no song, and a round of five such pairs was
+   watched and called five times the same video. Send back any pair that does not pass that test,
+   naming the change it needs (which shot to open on, which to close on).
+8. **Subject dosage.** Check each concept against **its own** `subject_quota`, not a fixed number.
    Reject or correct any concept whose structure already breaks the ceiling it declared.
 8. **Risk.** Unverified facts, sounds with no source, effects that depend on something untested. Risk
    doesn't disqualify, but it lowers the ranking and turns into a mandatory fix.

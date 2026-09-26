@@ -148,7 +148,7 @@ gets decided.
                                         v
                         ┌───────────────────────────────┐
                         │ 11. DELIVERY                  │
-                        │ deliveries/v1/<concept>/      │
+                        │ v1/<concept>/ (+resources/)  │
                         │  <concept>-A.mp4   (clean)    │
                         │  ...-A-preview.mp4 (song)     │
                         │  ...-A-light.mp4   (720p)     │
@@ -312,14 +312,14 @@ Everything an agent hands to another agent is **JSON with a schema in
 | `voice-script.json` next to the MP4 | Builder, when narrated | The narration step and the user | `voice-script` |
 | `workspace/story/<concept>-post.json` | `story-doctor`, post pass | Reviewer and you | `story-review` |
 | `workspace/concepts/<concept>/review.json` | Reviewer | You | `review-result` |
-| `deliveries/v1/<concept>/` | Phase 11 | You | — |
+| `v1/<concept>/` (upload-ready videos only) and `v1/<concept>/resources/` (everything else) | Phase 11 | You | — |
 
 Everything lives in the project's working folder, never in the plugin's repo:
 
 | System | Root (configurable with `REEL_FORGE_HOME`) |
 |---|---|
-| macOS | `~/Movies/reel-forge/<project>/` |
-| Linux | `~/Videos/reel-forge/<project>/` |
-| Windows | `%USERPROFILE%\Videos\reel-forge\<project>\` |
+| macOS | `~/Movies/Reel Forge/<project>/` |
+| Linux | `~/Videos/Reel Forge/<project>/` |
+| Windows | `%USERPROFILE%\Videos\Reel Forge\<project>\` |
 
-`workspace/` can be deleted entirely: it rebuilds from the scripts. `deliveries/` can't.
+`workspace/` can be deleted entirely: it rebuilds from the scripts. The round folders (`v1/`, `v2/`…) can't.

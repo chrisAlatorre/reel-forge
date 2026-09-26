@@ -259,8 +259,8 @@ beat pays for itself. All of those are correct, and a round where everything com
   other are one variant with three names.
 - **A short variant is not the long one truncated.** It keeps the whole arc and loses development
   beats, never the close.
-- **`duration` is a legitimate variant axis** (`differs_in: "duration"`), and that is where a real
-  difference in length belongs — not in cutting the close to hit a number.
+- **Length alone is not a variant.** A short variant earns its place with its own hook; "the same
+  video minus two shots" was watched twice and called identical.
 
 **The `story-doctor` is who guarantees this**, and it runs twice: over the concept before anything is
 built (it sets the arc and the seconds each variant needs, and those fixes are binding), and over the
@@ -375,8 +375,9 @@ On top of that, always:
 
 **How many variants per concept.** Two is the floor, not the rule: a concept with three genuinely
 different axes (sound, duration, cutting) earns three, and a round meant for comparison can ask for
-five. What is not allowed is five variants that differ only in the copy — one axis each, and their
-durations spread. The letters are `A`…`H`, one folder and one agent each.
+five. What is not allowed is variants a viewer cannot tell apart: each one after the `base` changes the
+hook, the close, the voice or at least 40 % of the shots, and `compare_variants.py` checks the rendered
+files frame by frame. Another song is never a variant — the clean files carry none. The letters are `A`…`H`, one folder and one agent each.
 
 Splitting rules:
 
@@ -437,51 +438,51 @@ with the MP4**, because without it they come back `skip`, and a `skip` looks exa
 
 ## Where everything is stored
 
-The project root is `REEL_FORGE_HOME` if it is set; otherwise it depends on the OS:
+Everything lives in the user's own videos folder, inside one folder named after the plugin, **Reel
+Forge**, and inside that one folder per project, named with a short human title — the trip, the
+event, the person: `Japón 2025`, `Boda de Ana`, `Mi perro`. The title comes from the user or, if they don't
+give one, from the material; ask for it in the grouped question of step 2 only if it is not obvious.
 
-| System | Root |
+| System | Root (`REEL_FORGE_HOME` wins if set) |
 |---|---|
-| macOS | `~/Movies/reel-forge` |
-| Linux | `~/Videos/reel-forge` |
-| Windows | `%USERPROFILE%\Videos\reel-forge` |
+| macOS | `~/Movies/Reel Forge` (Finder calls it "Movies" / "Películas") |
+| Windows | `%USERPROFILE%\Videos\Reel Forge` |
+| Linux | `$XDG_VIDEOS_DIR/Reel Forge`, else `~/Videos/Reel Forge` |
 
 ```
-<root>/<project>/
-  workspace/                  # the messy work: can be deleted and rebuilt  ($REEL_FORGE_WORKSPACE)
-    run.json                  # THE LEDGER: phases, units, artifacts. Read it before starting anything
-    run/<unit>.json           # one progress file per agent; nobody writes anybody else's
-    material/                 # exports, proxies, 9:16 crops
-    sheets/                   # contact sheets, frame strips, face crops
-    catalog/                  # catalog-<batch>.json and the merged catalog.json
-    trends/                   # trends.json and the audio previews
-    story/                    # the story-doctor: <concept>.json (before building, binding) and
-                              # <concept>-post.json (over the rendered variants)
-    concepts/<concept>/
-      review.json             # the critic-reviewer's findings
-      common/                 # prepared ONCE, before the builders: originals, stills, 360 renders,
-                              # music bed, RESOURCES.json
-      A/  B/  C/              # one agent per letter: variant.json, spec.json, voice-script.json,
-                              # voice/ (l0.wav…, alignment.json), result.json, notes.md
-  deliveries/                 # ($REEL_FORGE_OUTPUT)
-    v1/<concept>/
-      README.md               # one per concept, with every variant inside
-      <concept>-A.mp4         # 1080x1920, crf 22, no copyrighted music — verified before it lands here
-      <concept>-A-preview.mp4 # with the song, review only
-      <concept>-A-light.mp4   # 720p, for sending over chat
-      voice-script.json         # if the variant is narrated — the one format, in schemas/
-    v2/...                    # next round: v1 is never overwritten
+<root>/<project title>/
+  facts.json                  # what is TRUE about this project (facts.py) — never inside workspace/
+  workspace/                  # project-wide work: rebuildable  ($REEL_FORGE_WORKSPACE)
+    run.json  run/            # THE LEDGER and one progress file per agent
+    material/  sheets/        # exports, thumbnails, contact sheets, frame strips
+    catalog/  trends/         # catalog.json (+ .framecheck.json), trends.json and the previews
+    concepts/  story/         # the round's proposals, the chief editor's selection, the story-doctor
+  v1/                         # one folder per round; v1 is never overwritten by v2
+    <concept>/
+      <concept>-A.mp4         # ONLY the upload-ready videos sit here, one per variant:
+      <concept>-B.mp4         #   upload.py's profile — 1080x1920 H.264 High, BT.709, ~14 Mbps, AAC 256k
+      resources/              # EVERYTHING ELSE, so the folder reads as "these are the videos"
+        README.md             # one per concept, with every variant inside
+        <concept>-A-preview.mp4   <concept>-A-light.mp4
+        <concept>-A.timeline.json <concept>-A-verify.json <concept>-A-framecheck.json
+        <concept>-A-publish.md    <concept>-A-voice-script.json
+        common/               # the concept's shared material, prepared once
+        A/  B/                # one builder per letter: variant.json, spec.json, voice/, build.json
+  v2/ ...
 ```
 
-`REEL_FORGE_WORKSPACE` and `REEL_FORGE_OUTPUT` override the `workspace/` and `deliveries/` paths when
-they are set; otherwise they hang off `<root>/<project>/`.
+**The rule the user set, verbatim in spirit: open a concept's folder and see only videos you can
+upload.** No README, no preview, no JSON loose next to them — those are in `resources/`. `variant.py`
+writes that way and `verify.py` finds the sidecars there on its own.
 
 - **One round, one version.** When the user asks for changes, a full `v2` comes out; `v1` is untouched.
   That way they can compare and go back.
-- **`workspace/` is rebuilt from the scripts.** Never leave a `spec.json` that depends on a temporary
-  file you already deleted: `variant.py` has to be able to regenerate everything from zero out of the variant's `variant.json`.
-- **One README per concept**, with every variant. Not one per agent.
+- **Everything rebuilds from `variant.json`.** Never leave a spec that depends on a temporary you
+  already deleted: `variant.py` regenerates the variant from zero.
+- **One README per concept**, with every variant, in `resources/`. Not one per agent.
 - **`run.json` is not disposable.** If `workspace/` gets wiped, the next run starts from zero — which is
   correct, but say so before wiping it.
+- **Paths contain spaces** (`Reel Forge`, `Boda de Ana`). Quote every path in every shell command.
 
 ## Dependencies and honest limits
 

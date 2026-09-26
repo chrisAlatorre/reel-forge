@@ -8,6 +8,42 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.7.0
+
+**Breaking: where things are saved.** Projects now live in the user's videos folder under `Reel
+Forge/<project title>/` (macOS `~/Movies/Reel Forge`, Windows `%USERPROFILE%\Videos\Reel Forge`,
+Linux `$XDG_VIDEOS_DIR/Reel Forge`), rounds are `v1/`, `v2/`… straight under the project, and a
+concept's folder holds **only its upload-ready videos**: everything else — README, previews, light
+copies, reports, voice scripts, the shared material and each variant's build — is in `resources/`.
+`REEL_FORGE_HOME` still overrides the root. The paths contain spaces; everything quotes them.
+
+### Added
+
+- **`upload.py` — the upload-ready encode.** The file loose in a concept's folder is no longer the
+  render but an encode made for the platform's own re-encode to start from: 1080x1920, H.264 High,
+  `yuv420p`, 30 fps constant, BT.709 tagged on every frame, CRF 17 capped at 14 Mbps, 2 s closed GOP,
+  AAC-LC 48 kHz 256 kbps, `+faststart`. The publishing notes remind the user to turn on "Upload in HD",
+  without which the app compresses on the phone first. A test caught the first version writing only
+  the colour matrix and leaving primaries and transfer untagged.
+- **`compare_variants.py` — can a viewer tell two variants apart?** Frame by frame on the rendered
+  files, or by file and moment on the specs. A pair passes only if it changes the hook, the close, the
+  voice or at least 40 % of the shots. Run over the previous round it reproduced the user's complaint
+  exactly: all five concepts shipped two variants a viewer would take for the same video.
+
+### Changed
+
+- **Variants change what a viewer sees.** The old rule kept the hook and the close fixed and moved
+  one small thing; "same cuts, other song" (the uploads carry no song) and "the same minus two shots"
+  were valid variants. `differs_in` is now `base`, `hook`, `close`, `voice` or `shots`; `hook_resource`
+  and `close_resource` name the new shot; the validator rejects a song-only variant and a second base;
+  the story-doctor and the critic run `compare_variants.py` and a failing pair is a blocker.
+- **Length preferences come in seconds.** `short` 15-25 s, `medium` 25-45 s, `long` 45-90 s, and the
+  format tables' usual ranges become a floor. A user who said "they all feel short" had just received a
+  round of 13-31 s, because every family in the tables anchors on 12-35 s.
+- `verify.py` finds the timeline and the preview in `resources/` on its own, and the file-size
+  ceiling rose to 280 MB (under the app's ~287 MB): the old 120 MB would have failed exactly the
+  longer videos.
+
 ## 0.6.2
 
 What the build phase of the same run found.

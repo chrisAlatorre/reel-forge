@@ -288,8 +288,14 @@ def cmd_brief(args) -> int:
         lines.append("Length: the concept decides. Do not cut a story short to hit a template "
                      "length, and do not pad a short idea to fill one.")
     elif length:
-        lines.append(f"Length: the user asked for {length} videos, but never at the cost of "
-                     "the ending — a video that stops mid-thought is worse than a long one.")
+        # The words alone did nothing: a user who said "they feel short" got a whole round of 13-31 s
+        # videos, because every format table in the plugin anchors on 12-35 s. So the brief says it in
+        # seconds, and says what to do with a format that cannot hold that long.
+        span = {"short": "15-25 s", "medium": "25-45 s", "long": "45-90 s"}.get(length, length)
+        lines.append(f"Length: the user wants {length} videos — aim for {span}. Treat the format "
+                     "tables' usual ranges as a floor, not a target; a format that cannot hold this "
+                     "long needs a longer story (more beats, a second turn) or a different format. "
+                     "Never pad to get there, and never at the cost of the ending.")
     for key, label in (("voices.rejected", "Voices to avoid"),
                        ("voices.preferred", "Voices that work"),
                        ("formats.worked", "Formats that worked"),

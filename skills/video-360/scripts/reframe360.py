@@ -25,7 +25,7 @@ Conventions (degrees):
 
 keys.json:
 {
-  "src": "~/Movies/reel-forge/360/VID.insv",  "out": "~/Movies/reel-forge/360/output/x.mp4",
+  "src": "~/Movies/Reel Forge/360/VID.insv",  "out": "~/Movies/Reel Forge/360/output/x.mp4",
   "start": 12.0, "dur": 12, "fps": 30, "speed": 1.0, "audio": true,
   "stab": "no|visual|gyro|auto", "mode": "heading|lock", "level": "auto|no|gyro|[pitch, roll]",
   "blur": 0.35,                          # the virtual shutter (a fraction of a frame) for motion blur
@@ -59,7 +59,7 @@ from PIL import Image, ImageDraw, ImageFont
 # Working folders. They can be moved with environment variables, so the plugin imposes no paths.
 #   REEL_FORGE_360         360 root (originals, proxies and output).
 #                          Default: $REEL_FORGE_HOME/360
-#   REEL_FORGE_HOME        project root. Default: ~/Movies/reel-forge on macOS, ~/Videos/... elsewhere
+#   REEL_FORGE_HOME        project root. Default: ~/Movies/Reel Forge on macOS, ~/Videos/... elsewhere
 #   REEL_FORGE_CACHE       downloadable models and caches. Default: ~/.cache/reel-forge
 #   REEL_FORGE_LABEL_FONT  ttf for the sheet labels (optional).
 #                          Default: $REEL_FORGE_CACHE/fonts/Montserrat[wght].ttf (resources.py downloads it).

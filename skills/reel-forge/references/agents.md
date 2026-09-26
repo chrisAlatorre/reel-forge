@@ -36,8 +36,8 @@ time and caps itself at `min(16, CPUs - 2)`. What makes a round that size surviv
 protocol, not a smaller number.
 
 **How many variants per concept.** Two is the floor, not the rule. Each one moves on **one** axis
-(`differs_in`: sound, duration, subject_presence, cutting, structure), so a concept earns as many
-variants as it has real axes — three is common, five is what a comparison round asks for. Five variants
+(`differs_in`: base, hook, close, voice, shots — what a viewer SEES change), so a concept earns as many
+variants as it has real ways to open, close or tell it — three is common, five is what a comparison round asks for. Five variants
 that differ only in the copy are one variant with five names, and so are five that all came out the
 same length.
 

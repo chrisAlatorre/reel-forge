@@ -250,6 +250,85 @@ def a_silent_idle_export_is_killed_not_waited_on_forever(tmp):
     assert not stalled and code == 0
 
 
+# --------------------------------------------------------------------------- layout and upload
+
+@test
+def upload_file_is_the_platform_profile(tmp):
+    """The file that goes to the platform: H.264 High, yuv420p, BT.709 TAGGED, 1080x1920, constant
+    30 fps, AAC 48 kHz. An untagged file gets its colours guessed at by the platform."""
+    import upload
+    ff("-f", "lavfi", "-i", "testsrc2=size=1350x2400:rate=30:duration=2", "-f", "lavfi", "-i",
+       "sine=frequency=440:duration=2", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv444p",
+       "-c:a", "aac", tmp / "master.mp4")
+    upload.encode(tmp / "master.mp4", tmp / "up.mp4")
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
+                        "stream=codec_name,profile,pix_fmt,width,height,r_frame_rate,color_primaries,"
+                        "color_transfer,color_space,sample_rate", "-of", "json", str(tmp / "up.mp4")],
+                       capture_output=True, text=True)
+    st = {s["codec_name"]: s for s in json.loads(r.stdout)["streams"]}
+    v, a = st["h264"], st["aac"]
+    assert (v["width"], v["height"]) == (1080, 1920) and v["pix_fmt"] == "yuv420p", v
+    assert v["profile"] == "High" and v["r_frame_rate"] == "30/1", v
+    assert v.get("color_primaries") == "bt709" and v.get("color_space") == "bt709", v
+    assert a["sample_rate"] == "48000", a
+
+
+@test
+def a_concept_folder_holds_only_the_upload_ready_videos(tmp):
+    """The user's rule: open a concept's folder and see only videos you can upload — no README, no
+    preview, no JSON. Everything else in resources/. Built on a path WITH SPACES, like the default."""
+    base = tmp / "Reel Forge" / "Viaje de prueba" / "v1" / "mi-concepto"
+    build = base / "resources" / "A"
+    build.mkdir(parents=True)
+    s = _stills(tmp, 2)
+    ff("-f", "lavfi", "-i", "testsrc2=size=1080x1920:rate=30:duration=3", "-f", "lavfi", "-i",
+       "sine=frequency=330:duration=3", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+       "-c:a", "aac", tmp / "clip.mp4")
+    (build / "variant.json").write_text(json.dumps({
+        "name": "mi-concepto-A", "delivery": str(base),
+        "shots": [{"src": str(tmp / "clip.mp4"), "start": 0.0, "dur": 2.0, "kb": 0.0},
+                  {"src": s[0], "dur": 1.5, "audio": {"from": str(tmp / "clip.mp4"), "start": 0.5}},
+                  {"src": s[1], "dur": 1.5, "audio": {"continue": True}}],
+        "captions": [{"seg": 0, "lead": 0.0, "text": "Prueba", "style": "clean", "pos": "low"}]}))
+    r = uv(ENGINE / "variant.py", build / "variant.json", "--no-framecheck")
+    loose = sorted(p.name for p in base.iterdir() if p.is_file())
+    assert loose == ["mi-concepto-A.mp4"], (loose, r.stdout[-400:], r.stderr[-400:])
+    res = {p.name for p in (base / "resources").iterdir()}
+    for f in ("mi-concepto-A-light.mp4", "mi-concepto-A.timeline.json", "mi-concepto-A-verify.json",
+              "mi-concepto-A-publish.md"):
+        assert f in res, (f, sorted(res))
+    assert r.returncode == 0, r.stdout[-600:]
+
+
+@test
+def two_variants_a_viewer_cannot_tell_apart_fail(tmp):
+    """A whole round shipped as five pairs of the same video: "same cuts, other song" and "the same
+    minus two shots". What counts is a different hook, close, voice or most of the shots."""
+    def spec(srcs, voiced=False):
+        d = {"segments": [{"src": f"/m/{x}.jpg", "dur": 2.0} for x in srcs], "audio": []}
+        if voiced:
+            d["sync"] = {"from": "voice/alignment.json"}
+        return d
+    base = ["a", "b", "c", "d", "e", "f"]
+    cases = {"same": spec(base), "shorter": spec(["a", "b", "c", "f"]),
+             "newhook": spec(["x"] + base[1:]), "voiced": spec(base, voiced=True)}
+    for name, d in cases.items():
+        (tmp / f"{name}.json").write_text(json.dumps(d))
+    (tmp / "base.json").write_text(json.dumps(spec(base)))
+    def run(other):
+        return uv(ENGINE / "compare_variants.py", tmp / "base.json", tmp / f"{other}.json").returncode
+    assert run("same") == 1 and run("shorter") == 1, "identical or merely shorter must fail"
+    assert run("newhook") == 0 and run("voiced") == 0, "another hook or the voice must pass"
+
+
+@test
+def projects_live_in_the_videos_folder_under_reel_forge(tmp):
+    import config
+    assert config.APP_FOLDER == "Reel Forge"
+    if not os.environ.get("REEL_FORGE_HOME"):
+        assert config.HOME.name == "Reel Forge" and config.HOME.parent.name in ("Movies", "Videos"), config.HOME
+
+
 # --------------------------------------------------------------------------- runner
 
 def main():

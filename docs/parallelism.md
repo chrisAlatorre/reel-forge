@@ -86,7 +86,7 @@ agent crashes, the battery dies — **whatever isn't on disk is lost**.
   reads it and returns it instead of looking at everything again. The second run costs almost nothing.
   That is also what makes a run survive a sleeping machine: the agents that had already written stay
   written, and only the rest get relaunched.
-- **`workspace/` is rebuildable; `deliveries/` is not touched.** Every variant leaves a `variant.json` that
+- **`workspace/` is rebuildable; the round folders (`v1/`, `v2/`…) are not touched.** Every variant leaves a `variant.json` that
   regenerates its spec and its pre-renders from scratch. Never leave a `spec.json` pointing at a temporary
   you already deleted: once the temporaries are cleaned up, that spec is irreproducible.
 - **Resuming the whole run:** the Workflow tool returns a `runId`. With

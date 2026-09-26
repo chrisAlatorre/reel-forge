@@ -15,7 +15,7 @@ food, sport, fitness, cars, music, whatever.
 | `--lang TAG` | Language **and market** of the research (`es-MX`, `en-US`, `pt-BR`…). Default: `$REEL_FORGE_LANG`, then `"lang"` in `~/.config/reel-forge/config.json`, then the language the user is writing in. |
 | `--platform` | A single platform; by default it looks at vertical video in general |
 | `--fast` | 1 agent, formats and 3 sounds, BPM measured only for the main one |
-| `--out PATH` | Where to leave the report (default: `<root>/trends/<topic>-<date>.md`, where `<root>` is `$REEL_FORGE_HOME`, or `~/Movies/reel-forge` on macOS, `~/Videos/reel-forge` on Linux, `%USERPROFILE%\Videos\reel-forge` on Windows) |
+| `--out PATH` | Where to leave the report (default: `<root>/trends/<topic>-<date>.md`, where `<root>` is `$REEL_FORGE_HOME`, or `~/Movies/Reel Forge` on macOS, `~/Videos/Reel Forge` on Linux, `%USERPROFILE%\Videos\Reel Forge` on Windows) |
 
 It can run on its own, or `/reel` calls it in step 4.
 

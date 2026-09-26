@@ -9,8 +9,8 @@
 //
 // args (everything optional except the material):
 //   project         name of the working folder, e.g. "summer-coast"
-//   root            project root (default: ~/Movies/reel-forge on macOS, ~/Videos/... on Linux,
-//                   %USERPROFILE%\Videos\reel-forge on Windows; REEL_FORGE_HOME wins if set)
+//   root            project root (default: ~/Movies/Reel Forge on macOS, ~/Videos/... on Linux,
+//                   %USERPROFILE%\Videos\Reel Forge on Windows; REEL_FORGE_HOME wins if set)
 //   days            [{ date: "2026-04-11", place: "Coast", files: ["/path/IMG_0001.HEIC", ...] }]
 //   videos          [{ path: "/path/VID_0007.MOV", dur_s: 41 }]  (or just the path as a string)
 //   clips360        [{ path: "/path/VID_0012.insv", dur_s: 28 }]
@@ -59,10 +59,10 @@ const A = args || {}
 const PLUGIN_ROOT = A.plugin_root || '$CLAUDE_PLUGIN_ROOT'
 
 const PROJECT = A.project || 'project'
-// Project root. macOS ~/Movies/reel-forge, Linux ~/Videos/reel-forge, Windows
-// %USERPROFILE%\Videos\reel-forge, and REEL_FORGE_HOME wins if it is set.
+// Project root. macOS ~/Movies/Reel Forge, Linux ~/Videos/Reel Forge, Windows
+// %USERPROFILE%\Videos\Reel Forge, and REEL_FORGE_HOME wins if it is set.
 // Pass it already resolved in args.root.
-const ROOT = A.root || '~/Movies/reel-forge'
+const ROOT = A.root || '~/Movies/Reel Forge'
 const WORKSPACE = `${ROOT}/${PROJECT}/workspace`
 const LEDGER = `${WORKSPACE}/run.json`
 const UNITS = `${WORKSPACE}/run`

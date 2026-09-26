@@ -249,7 +249,7 @@ list of variables and the config file are in [`configuration.md`](configuration.
 ```bash
 export REEL_FORGE_LANG="en-US"
 export REEL_FORGE_SOURCES="$HOME/Pictures/material:$HOME/Videos/material"
-export REEL_FORGE_HOME="$HOME/Movies/reel-forge"
+export REEL_FORGE_HOME="$HOME/Movies/Reel Forge"
 ```
 
 or in `~/.config/reel-forge/config.json`, which wins over automatic detection:
@@ -258,7 +258,7 @@ or in `~/.config/reel-forge/config.json`, which wins over automatic detection:
 {
   "lang": "en-US",
   "sources": ["~/Pictures/material", "~/Videos/material"],
-  "home": "~/Movies/reel-forge",
+  "home": "~/Movies/Reel Forge",
   "platform": "tiktok"
 }
 ```

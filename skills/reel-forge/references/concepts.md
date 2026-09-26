@@ -86,7 +86,12 @@ declares `target_duration_s` **with** `duration_rationale`, counted in beats —
 | Recap, POV, photo dump | 20-35 s | there's a real turn in the middle |
 | Storytime, guide, documentary | 35-75 s | every beat brings a new fact and the material holds |
 
-Guides to argue against, not lengths to obey. The two rules that actually decide:
+Guides to argue against, not lengths to obey — and **when the user has said what length they want,
+their word moves the whole table.** `preferences.py brief` prints it in seconds (`long` = 45-90 s).
+A user who said "they all feel short" once got a round of 13-31 s videos, because every family below
+anchors on 12-35 s: with a length preference set, those ranges are a floor, a gag format has to find a
+setup that earns the extra time or give way to a format that holds it, and the chief editor treats a
+round that ignores the preference as a bad selection. The two rules that actually decide:
 
 - **More story than time → it goes up.** Trimming a beat to hit a length is exactly what produces the
   abrupt ending. Name the starving beat and give it its seconds.
@@ -144,27 +149,37 @@ points end up with two seconds each.
 
 ## The variants of a concept
 
-Two by default, up to five when the user wants a wide comparison. They have to read differently in the
-first 3 s, and each one moves on **one** axis (`differs_in`); two variants that move on the same axis
-are the same variant. There are five axes, so **five variants is the ceiling** — a sixth would repeat
-one. What each axis means:
+Two by default, up to five when the user wants a wide comparison. **Someone who watches them one
+after the other has to say "that's a different one" within the first seconds** — or, failing that, at
+the end. The feedback that rewrote this section, verbatim: *"for each concept you made two variants,
+but they looked the same; I saw no difference between them"*. It was true: the old rule here kept the
+hook, the close and most of the shots fixed and moved one small thing, and a round of five concepts
+came out as five pairs of the same video.
 
-| `differs_in` | One side | The other |
-|---|---|---|
-| `sound` | silent, diegetic only | narrated |
-| `duration` | full at 45 s | 18 s: hook, one beat and the same close |
-| `subject_presence` | the subject as protagonist | pure b-roll |
-| `cutting` | cut to the beat | long shots |
-| `structure` | the beats in the order they happened | the turn moved to the front, told backwards |
+**A variant changes at least one of these, and it is measured** (`compare_variants.py` over the
+rendered files, frame by frame; the critic runs it and a pair that fails is a blocker):
 
-With five variants, hand out one axis each and write in every `what` what it is testing. Five variants
-that all move on `cutting` are one variant rendered five times, and the validator rejects the file.
+| what changes | what that means on screen |
+|---|---|
+| **the hook** | it opens on another shot — the turn moved to the front, the payoff teased first, a different face or place in frame 1 |
+| **the close** | it lands on another shot or another kind of close (a loop instead of a punchline, back-to-hook instead of a final fact) |
+| **the voice** | one is narrated and the other is not |
+| **the shots** | at least 40 % of them are different material, not the same material reordered |
 
-What **doesn't** change between variants: the concept, the hook, the promise, **the close**, the output
-language and the subject quota. If those change, they're two concepts and you have to say so.
+What **does not** count, however it is labelled:
 
-**A short variant drops development beats, never the close.** Cutting the ending to make a video shorter
-is the exact defect this whole section exists to prevent.
+- **Another song.** The clean files never carry music: "same cuts, other song" is two identical
+  uploads. Music can travel with another change, never be the change.
+- **The same video shorter.** Dropping two development beats and keeping the hook and the close is
+  what was watched twice and called identical. A short variant is welcome — with its own hook.
+- **A different `look`, text style or tempo of the same shots.** Nobody scrolling notices.
+
+What stays is the **concept**: the premise, the promise and the payoff that makes it this story. Two
+variants can open and close on different shots and still be the same idea told two ways; if the
+premise changes, it is another concept.
+
+**A short variant drops development beats, never the close** — and, to read as its own thing, it
+usually opens on something the long one saves for later.
 
 ## Structure
 

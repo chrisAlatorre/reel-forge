@@ -163,7 +163,14 @@ def load_timeline(video, given, enabled=True):
     """The `VIDEO.timeline.json` the engine leaves: shots, burned-in text and voice windows."""
     if not enabled:
         return None
-    path = Path(given) if given else video.with_name(video.stem + ".timeline.json")
+    if given:
+        path = Path(given)
+    else:
+        # beside the video, or in the concept's resources/ folder, where the builder keeps every
+        # sidecar so that only the upload-ready files sit loose next to each other
+        path = next((c for c in (video.with_name(video.stem + ".timeline.json"),
+                                 video.parent / "resources" / (video.stem + ".timeline.json"))
+                     if c.exists()), video.with_name(video.stem + ".timeline.json"))
     if not path.exists():
         return None
     try:
@@ -421,7 +428,10 @@ def main():
     ap.add_argument("--min-end-taper", type=float, default=6.0,
                     help="dB the sound has to come down by on the last 0.3 s; under it nothing "
                          "tapered and the audio was cut at full level")
-    ap.add_argument("--max-mb", type=float, default=120.0, help="ceiling for the delivered file")
+    # 280 MB: under the app's own upload ceiling (~287 MB on iOS). The upload profile runs ~14 Mbps,
+    # so a 90 s story is ~160 MB — the old 120 MB ceiling would have failed exactly the longer videos
+    # the user asked for.
+    ap.add_argument("--max-mb", type=float, default=280.0, help="ceiling for the delivered file")
     ap.add_argument("--max-preview-mb", type=float, default=30.0, help="ceiling for the review copy")
     ap.add_argument("--json", dest="json_out", help="write the report to this file as well")
     a = ap.parse_args()
@@ -697,7 +707,10 @@ def main():
         warn(report, "ending", not bad, detail + (f" [{measured}]" if measured else ""))
 
     # 10. weight: the delivery and the review copy
-    preview = Path(a.preview) if a.preview else video.with_name(video.stem + "-preview.mp4")
+    preview = Path(a.preview) if a.preview else next(
+        (c for c in (video.with_name(video.stem + "-preview.mp4"),
+                     video.parent / "resources" / (video.stem + "-preview.mp4")) if c.exists()),
+        video.with_name(video.stem + "-preview.mp4"))
     if preview.exists():
         p_mb = preview.stat().st_size / 1e6
         check(report, "preview_size", p_mb <= a.max_preview_mb,

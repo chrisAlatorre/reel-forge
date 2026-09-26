@@ -111,12 +111,17 @@ A **short variant is not the long one truncated**: it keeps the whole arc and lo
 ## If your job is a variant
 
 ```
-<workspace>/concepts/<slug>/common/   already prepared — use it, never redo it
-<workspace>/concepts/<slug>/<LETTER>/ yours: variant.json, voice-script.json, notes.md, result.json
-                                      (the builder leaves build.json, spec.json, voice/, tmp/)
-<deliveries>/<slug>/                  <name>.mp4, -preview.mp4, -light.mp4, -verify.json,
-                                      -framecheck.json, -publish.md, -voice-script.json
+<project>/<version>/<slug>/                     ONLY the upload-ready <name>.mp4 files, nothing else
+<project>/<version>/<slug>/resources/common/    already prepared — use it, never redo it
+<project>/<version>/<slug>/resources/<LETTER>/  yours: variant.json, voice-script.json, notes.md,
+                                                result.json (the builder adds build.json, spec.json, voice/)
+<project>/<version>/<slug>/resources/           the builder's sidecars: -preview, -light, -verify,
+                                                -framecheck, -publish, -voice-script, .timeline.json
 ```
+
+Set `"delivery"` in `variant.json` to the **concept's folder** (`<project>/<version>/<slug>`): the
+builder puts the upload-ready file there and everything else in its `resources/`. Paths contain spaces
+(`Reel Forge`): quote them in every shell command.
 
 **You do not write a build script.** You write `variant.json` and run the shared builder:
 

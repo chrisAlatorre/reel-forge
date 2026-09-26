@@ -78,7 +78,7 @@ is variable, the engine asks it for weight 700/850).
 | `REEL_FORGE_FONTS` | `$REEL_FORGE_CACHE/fonts` | Typefaces |
 | `REEL_FORGE_ASSETS` | `$REEL_FORGE_CACHE/assets` | Base map, sound effects |
 | `REEL_FORGE_MODELS` | `$REEL_FORGE_CACHE/models` | Segmentation model |
-| `REEL_FORGE_HOME` | `~/Movies/reel-forge` on macOS, `~/Videos/reel-forge` elsewhere | Project root |
+| `REEL_FORGE_HOME` | `~/Movies/Reel Forge` on macOS, `~/Videos/Reel Forge` elsewhere | Project root |
 | `REEL_FORGE_OUTPUT` | `$REEL_FORGE_HOME` | Base for the spec's relative `out` paths |
 | `REEL_FORGE_FONT_SANS` / `_SERIF` | Montserrat / Instrument Serif | Changing the typeface |
 | `REEL_FORGE_FONT_THAI` / `_CJK` | auto-detected | Scripts the sans doesn't cover |

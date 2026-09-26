@@ -3,29 +3,37 @@
 ## Structure
 
 ```
-<root>/<project>/deliveries/v1/<concept>/
-  README.md
-  <concept>-A.mp4              1080x1920, crf 22, NO copyrighted music — it passed the gate
-  <concept>-A-preview.mp4      with the song, just so they can hear it
-  <concept>-A-light.mp4        720p, crf 24, 4-11 MB, for sending over chat
-  <concept>-A.timeline.json    what the render burned in and where every cut fell — the gate reads it
-  <concept>-A-verify.json      the gate's report for that file
-  <concept>-B.mp4  ...
-  voice-script.json            if any variant is narrated (the format is schemas/voice-script.schema.json)
+<root>/<project title>/v1/<concept>/
+  <concept>-A.mp4              UPLOAD-READY: upload.py's profile, NO copyrighted music, passed the gate
+  <concept>-B.mp4              …one per variant, and NOTHING else loose in this folder
+  resources/
+    README.md                  one per concept, every variant inside
+    <concept>-A-preview.mp4    with the song, just so they can hear it (720p)
+    <concept>-A-light.mp4      720p, for sending over chat
+    <concept>-A.timeline.json  what the render burned in and where every cut fell — the gate reads it
+    <concept>-A-verify.json    the gate's report for the upload file
+    <concept>-A-framecheck.json  <concept>-A-publish.md  <concept>-A-voice-script.json
+    common/  A/  B/            the shared material and each variant's build (variant.json, spec, voice)
 ```
 
-The variant's `spec.json`, its `variant.json` and its voice folder stay in the workspace: the delivery
-folder holds what gets watched, the one file the user may have to edit (the voice script) and the two
-the gate needs. **The `timeline.json` travels with the MP4**: the text, voice-over-image and ending
-checks read it, and without it they are skipped — and a skipped check looks exactly like a passed one.
+The user asked for it in these words: open a concept's folder and see **only the videos, ready to
+upload**. Everything else — even the README — is in `resources/`. The `timeline.json` stays with the
+build: `verify.py` looks for it beside the video **and** in `resources/`, so the text, voice-over-image
+and ending checks still run — a skipped check looks exactly like a passed one.
 
-Root: `REEL_FORGE_HOME` if set; otherwise macOS `~/Movies/reel-forge`, Linux `~/Videos/reel-forge`,
-Windows `%USERPROFILE%\Videos\reel-forge`. `REEL_FORGE_OUTPUT` overrides the `deliveries/` path.
+**The upload file is its own encode** (`upload.py`), not the render: 1080x1920, H.264 High, 30 fps
+constant, BT.709 tagged, CRF 17 capped at 14 Mbps, 2 s closed GOP, AAC-LC 48 kHz 256 kbps,
+`+faststart`. Every platform re-encodes; what we control is handing it a clean standard file at the
+top of its useful range. The README always tells the user to turn on **"Upload in HD" / "Allow
+high-quality uploads"** when posting — without it the app compresses on the phone first, whatever the
+file.
+
+Root: `REEL_FORGE_HOME` if set; otherwise the user's videos folder + `Reel Forge` (macOS
+`~/Movies/Reel Forge`, Windows `%USERPROFILE%\Videos\Reel Forge`, Linux `$XDG_VIDEOS_DIR/Reel Forge`).
 
 - **One round, one version.** Changes come out as a full `v2`. `v1` is never touched.
 - **One README per concept**, with every variant inside. Not one per agent.
-- The workspace (`workspace/`) can be deleted entirely and rebuilt by running `variant.py` on each `variant.json` —
-  but deleting it also throws away `workspace/run.json`, the ledger an interrupted run resumes from.
+- The project's `workspace/` can be deleted and rebuilt — but deleting it also throws away `workspace/run.json`, the ledger an interrupted run resumes from.
   Say so before wiping it.
 
 ## The gate: nothing ships unverified

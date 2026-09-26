@@ -86,6 +86,16 @@ builder's included. Then:
      arguing with it. The failure that put this line here: a ship shot from inside a boat,
      with two strangers' heads owning the bottom third and a window mullion across the middle, in a
      delivered video. Every automatic check was green, because none of them was looking at that.
+   - **Variants a viewer would take for the same video.** Measure it, on the rendered files:
+
+     ```
+     uv run ${CLAUDE_PLUGIN_ROOT}/skills/video-engine/scripts/compare_variants.py "<concept folder>"
+     ```
+
+     A pair fails when it shares the hook, the close and the voice and most of its shots look alike.
+     That is a blocker, not a nitpick: a whole round shipped as five such pairs and the user saw "no
+     difference between variants". The fix is a different hook, close or voice — never another song
+     (the uploads carry none) and never just fewer shots.
    - **Uneven look between variants:** compare the **same frame** across A, B, C. A `look` that washes
      out the hook in two of four deliveries is a defect of the set, not of one variant.
    - **Something the user already told us is false.** Run the project's facts over what SHIPS — the

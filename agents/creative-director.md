@@ -115,19 +115,23 @@ you see, on-screen text (if any), sound and effect. Hard rules:
   variant uses one it gets said in that variant's README.
 
 ## Variants (2, up to 5 when you're asked for a wide round)
-All of the **same concept**, changing one lever each (`differs_in`), so the choice means something.
-There are five axes and each variant takes one, so five is the ceiling:
-- **A** `cutting`: the full version, as you imagined it.
-- **B** `sound`: a different audio layer (narration, or the opposite: pure natural sound, no music).
-- **C** `duration`: shorter — it drops **development beats**, never the close. A short variant that
-  loses its ending is the defect this plugin exists to stop.
-- **D** `subject_presence`: the useful twist (guide with prices, block counter, POV, or pure b-roll).
-- **E** `structure`: the same beats in another order — the turn moved to the front, told backwards.
+All of the **same concept** — same premise, same payoff — but **a viewer who watches them one after
+the other has to see a different video**. A whole round once came back as five pairs of the same video:
+"same cuts, other song" (the clean files carry no song) and "the same thing minus two shots". Each
+variant after the `base` changes one thing you can SEE or HEAR (`differs_in`):
 
-Say in each variant's `what` which axis it's testing and what you expect to learn from it.
+- **`base`**: the reference cut, as you imagined it. At most one.
+- **`hook`**: it opens on another shot — the turn moved to the front, the payoff teased first. Name it
+  in `hook_resource`.
+- **`close`**: it lands on another shot or another kind of close. Name it in `close_resource`.
+- **`voice`**: narrated where the base is not, or the reverse.
+- **`shots`**: at least 40 % different material, not the same material reordered.
 
-What never changes between variants: the concept, the hook, the promise, the close and the output
-language. If the variant is already another idea, that's a separate concept.
+A shorter variant is welcome, but length alone is not a variant: give the short one its own hook.
+Another song is never a variant. `compare_variants.py` measures the rendered files frame by frame and
+the critic sends back any pair a viewer would take for the same video.
+
+Say in each variant's `what` what a viewer notices first, and what you expect to learn from it.
 
 ## Output format
 Write `<working_folder>/concepts/<slug>.json` in the format of
@@ -178,8 +182,8 @@ duration with its beats, and which variants you propose.
   ],
   "resources": ["d03-021a", "d03-014", "d03-030a", "d03-018", "d03-002"],
   "variants": [
-    {"letter": "A", "what": "the full version, cut on the beat", "differs_in": "cutting", "narrated": false, "target_duration_s": 31.0},
-    {"letter": "B", "what": "narrated over a music bed, same arc", "differs_in": "sound", "narrated": true, "target_duration_s": 34.0}
+    {"letter": "A", "what": "the full version, cut on the beat", "differs_in": "base", "narrated": false, "target_duration_s": 48.0},
+    {"letter": "B", "what": "opens on the turn and tells the rest as a flashback; narrated", "differs_in": "hook", "hook_resource": "d03-030a", "narrated": true, "target_duration_s": 34.0}
   ],
   "notes": "d03-030a has 9 usable seconds and the concept uses 4: there is room if the turn wants more",
   "missing": ["no food b-roll: a fourth proof would have to be invented, so there are three"]

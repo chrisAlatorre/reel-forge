@@ -214,12 +214,35 @@ def check_arc(c: dict) -> list[str]:
         out.append("narration is true and no block declares `says`. That field is what ties the voice "
                    "to the picture, and without it verify.py cannot check a single pairing.")
 
-    lengths = [v.get("target_duration_s") for v in c.get("variants") or []
-               if v.get("target_duration_s") is not None]
-    if any(v.get("differs_in") == "duration" for v in c.get("variants") or []) and len(lengths) > 1:
-        if max(lengths) - min(lengths) < 4:
-            out.append(f"variants: one of them differs in duration and they all land within "
-                       f"{max(lengths) - min(lengths):.1f} s of each other. That is the same video twice.")
+    # Variants a viewer can tell apart. "Same cuts, other song" and "the same video shorter" shipped as
+    # variants and were watched twice and called identical; the axes below are the ones you can see.
+    variants = c.get("variants") or []
+    arc = c.get("arc") or {}
+    hook_id = (arc.get("hook") or {}).get("resource") if isinstance(arc.get("hook"), dict) else None
+    close_id = (arc.get("close") or {}).get("resource") if isinstance(arc.get("close"), dict) else None
+    if sum(1 for v in variants if v.get("differs_in") == "base") > 1:
+        out.append("variants: more than one `base`. One reference cut; every other variant changes something you can see.")
+    for v in variants:
+        L, ax = v.get("letter"), v.get("differs_in")
+        if ax == "hook":
+            if not v.get("hook_resource"):
+                out.append(f"variants/{L}: differs in the hook but names no `hook_resource`.")
+            elif hook_id and v["hook_resource"] == hook_id:
+                out.append(f"variants/{L}: its hook_resource is the concept's own hook ({hook_id}): it opens the same way.")
+        if ax == "close":
+            if not v.get("close_resource"):
+                out.append(f"variants/{L}: differs in the close but names no `close_resource`.")
+            elif close_id and v["close_resource"] == close_id:
+                out.append(f"variants/{L}: its close_resource is the concept's own close ({close_id}): it lands the same way.")
+    if any(v.get("differs_in") == "voice" for v in variants):
+        voiced = {bool(v.get("narrated", c.get("narration"))) for v in variants}
+        if len(voiced) < 2:
+            out.append("variants: one differs in the voice, yet every variant is narrated the same way.")
+    for v in variants:
+        what = (v.get("what") or "").lower()
+        if any(w in what for w in ("other song", "another song", "different song", "otra canción", "same cuts")) \
+                and v.get("differs_in") not in ("hook", "close", "voice", "shots"):
+            out.append(f"variants/{v.get('letter')}: changes the song. The clean files carry no music, so the two uploads are the same video.")
     return out
 
 
@@ -255,9 +278,12 @@ def check_concept(c: dict) -> list[str]:
     letters = [v.get("letter") for v in c.get("variants", [])]
     if len(set(letters)) != len(letters):
         out.append("variants: two variants share a letter.")
-    axes = [v.get("differs_in") for v in c.get("variants", [])]
-    if len(set(axes)) < len(axes):
-        out.append("variants: two variants move on the same axis (differs_in). They will read the same.")
+    seen = {}
+    for v in c.get("variants", []):
+        key = (v.get("differs_in"), v.get("hook_resource") or v.get("close_resource") or v.get("narrated"))
+        if v.get("differs_in") in ("hook", "close", "voice") and key in seen:
+            out.append(f"variants: {seen[key]} and {v.get('letter')} make the same change. They will read the same.")
+        seen.setdefault(key, v.get("letter"))
     return out
 
 

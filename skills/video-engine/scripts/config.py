@@ -7,7 +7,7 @@ particular folders:
     REEL_FORGE_FONTS       typefaces                      (default: $REEL_FORGE_CACHE/fonts)
     REEL_FORGE_ASSETS      base map, sound effects        (default: $REEL_FORGE_CACHE/assets)
     REEL_FORGE_MODELS      models                         (default: $REEL_FORGE_CACHE/models)
-    REEL_FORGE_HOME        project root                   (default: ~/Movies|~/Videos/reel-forge)
+    REEL_FORGE_HOME        where projects live            (default: <the videos folder>/Reel Forge)
     REEL_FORGE_OUTPUT      base for relative `out` paths  (default: $REEL_FORGE_HOME)
     REEL_FORGE_FONT_SANS   .ttf of the sans               (default: variable Montserrat)
     REEL_FORGE_FONT_SERIF  .ttf of the serif              (default: Instrument Serif italic)
@@ -22,6 +22,7 @@ folder). All these paths are exported back into the environment, so a spec can w
 `"src": "$REEL_FORGE_ASSETS/sfx/shutter.mp3"` and the engine expands it.
 """
 import os
+import sys
 from pathlib import Path
 
 # ------------------------------------------------------------ canvas and formats
@@ -105,9 +106,34 @@ FONTS = _path("REEL_FORGE_FONTS", CACHE / "fonts")
 ASSETS = _path("REEL_FORGE_ASSETS", CACHE / "assets")
 MODELS = _path("REEL_FORGE_MODELS", CACHE / "models")
 
-_movies = Path.home() / "Movies"                      # macOS; on Linux/Windows it is ~/Videos
-HOME = _path("REEL_FORGE_HOME", (_movies if _movies.is_dir() else Path.home() / "Videos") / "reel-forge")
+# The user's own videos folder, whatever the system calls it, and inside it one folder named after
+# the plugin. Finder shows ~/Movies as "Películas" / "Movies"; Windows shows %USERPROFILE%\Videos as
+# "Vídeos"; Linux has an XDG setting for it. The folder on disk is what matters, not its label.
+APP_FOLDER = "Reel Forge"
+
+
+def _videos_dir() -> Path:
+    home = Path.home()
+    if sys.platform == "darwin":
+        return home / "Movies"
+    if os.name == "nt":
+        return Path(os.environ.get("USERPROFILE") or home) / "Videos"
+    try:                                           # Linux and the rest: ask XDG, then fall back
+        import subprocess
+        r = subprocess.run(["xdg-user-dir", "VIDEOS"], capture_output=True, text=True, timeout=5)
+        d = Path(r.stdout.strip())
+        if r.returncode == 0 and d.is_dir() and d != home:
+            return d
+    except Exception:
+        pass
+    return home / "Videos"
+
+
+HOME = _path("REEL_FORGE_HOME", _videos_dir() / APP_FOLDER)
 OUTPUT = _path("REEL_FORGE_OUTPUT", HOME)
+
+# Inside a concept's folder only the upload-ready videos sit loose; everything else lives here.
+RESOURCES = "resources"
 
 FONT_SANS = _path("REEL_FORGE_FONT_SANS", FONTS / "Montserrat[wght].ttf")
 FONT_SERIF = _path("REEL_FORGE_FONT_SERIF", FONTS / "InstrumentSerif-Italic.ttf")

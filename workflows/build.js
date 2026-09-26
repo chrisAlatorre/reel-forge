@@ -75,16 +75,18 @@ const concepts = A.concepts || []
 if (!concepts.length) throw new Error('build.js: pass it args.concepts')
 
 const PROJECT = A.project || 'project'
-// macOS ~/Movies/reel-forge, Linux ~/Videos/reel-forge, Windows %USERPROFILE%\Videos\reel-forge;
+// macOS ~/Movies/Reel Forge, Linux ~/Videos/Reel Forge, Windows %USERPROFILE%\Videos\Reel Forge;
 // REEL_FORGE_HOME wins if it is set. Pass it already resolved in args.root.
-const ROOT = A.root || '~/Movies/reel-forge'
+const ROOT = A.root || '~/Movies/Reel Forge'
 const VERSION = A.version || 'v1'
 // The project folder holds workspace/ and facts.json. A project that predates the standard layout
 // passes its own folders; otherwise they hang off <root>/<project>/ (REEL_FORGE_WORKSPACE and
 // REEL_FORGE_OUTPUT, resolved by the caller, arrive the same way).
 const PROJECT_DIR = A.project_dir || `${ROOT}/${PROJECT}`
 const WORKSPACE = A.workspace || `${PROJECT_DIR}/workspace`
-const DELIVERIES = A.deliveries || `${PROJECT_DIR}/deliveries/${VERSION}`
+// A round is a folder straight under the project: <project>/v1, <project>/v2… each with one folder
+// per concept. No "deliveries/" level in between.
+const DELIVERIES = A.deliveries || `${PROJECT_DIR}/${VERSION}`
 const LEDGER = `${WORKSPACE}/run.json`
 const UNITS = `${WORKSPACE}/run`
 const SCHEMAS = `${PLUGIN_ROOT}/schemas`
@@ -126,10 +128,14 @@ if (PEAK > 10) log(`${concepts.length} concepts, ${PEAK} variants = ${PEAK} buil
 
 // ────────────────────────────────────────────────────── paths and ids
 
-function conceptDir(concept) { return `${WORKSPACE}/concepts/${concept.id}` }
-function commonDir(concept) { return `${conceptDir(concept)}/common` }
-function variantDir(concept, v) { return `${conceptDir(concept)}/${v.letter}` }
+// The user's layout: <videos>/Reel Forge/<project>/<version>/<concept>/ holds ONLY the upload-ready
+// files, and everything it took to make them — the README, the previews, the reports, the voice
+// scripts, the shared material and each variant's build folder — lives in <concept>/resources/.
 function deliveryDir(concept) { return `${DELIVERIES}/${concept.id}` }
+function resourcesDir(concept) { return `${deliveryDir(concept)}/resources` }
+function conceptDir(concept) { return resourcesDir(concept) }
+function commonDir(concept) { return `${resourcesDir(concept)}/common` }
+function variantDir(concept, v) { return `${resourcesDir(concept)}/${v.letter}` }
 function deliveryFile(concept, v) { return `${deliveryDir(concept)}/${concept.id}-${v.letter}.mp4` }
 function unitId(concept, v) { return `${concept.id}-${v.letter}` }
 // The story-doctor's two passes, each its own unit and its own file on disk, so a resume can tell
@@ -439,6 +445,11 @@ Run it before you write a single line. The builder checks every line and caption
 it renders anything, and stops if one contradicts them.
 
 Fixed facts for this concept:
+- **Every path here can contain spaces** (the default home is ".../Reel Forge/<project title>/"): quote
+  every path in every shell command, always.
+- The concept's folder ${deliveryDir(concept)}/ holds ONLY the upload-ready videos. Everything else —
+  README, previews, light copies, reports, voice scripts, the shared material, each variant's build —
+  goes in ${resourcesDir(concept)}/. Never leave another file loose next to the videos.
 - Catalog: ${CATALOG} · Trends: ${TRENDS} · Common folder: ${commonDir(concept)}
 - Render: ${ENGINE} <spec.json>
 - Verify a delivery: ${VERIFIER} <file.mp4>
@@ -508,8 +519,10 @@ adds to it:
 - The concept is "${concept.id}", the catalog is ${CATALOG} and the trends, if there are any, ${TRENDS}.
 - **Every variant gets its own number of seconds**, in \`per_variant\`, worked out from its own beats:
   ${variants.map((v) => `${v.letter}${v.what ? ` (${v.what})` : ''}`).join(', ')}. Two variants with the
-  same recommended length are one variant with two names — and the concept says their axis is
-  \`differs_in\`, so if it is \`duration\`, make the gap real. A short variant keeps the whole arc and
+  same recommended length are one variant with two names. And each variant has to be a video a viewer
+  can tell apart — another hook, another close, the voice on or off, or mostly other shots
+  (\`differs_in\`); if the concept's variants only change the length or the song, fix that here, at
+  \`level: "blocks"\`, naming the shot each one should open or close on. A short variant keeps the whole arc and
   loses middle beats, never the close.
 - **Write the fixes as instructions a builder can apply** ("open on <id> instead of <id>", "the close is
   <id>, held 2 s, with the line <text>"), each with its \`level\`. \`blocks\` is binding: the builders
@@ -604,7 +617,7 @@ next one starts.
    bed, **the project's facts against every line and caption BEFORE anything renders** (exit 4: a line
    contradicts what the user told us — rewrite the line), render, the 720p copies, the gate
    (\`verify.py\` with \`--spec\` and \`--script\`), and \`framecheck.py\` over every rendered cut. It
-   writes everything to ${deliveryDir(concept)}/ with the timeline sidecar, and \`build.json\` in your
+   writes the upload-ready file to ${deliveryDir(concept)}/ and every sidecar to ${resourcesDir(concept)}/, and \`build.json\` in your
    folder. It holds a lock (exit 3 means another build of your letter is running) and skips a delivery
    that is already up to date.
 4. Pull an \`fps=2,tile=12x6\` strip of the result and **look at it with Read**: captions readable and
@@ -659,8 +672,13 @@ What this run adds to your method:
 - Answer **per variant**, with \`lands\`, \`develops\` and \`duration_fits\` as booleans you can defend,
   and \`ends_on\` saying what the last frame actually is. A variant that ends on a cut with motion still
   in it gets a fix at \`level: "blocks"\` — that is the defect this whole round was sent back for.
-- Compare the set: if every variant came out within a few seconds of the others, say so in \`spread\`.
-  Their axis was supposed to make them different lengths.
+- **Compare the set as a viewer would**:
+  \`uv run "${PLUGIN_ROOT}/skills/video-engine/scripts/compare_variants.py" "${deliveryDir(concept)}"\`
+  measures the rendered variants frame by frame. A pair that fails it — same hook, same close, same
+  voice, most shots alike — is a fix at \`level: "blocks"\`: a round once shipped five such pairs and
+  the user watched each twice and saw the same video. The fix names what that variant should open or
+  close on instead. Length alone is not a difference; another song is not either (the uploads carry
+  none).
 - Each fix is applicable to that variant's \`variant.json\`: which shot, which second, how long it holds.
   A close that has to be extended is extended **with material**, never by freezing the last frame.
 - Do not re-render anything and do not edit anybody's \`variant.json\`: the Fix stage applies what you and
@@ -673,7 +691,7 @@ function reviewPrompt(concept, variants) {
   return `Review ALL the variants of reel-forge concept "${concept.id}" (${concept.title}).
 Each was built by a different agent, so the typical mistake is not inside one variant but BETWEEN them.
 
-${progress(`${concept.id}-review`, `${deliveryDir(concept)}/README.md`)}
+${progress(`${concept.id}-review`, `${resourcesDir(concept)}/README.md`)}
 
 Variants:
 ${variants.map((v) => `- ${v.letter}: ${v.mp4} (${v.duration_s} s${v.duration_why ? ` — ${v.duration_why}` : ''}, ${v.cuts} cuts, ${v.cuts_with_subject} with the subject, verify ${v.verify_pass ? 'passed' : 'FAILED'}${(v.verify_skipped || []).length ? ` with ${v.verify_skipped.join(', ')} SKIPPED` : ''}${v.narrated ? `, narrated with ${v.voice || 'an unnamed voice'} — voice in the file: ${v.voice_in_video ? 'yes' : 'NO'}` : ''})\n  spec: ${v.spec}`).join('\n')}
@@ -705,7 +723,7 @@ answering. On top of the checklist, the five things that only exist at this leve
    copy, one is redundant and you say which. Two variants that also came out the same length are one
    variant.
 
-Write ONE README.md for the concept in ${deliveryDir(concept)}/, in ${LANG}, following the structure in
+Write ONE README.md for the concept in ${resourcesDir(concept)}/ (never loose in the concept's folder: that one holds only the upload-ready videos), in ${LANG}, following the structure in
 ${REFS}/delivery.md: the variants with **their duration and why it is that length**, what changes
 between them, which one you recommend, the cut counts, which voice each narrated variant used, the
 verification result of each one and, plainly, anything that could not be delivered and why. Not one
@@ -718,7 +736,7 @@ function fixPrompt(concept, problems) {
   return `Fix what is blocking delivery of reel-forge concept "${concept.id}". Do not redesign: correct
 exactly this and re-render the affected variants.
 
-${progress(`${concept.id}-fix`, `${deliveryDir(concept)}/README.md`)}
+${progress(`${concept.id}-fix`, `${resourcesDir(concept)}/README.md`)}
 
 ${problems.map((p) => `- [${p.variant}] ${p.what}${p.where ? ` (${p.where})` : ''}\n  Fix proposed by ${p.from || 'the reviewer'}: ${p.how_to_fix}`).join('\n')}
 

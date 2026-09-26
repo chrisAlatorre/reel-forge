@@ -13,7 +13,7 @@ what you answered.
 {
   "lang": "en-US",
   "sources": ["~/Pictures/material", "~/Videos/material"],
-  "home": "~/Movies/reel-forge",
+  "home": "~/Movies/Reel Forge",
   "platform": "tiktok"
 }
 ```
@@ -165,7 +165,7 @@ for one run.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `REEL_FORGE_HOME` | macOS `~/Movies/reel-forge` · Linux `~/Videos/reel-forge` · Windows `%USERPROFILE%\Videos\reel-forge` | Project root |
+| `REEL_FORGE_HOME` | macOS `~/Movies/Reel Forge` · Linux `~/Videos/Reel Forge` · Windows `%USERPROFILE%\Videos\Reel Forge` | Project root |
 | `REEL_FORGE_WORKSPACE` | `$REEL_FORGE_HOME/<project>/workspace` | Intermediate work: proxies, sheets, catalog. Can be deleted and rebuilt. |
 | `REEL_FORGE_OUTPUT` | `$REEL_FORGE_HOME/<project>/deliveries` | The finished videos. Also the base for the relative `out` paths in a render spec. |
 | `REEL_FORGE_360` | `$REEL_FORGE_HOME/360` | 360 originals, proxies and output |
@@ -205,7 +205,7 @@ In `~/.zshrc` or `~/.bashrc`:
 ```bash
 export REEL_FORGE_LANG="en-US"
 export REEL_FORGE_SOURCES="$HOME/Pictures/material:$HOME/Videos/material"
-export REEL_FORGE_HOME="$HOME/Movies/reel-forge"
+export REEL_FORGE_HOME="$HOME/Movies/Reel Forge"
 ```
 
 ## Precedence, in one line

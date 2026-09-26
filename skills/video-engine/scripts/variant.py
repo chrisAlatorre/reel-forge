@@ -20,8 +20,8 @@ variant.json (paths relative to its own folder; `~` and `$VARS` expand):
 
     {
       "name": "harbour-walk-C",                  # delivery basename
-      "delivery": "../../../deliveries/v2/harbour-walk",
-      "project": "~/Movies/reel-forge/<project>", # optional: enables the facts check
+      "delivery": "~/Movies/Reel Forge/<project>/v2/harbour-walk",
+      "project": "~/Movies/Reel Forge/<project>", # optional: enables the facts check
       "progress": "../../../run/harbour-walk-C.json",   # optional: the unit's progress file
       "format": "9x16", "fps": 30, "crf": 22, "look": "clean", "grain": 0.006,
       "loop": false,                             # true: the last shot lands on the first frame
@@ -56,6 +56,8 @@ behind, cutout, map...) and they pass straight to the spec. The builder adds:
 
 Defaults that used to be each builder's to remember, and were forgotten:
   * a caption on the first shot with lead <= 0.05 is `instant` (on screen from frame 1);
+  * the concept's folder holds ONLY the upload-ready file (upload.py's profile); the preview, the
+    light copy, the reports, the timeline and the voice-script go to its resources/ folder;
   * the preview and the light copy are re-encoded at 720p, so they fit their ceilings;
   * narration is Valentino when the language is Spanish and CapCut answers; otherwise the local
     voice, and the reason goes into the result so the README can say it;
@@ -90,6 +92,9 @@ RENDER = HERE / "render.py"
 VERIFY = HERE / "verify.py"
 TRANSCRIBE = HERE / "transcribe.py"
 FRAMECHECK = PLUGIN / "skills/sources/scripts/framecheck.py"
+UPLOAD = HERE / "upload.py"
+RESOURCES = "resources"          # same name as config.RESOURCES; config is not imported here
+FORMAT_SIZES = {"9x16": (1080, 1920), "4x5": (1080, 1350), "1x1": (1080, 1080), "16x9": (1920, 1080)}
 FACTS = PLUGIN / "skills/sources/scripts/facts.py"
 VOICES = PLUGIN / "skills/voices/scripts"
 
@@ -182,10 +187,12 @@ class Variant:
         if not c["shots"]:
             raise Bad("`shots` is empty")
         self.name = c["name"]
-        self.delivery = self.path(c["delivery"])
+        self.delivery = self.path(c["delivery"])        # the concept's folder: upload-ready files only
+        self.res = self.delivery / RESOURCES             # everything else a person does not upload
         self.tmp = self.dir / "tmp"
         self.voice_dir = self.dir / "voice"
-        self.out = self.delivery / f"{self.name}.mp4"
+        self.out = self.delivery / f"{self.name}.mp4"            # the upload-ready encode
+        self.master = self.res / f"{self.name}.render.mp4"        # what the engine renders
         self.music = c.get("music") or {}
         bpm = self.music.get("bpm")
         grid = c.get("grid", "auto")
@@ -542,7 +549,7 @@ class Variant:
             if c.get("seg") == 0 and float(c.get("lead", 0.15)) <= 0.05 and "instant" not in c:
                 c["instant"] = True          # the hook is on screen from frame 1
             caps.append(c)
-        spec = {"out": str(self.out), "format": self.cfg.get("format", "9x16"),
+        spec = {"out": str(self.master), "format": self.cfg.get("format", "9x16"),
                 "fps": self.cfg.get("fps", 30), "crf": self.cfg.get("crf", 22),
                 "look": self.cfg.get("look", "clean"), "grain": self.cfg.get("grain", 0.006),
                 "loop": self.loop,
@@ -583,7 +590,7 @@ class Variant:
                   "start_s": round(r["t0"] + 0.15, 3), "end_s": round(max(r["t0"] + 0.2, r["t1"] - 0.15), 3)}
                  for r in g]
         atomic_json(cat, {"batch": self.name, "items": items})
-        side = self.delivery / f"{self.name}-framecheck.json"
+        side = self.res / f"{self.name}-framecheck.json"
         r = run(["uv", "run", FRAMECHECK, "--catalog", cat, "--root", "/", "--json", side],
                 check=False, capture_output=True, text=True)
         try:
@@ -596,7 +603,10 @@ class Variant:
         return side, flagged
 
     def publish_notes(self, g, total, voice_info, gate_ok, flagged):
-        lines = [f"# {self.name}", "", f"- Length: {total:.2f} s, {len(g)} cuts."]
+        lines = [f"# {self.name}", "", f"- Length: {total:.2f} s, {len(g)} cuts.",
+                 f"- Upload `{self.out.name}` (the file loose in the concept's folder): 1080x1920, H.264 "
+                 "High, BT.709, ~14 Mbps cap, AAC 256 kbps. **Turn on \"Upload in HD\" / \"Allow "
+                 "high-quality uploads\" when posting**, or the app compresses it on the phone first."]
         if self.beats_mode:
             lines += [f"- Cuts on the beat of **{Path(str(self.music.get('src', ''))).stem}** "
                       f"({self.music.get('bpm')} BPM; first hit at {self.beat0:.3f} s).",
@@ -615,7 +625,7 @@ class Variant:
                          ", ".join(f"{k} ({', '.join(v)})" for k, v in flagged.items()))
         if self.warnings:
             lines += ["", "Warnings:"] + [f"- {w}" for w in self.warnings]
-        p = self.delivery / f"{self.name}-publish.md"
+        p = self.res / f"{self.name}-publish.md"
         p.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return p
 
@@ -630,6 +640,7 @@ def build(v: Variant, a):
         return 0
     v.tmp.mkdir(parents=True, exist_ok=True)
     v.delivery.mkdir(parents=True, exist_ok=True)
+    v.res.mkdir(parents=True, exist_ok=True)
     v.progress("start")
 
     durs = voice_info = vs_data = None
@@ -703,21 +714,35 @@ def build(v: Variant, a):
     log("render")
     run(["uv", "run", RENDER, spec_f])
 
+    v.progress("upload")
+    log("upload-ready encode")
+    # The engine renders a master into resources/; the file that goes to the platform is re-encoded
+    # to the upload profile (upload.py) and is the ONLY thing left loose in the concept's folder.
+    size = FORMAT_SIZES.get(v.cfg.get("format", "9x16"))
+    run(["uv", "run", UPLOAD, v.master, v.out] + (["--size", f"{size[0]}x{size[1]}"] if size else []))
+    timeline = v.res / f"{v.name}.timeline.json"
+    rendered_tl = v.master.with_name(v.master.stem + ".timeline.json")
+    if rendered_tl.exists():
+        rendered_tl.replace(timeline)
+
     v.progress("copies")
-    log("light copy and preview")
-    v.light(v.out, v.delivery / f"{v.name}-light.mp4")
-    prev = v.delivery / f"{v.name}-preview.mp4"
-    if prev.exists():
-        big = v.tmp / "preview-1080.mp4"
-        prev.replace(big)
-        v.light(big, prev)
-        big.unlink()
+    log("light copy and preview, into resources/")
+    v.light(v.out, v.res / f"{v.name}-light.mp4")
+    rendered_prev = v.master.with_name(v.master.stem + "-preview.mp4")
+    prev = v.res / f"{v.name}-preview.mp4"
+    if rendered_prev.exists():
+        v.light(rendered_prev, prev)
+        rendered_prev.unlink()
+    v.master.unlink(missing_ok=True)              # reproducible from variant.json; 50-80 MB each
     if vs_data is not None:
-        shutil.copy2(v.path(v.voice_cfg["script"]), v.delivery / f"{v.name}-voice-script.json")
+        shutil.copy2(v.path(v.voice_cfg["script"]), v.res / f"{v.name}-voice-script.json")
 
     v.progress("gate")
-    log("gate")
-    vcmd = ["uv", "run", VERIFY, v.out, "--spec", spec_f, "--json", v.delivery / f"{v.name}-verify.json"]
+    log("gate, on the file that ships")
+    vcmd = ["uv", "run", VERIFY, v.out, "--spec", spec_f, "--timeline", timeline,
+            "--json", v.res / f"{v.name}-verify.json"]
+    if prev.exists():
+        vcmd += ["--preview", prev]
     if vs_data is not None:
         vcmd += ["--script", v.path(v.voice_cfg["script"])]
     gate_ok = run(vcmd, check=False, capture_output=True, text=True).returncode == 0
