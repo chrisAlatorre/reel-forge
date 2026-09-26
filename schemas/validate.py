@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -246,8 +247,27 @@ def check_arc(c: dict) -> list[str]:
     return out
 
 
+def check_variant_material(c: dict) -> list[str]:
+    """Every non-base variant brings its own middle: at least 40 % material the base does not use.
+    A round passed "hook OR voice changed" on every pair and the critic still wrote "after the first
+    ~6 s, A and B are the same video"."""
+    out = []
+    variants = c.get("variants") or []
+    n_res = len(c.get("resources") or [])
+    need = math.ceil(0.4 * n_res) if n_res else 0
+    for v in variants:
+        if v.get("differs_in") == "base":
+            continue
+        got = len(v.get("new_resources") or [])
+        if got < need:
+            out.append(f"variants/{v.get('letter')}: {got} new_resources, needs at least {need} (40 % of "
+                       f"the concept's {n_res}). A new hook/close/voice over the same middle was watched "
+                       "and called 'the same video after 6 s'.")
+    return out
+
+
 def check_concept(c: dict) -> list[str]:
-    out = check_arc(c)
+    out = check_arc(c) + check_variant_material(c)
     blocks = c.get("structure", [])
     for a, b in zip(blocks, blocks[1:]):
         if b.get("t0", 0) < a.get("t1", 0):

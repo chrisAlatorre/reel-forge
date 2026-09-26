@@ -52,6 +52,11 @@ PINNED = CONFIG_DIR / "voice.json"
 # OUTSIDE the app with atempo, which preserves pitch (see capcut_voice.py).
 VALENTINO = os.environ.get("REEL_FORGE_CAPCUT_VOICE", "Valentino")
 VALENTINO_SPEED = 1.4
+# The Spanish fallback: a synthetic voice designed with Qwen3-TTS VoiceDesign from the recipe in
+# ../designed/narrador-mx.json (no real person's voice), read at 1.15x. Chosen on 26 sep 2026 after
+# a round narrated with it ("the voice is really good") — as the backup, never as the default.
+LOCAL_ES_VOICE = os.environ.get("REEL_FORGE_LOCAL_ES_VOICE", "narrador-mx")
+LOCAL_ES_SPEED = 1.15
 CAPCUT_APPS = ("/Applications/CapCut.app", "~/Applications/CapCut.app")
 LOCAL_ENGINES = ("qwen", "voxcpm", "piper")
 APP_ENGINES = ("capcut",)
@@ -239,6 +244,8 @@ def resolve_voice(lang=None, engine=None, voice=None, speed=None, local_only=Fal
                   + ("--local-only" if local_only else
                      f"no app voice applies to {language or 'this language'}") + ")")
         fallback = False
+    if spanish and chosen == "qwen" and not voice:
+        voice, speed = LOCAL_ES_VOICE, speed or LOCAL_ES_SPEED
     return {"engine": chosen, "voice": voice, "speed": float(speed or 1.0), "language": language,
             "source": "local-fallback", "reason": reason, "fallback": fallback,
             "disclose": disclose, "warnings": warnings}

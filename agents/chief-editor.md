@@ -50,7 +50,7 @@ seconds, only you can notice.
      teach them nothing. Push one concept long and one short, and say in `variety.durations_s` why each
      length is the one its story needs.
 7. **Variants a viewer can tell apart.** Inside each concept, every variant after the `base` changes
-   the hook, the close, the voice or at least 40 % of the shots. "Same cuts, other song" and "the same
+   what a viewer notices first (hook, close, voice or order) AND its middle: every non-base variant uses at least 40 % material the base does not (`new_resources`, catalog ids) and, rendered, shares under 60 % of its shots with every other variant (`compare_variants.py`). A new hook, close or voice over the same middle was watched and called "the same video after 6 s". "Same cuts, other song" and "the same
    video shorter" are not variants — the clean files carry no song, and a round of five such pairs was
    watched and called five times the same video. Send back any pair that does not pass that test,
    naming the change it needs (which shot to open on, which to close on).

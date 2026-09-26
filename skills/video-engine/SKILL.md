@@ -167,6 +167,11 @@ Every segment contributes **image only**. Its duration is declared with `dur` (s
 
 // 2. Video clip (mov, mp4, m4v, mkv). HDR is converted to SDR automatically.
 {"src": "~/videos/river.mov", "dur": 2.4, "start": 12.0, "speed": 0.5, "focus": [0.62, 0.5]}
+//    `end` stops the picture at that source second; `tail` fills the rest of the shot:
+//    "hold" (default, last frame), "boomerang", or "still" + `still` — a Live Photo's movement
+//    (see sources/live.py), then its sharp photo. This is how photos with movement go in.
+{"src": "live/UUID.live.mov", "start": 0.0, "end": 2.1, "speed": 0.7, "dur": 3.4,
+ "tail": "still", "still": "photos/UUID.jpg"}
 
 // 3. A 360 clip reframed with a virtual camera (needs the plugin's 360 engine)
 {"src": "VID_0012.insv", "dur": 4, "start": 12, "r360": "keys.json"}

@@ -12,13 +12,17 @@ Two paths, and which one runs is **not** the caller's whim: `scripts/resolve_voi
 | **App** (`scripts/capcut_voice.py`) | drives CapCut and collects the WAV | **the default for Spanish**, with **Valentino at 1.4x** |
 | **Local** (`scripts/voice.py`) | open-weight models, run on the machine, clear license | every other language, and the fallback when CapCut is not there |
 
-> **Since CapCut 9.5 the app path needs a signed-in CapCut account.** Signed in (checked
-> **24 sep 2026**, 9.5.0, es-MX, Pro active) the wall is gone and text to speech **generates for
-> real** — but **Valentino itself is refused by CapCut's server** with *"En estos momentos, hay
-> demasiadas personas usando esta función. Intenta de nuevo más tarde."* On a machine nobody has
-> signed in on it still stops at **exit 6** and Spanish narrates locally, with the disclosure
-> sentence in the README. Details, and everything else that moved between 7.5 and 9.5, in
-> *The CapCut path* below.
+> **Recommended: a CapCut account with Pro.** Since 9.5 the app path needs a signed-in account,
+> and Valentino — the viral narrator, first under *"En tendencia"* in the catalog — is an ElevenLabs
+> voice served through CapCut (`tone_platform: 11labs`). With Pro it generates: **26 sep 2026,
+> 9.5.0, es-MX**, after being refused on 24 sep and again earlier that morning with *"En estos
+> momentos, hay demasiadas personas usando esta función"*. That refusal is per voice and temporary
+> (other voices generated in the same minutes), so `capcut_voice.py` now **waits it out** — retries on
+> a 1, 2, 4, 8… min schedule for up to `--busy-wait` minutes (default 20) — before a run falls back.
+>
+> Without CapCut, without an account, or with Valentino still refused after the wait, Spanish is
+> read by the plugin's **fallback voice, `narrador-mx`** (local, synthetic, see below), and the
+> variant's README says so. It is a good voice; it is not the trend's voice.
 
 Both leave **the same contract**: `l0.wav, l1.wav… + durations.json` in a folder, 48 kHz mono,
 −16 LUFS. Anything that consumes narration (the editing engine, `narrate.py`) works the same with
@@ -47,7 +51,10 @@ The order, and it is not negotiable:
    fallback and has to be disclosed like any other. Signed in, generation works — but as of
    **24 sep 2026** Valentino specifically comes back with a server-side "too many people are using
    this feature" and writes nothing, so branch 3 is still what a Spanish run gets today.
-3. **A local engine** — `qwen` on Apple Silicon, `piper` anywhere else.
+3. **A local engine** — `qwen` on Apple Silicon, `piper` anywhere else. For Spanish on `qwen` the
+   voice is **`narrador-mx` at 1.15x**, the plugin's fallback: a synthetic voice designed with
+   Qwen3-TTS VoiceDesign from the recipe in `designed/narrador-mx.json` (a description and a seed, no
+   recording of anyone). `voice.py` designs it into the cache the first time it is asked for.
 
 Branch 3 on a Spanish run is a **fallback**, and the delivery may not hide it. `resolve_voice()`
 returns `disclose`, one sentence, and that sentence goes **in the variant's README**:
@@ -239,7 +246,11 @@ Spanish run here as long as CapCut is installed, with the voice **Valentino** at
 > voz…"*, then wrote `textReading/<hash>.wav` and put a "Texto a voz <name>" track on the timeline.
 > Verified with **Georgie** (`tone_platform: sami`) and **Nandez** (`tone_platform: 11labs`).
 >
-> **Valentino💌 is the one voice that does not come back.** Nine attempts over ~25 minutes, on a
+> **Update 26 sep 2026: Valentino generates again** (Pro account, CapCut relaunched), so what follows is
+> the history of the refusal, kept because it comes back: treat it as temporary and let `--busy-wait`
+> ride it out.
+>
+> **Valentino💌 was the one voice that did not come back.** Nine attempts over ~25 minutes, on a
 > fresh project and on one that had just generated with two other voices: the "Generando la voz…"
 > dialog appears and is then replaced by a toast, *"En estos momentos, hay demasiadas personas
 > usando esta función. Intenta de nuevo más tarde."*, and no WAV is written. It is **not** the

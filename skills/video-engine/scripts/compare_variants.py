@@ -16,20 +16,26 @@ the same, I saw no difference between them"*. It was true, and it came in two sh
   * **The axis was too small.** "The same thing minus two shots" reads as the same video. Nobody
     watching them one after the other says "that's the short one".
 
-So a pair passes only if a viewer would notice at least one of these, and each is measured:
+And then a third, after a round that passed this check (26 sep 2026): every pair differed in its
+hook OR its voice, and the critic still wrote *"after the first ~6 s, A and B are the same video"*.
+A new first shot on the same 20 cuts is a hook test, not a variant; the same cut with and without a
+voice is one video listened to twice.
 
-| axis | counts as different when |
-|---|---|
-| the shots | fewer than 60 % of the shots are shared (by source and window) |
-| the hook | the first shot is a different source, or the same source at another moment |
-| the close | the last shot differs the same way |
-| the voice | one is narrated and the other is not |
-| the length | never on its own: "the same minus two shots" is what was watched twice and called identical |
+So a pair passes only if **the middle differs**: fewer than 60 % of the shots shared. The rest is
+reported, because it is what the viewer notices first, but none of it passes a pair on its own:
+
+| axis | measured as | passes the pair? |
+|---|---|---|
+| the shots | the share of shots in common (by source and window, or by what is on screen) | **yes, under 60 %** |
+| the hook | the first shot differs | no — reported |
+| the close | the last shot differs | no — reported |
+| the voice | one narrated, the other not | no — reported |
+| the length | min/max under 75 % | no — reported |
 
 Music is deliberately NOT an axis: the clean files never carry it.
 
-Exit 0 when every pair differs on something a viewer sees or hears; exit 1 with the pairs that do
-not, and what they share.
+Exit 0 when every pair shares under 60 % of its shots; exit 1 with the pairs that do
+not, and what little they differ on.
 """
 from __future__ import annotations
 
@@ -84,7 +90,7 @@ def compare(name_a, a, name_b, b):
     length = f"length ({min(da, db):.1f} vs {max(da, db):.1f} s)" if ratio <= 0.75 else None
     return {"pair": f"{name_a} vs {name_b}", "shared_shots": round(share, 2),
             "length_ratio": round(ratio, 2), "differs_on": axes + ([length] if length and axes else []),
-            "ok": bool(axes)}
+            "ok": share < 0.60}
 
 
 # ------------------------------------------------------------------ what a viewer SEES
@@ -137,7 +143,7 @@ def compare_seen(name_a, fa, da, voiced_a, name_b, fb, db, voiced_b):
     length = f"length ({min(da, db):.1f} vs {max(da, db):.1f} s)" if ratio <= 0.75 else None
     return {"pair": f"{name_a} vs {name_b}", "shared_shots": round(share, 2),
             "length_ratio": round(ratio, 2), "differs_on": axes + ([length] if length and axes else []),
-            "ok": bool(axes)}
+            "ok": share < 0.60}
 
 
 def _voiced(video: Path):

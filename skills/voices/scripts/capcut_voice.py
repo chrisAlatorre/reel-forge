@@ -323,7 +323,11 @@ def modal_windows():
 # classify() used to blame the voice grid for a refusal that came from the server.
 SERVER_TOASTS = (
     ("busy", ("demasiadas personas", "too many people", "try again later",
-              "intenta de nuevo", "intentalo de nuevo", "inténtalo de nuevo")),
+              "intenta de nuevo", "intentalo de nuevo", "inténtalo de nuevo",
+              # seen on 26 sep 2026 a second BEFORE the "too many people" toast, on the same
+              # refusal of Valentino; the text was plain Spanish that the same voice read on 22 sep
+              "no es compatible con la conversion", "no es compatible con la conversión",
+              "not compatible with text to speech")),
     ("network", ("sin conexion", "sin conexión", "network error", "error de red",
                  "check your network", "revisa tu conexion", "revisa tu conexión")),
     ("quota", ("creditos", "créditos", "credits", "limite", "límite", "limit reached")),
@@ -359,6 +363,9 @@ def ax_texts():
     return out
 
 
+PICKED = {}   # voice -> whether its tile was found by name and clicked in this run
+
+
 def read_toast(seconds=9.0):
     """Watches for the server's toast for `seconds`. Returns (kind, text), or None.
 
@@ -371,7 +378,7 @@ def read_toast(seconds=9.0):
             for kind, needles in SERVER_TOASTS:
                 if any(n in low for n in needles):
                     return kind, t
-        time.sleep(0.4)
+        time.sleep(0.15)
     return None
 
 
@@ -592,7 +599,8 @@ def set_text(line: str, voice: str = DEFAULT_VOICE):
     cliclick("kd:cmd", "t:a", "ku:cmd"); time.sleep(0.5)
     cliclick("kd:cmd", "t:v", "ku:cmd"); time.sleep(1.2)
     ax_click("tts_tab", 2.5, what="the right panel's 'Texto a voz' tab")
-    if not pick_voice(voice):
+    PICKED[voice] = pick_voice(voice)
+    if not PICKED[voice]:
         die(f"I scrolled the whole voice catalog and {voice!r} is not in it. CapCut's catalog "
             "changes by country and by version, and in 9.5 the name carries an emoji "
             "(\"Valentino💌\"), which the substring match handles. Open the 'Texto a voz' panel and "
@@ -674,6 +682,14 @@ def classify(draft: Path, line: str, voice: str = DEFAULT_VOICE) -> tuple:
                       f"{(e.get('text') or '')[:40]!r}): the clicks are landing wrong. CapCut almost "
                       "certainly moved its buttons in an update. Run --calibrate: it resolves every "
                       "anchor by name and says which one is gone.")
+    if not any(voice.lower() in v.lower() for v in e.get("voices") or []) and PICKED.get(voice):
+        # The tile WAS found by name and clicked (pick_voice returned True), the text is on the clip,
+        # and still no track with that voice: that is the server refusing that one voice with a
+        # toast this run did not manage to read (it lasts ~2 s). Blaming the grid here sent the
+        # 26 sep 2026 run to --calibrate for a refusal that a later retry simply got past.
+        return "server", (f"the text arrived and the {voice} tile was clicked by name, but no track "
+                          "uses it: CapCut refused that voice (its 'too many people' toast lasts ~2 s "
+                          "and was missed). Not the interface; retrying later is what works.")
     if not any(voice.lower() in v.lower() for v in e.get("voices") or []):
         return "ui", (f"the text did arrive, but no audio clip uses {voice}: the click in the voice "
                       "grid landed outside, or the catalog renamed the voice. Run --calibrate and "
@@ -968,6 +984,34 @@ def machine_lock(timeout_s=int(os.environ.get("REEL_FORGE_CAPCUT_WAIT", "1800"))
             time.sleep(5)
 
 
+def wait_out_busy(tr: Path, line: str, a, i: int):
+    """The server's "too many people" is a refusal of ONE voice for a while, not a verdict.
+
+    Seen on 24 sep 2026 (nine refusals in 25 min) and again early on 26 sep; fifteen minutes later that
+    day, with nothing changed but CapCut relaunched, Valentino generated on the first try. So a busy
+    refusal waits and retries on a doubling schedule (1, 2, 4, 8… min) for up to --busy-wait minutes
+    before the batch gives up and the run falls back to the local voice. Returns the WAV or None.
+    """
+    budget = a.busy_wait * 60
+    if budget <= 0:
+        return None
+    kind, _ = classify(tr.parent, line, a.voice)
+    if kind != "server" or (LAST_TOAST and LAST_TOAST[0] != "busy"):
+        return None
+    t0, pause = time.time(), 60
+    while time.time() - t0 + pause <= budget:
+        print(f"l{i}: CapCut refused {a.voice} (busy); retrying in {pause // 60} min "
+              f"({int((budget - (time.time() - t0)) // 60)} min left of --busy-wait)", flush=True)
+        time.sleep(pause)
+        before = set(tr.glob("*.wav"))
+        set_text(line, a.voice)
+        raw = wait_for_wav(tr, before)
+        if raw:
+            return raw
+        pause = min(pause * 2, 16 * 60)
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(description="CapCut's narrator voice, driven by clicks (macOS)")
     ap.add_argument("lines", nargs="?", help="JSON file with the list of sentences")
@@ -985,6 +1029,10 @@ def main():
                     help="only run the checks (CapCut, version, window, permissions, project) and exit")
     ap.add_argument("--new-project-on-saturation", action=argparse.BooleanOptionalAction, default=True,
                     help="when the project stops generating, create a new one and retry once (default: yes)")
+    ap.add_argument("--busy-wait", type=float, metavar="MIN",
+                    default=float(os.environ.get("REEL_FORGE_CAPCUT_BUSY_WAIT", "20")),
+                    help="when the server says the voice is busy, keep retrying for up to MIN minutes "
+                         "(default 20, $REEL_FORGE_CAPCUT_BUSY_WAIT; 0 = give up at once)")
     ap.add_argument("--keep-raw", action="store_true", help="also keeps the wav exactly as CapCut produced it")
     ap.add_argument("--split", metavar="AUDIO.WAV",
                     help="plan B: cuts an audio file holding the whole script by silences (uses 'out' as the folder)")
@@ -1030,10 +1078,12 @@ def main():
             raw = wait_for_wav(tr, before)
             if raw:
                 break
-            if LAST_TOAST:     # el servidor ya dijo que no: reintentar solo gasta minutos
+            if LAST_TOAST:     # el servidor ya dijo que no: reintentar al instante no sirve
                 break
             print(f"l{i}: no audio on the first attempt, retrying…", flush=True)
             time.sleep(3)
+        if not raw:
+            raw = wait_out_busy(tr, line, a, i)
         if not raw:
             kind, why = classify(tr.parent, line, a.voice)
             head = f"CapCut generated no audio for l{i} ({line[:50]!r}).\n  Diagnosis: {why}"

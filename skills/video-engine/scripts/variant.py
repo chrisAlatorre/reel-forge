@@ -41,7 +41,13 @@ variant.json (paths relative to its own folder; `~` and `$VARS` expand):
     }
 
 A shot carries any engine segment key (kb, punch, focus, flash, speed, says, fit, subs, drift,
-behind, cutout, map...) and they pass straight to the spec. The builder adds:
+behind, cutout, map, end, tail, still...) and they pass straight to the spec. A Live Photo is a clip:
+
+        {"src": "common/live/UUID.live.mov", "start": 0.0, "end": 2.1, "speed": 0.7, "dur": 3.4,
+         "tail": "still", "still": "common/photos/UUID.jpg"}
+
+  its movement (inside the window live.py measured), then the sharp still for the rest of the shot,
+  with the Live's own sound under the movement. The builder adds:
 
   beats / dur     how long it holds. In a beat grid, `beats`; the FIRST shot also absorbs `beat0`,
                   the song's intro before its first hit, so the first cut lands on the beat.
@@ -219,6 +225,10 @@ class Variant:
                 s["src"] = str(self.path(s["src"]))
                 if not Path(s["src"]).exists():
                     raise Bad(f"shot {i}: {s['src']} does not exist")
+            if s.get("still"):
+                s["still"] = str(self.path(s["still"]))
+                if not Path(s["still"]).exists():
+                    raise Bad(f"shot {i}: its still {s['still']} does not exist")
 
     def path(self, p) -> Path:
         p = os.path.expandvars(os.path.expanduser(str(p)))
@@ -462,6 +472,17 @@ class Variant:
             else:
                 src, start = s.get("src"), float(s.get("start", 0.0))
                 spd = float(s.get("speed", 1) or 1)
+                if s.get("end") is not None:
+                    # the picture stops at `end` (a Live Photo's phone going down); its sound does
+                    # too, or the shot plays the rustle of the pocket under the still
+                    t_end = r["t0"] + (float(s["end"]) - start) / spd
+                    if t_end < r["t1"] - 0.05:
+                        pieces.append([r["t0"], max(r["t0"] + 0.2, t_end), src, start,
+                                       float(a.get("lufs", DEFAULT_LUFS)) if isinstance(a, dict) else DEFAULT_LUFS,
+                                       a.get("filter") if isinstance(a, dict) else None, spd])
+                        if not has_audio(src):
+                            pieces.pop()
+                        continue
             if not src or is_photo(src) or not has_audio(src):
                 if not (isinstance(a, dict) and a.get("from")):
                     self.warnings.append(f"shot {r['i']} has no sound under it (a photo with no "

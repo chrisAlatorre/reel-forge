@@ -90,8 +90,27 @@ def copy_thumbnails(ids, dest, lib_path=None, dry_run=False):
                      "for checking faces, not for the final render.")}
 
 
+def photos_responsive(timeout_s=20):
+    """Does the Photos app answer Apple events at all? When its export queue is stuck (other exports
+    abandoned mid-way), every export 'succeeds' with no file, and a direct one dies with -1712. That
+    silent success is the dangerous part: it looks like the media simply was not there."""
+    r = subprocess.run(["osascript", "-e", f'with timeout of {timeout_s} seconds',
+                        "-e", 'tell application "Photos" to get name', "-e", "end timeout"],
+                       capture_output=True, text=True, timeout=timeout_s + 10)
+    return r.returncode == 0, (r.stderr or "").strip()
+
+
 def export_originals(ids, dest, lib_path=None, dry_run=False, extra=None):
     """Calls osxphotos export with the list of uuids."""
+    if sys.platform == "darwin" and not dry_run:
+        ok, err = photos_responsive()
+        if not ok:
+            return {"ok": False,
+                    "reason": ("The Photos app is not answering (" + (err[:120] or "timeout") + "). Its "
+                               "export queue is probably stuck, and in that state every export reports "
+                               "success and writes nothing. Quit Photos normally (Photos > Quit, or "
+                               "`osascript -e 'tell application \"Photos\" to quit'`; if it does not quit, "
+                               "`kill -TERM` its process), reopen it, and run this again.")}
     binary = find_osxphotos()
     if not binary:
         return {"ok": False,

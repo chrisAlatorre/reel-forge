@@ -68,6 +68,7 @@ except ImportError:      # this file still has to work on its own, copied out of
 CACHE = Path(os.path.expanduser(os.environ.get("REEL_FORGE_CACHE", "~/.cache/reel-forge")))
 VOICES = CACHE / "voices"          # Piper .onnx models
 DESIGNED = VOICES / "designed"     # synthetic voices designed with VoiceDesign (.wav + .json)
+BUNDLED = Path(__file__).resolve().parents[1] / "designed"   # recipes the plugin ships (no audio)
 MLX_AUDIO = "mlx-audio==0.5.5"
 MODELS = {"qwen": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16", "voxcpm": "mlx-community/VoxCPM2-bf16",
           "design": "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16"}
@@ -249,6 +250,12 @@ def synthesize_mlx(engine: str, lines: list, out: Path, voice: str, slow: float,
     from mlx_audio.tts.utils import load_model
     ref = Path(voice) if voice.endswith(".wav") else DESIGNED / f"{voice}.wav"
     meta = ref.with_suffix(".json")
+    recipe = BUNDLED / f"{voice}.json"
+    if not voice.endswith(".wav") and not ref.exists() and recipe.exists():
+        # a voice the plugin ships as a recipe (the Spanish fallback): designed once, then cached
+        r = json.loads(recipe.read_text())
+        print(f"designing the bundled voice {voice!r} (first use on this machine)…", flush=True)
+        create_voice(voice, r["description"], int(r["seed"]), r["language"], r["text"])
     if not ref.exists() or not meta.exists():
         sys.exit(f"I can't find {ref} and its .json (the reference text). Voices: "
                  f"{sorted(p.stem for p in DESIGNED.glob('*.wav'))}")

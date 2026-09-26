@@ -156,15 +156,25 @@ but they looked the same; I saw no difference between them"*. It was true: the o
 hook, the close and most of the shots fixed and moved one small thing, and a round of five concepts
 came out as five pairs of the same video.
 
-**A variant changes at least one of these, and it is measured** (`compare_variants.py` over the
-rendered files, frame by frame; the critic runs it and a pair that fails is a blocker):
+**A variant changes its middle, and it is measured.** The rule above used to be "at least one of
+hook, close, voice or shots", and a round passed it with every pair while the critic wrote *"after
+the first ~6 s, A and B are the same video"*: a new first shot over the same twenty cuts is a hook
+test, and the same cut with and without a voice is one video listened to twice. So now:
+
+- **Every non-base variant uses at least 40 % material the base does not**, named in the concept as
+  `new_resources` (catalog ids; `validate.py` counts them), and after rendering `compare_variants.py`
+  requires **under 60 % of shots shared**. The critic runs it; a pair that fails is a blocker.
+- Where that material comes from: **other moments of the same story** — the neighbours of a favourite
+  (minutes before and after), another Live Photo of the same scene, the clip the base left out, the
+  same beat seen from the other side.
+- On top of that, each variant should ALSO change what a viewer notices first:
 
 | what changes | what that means on screen |
 |---|---|
 | **the hook** | it opens on another shot — the turn moved to the front, the payoff teased first, a different face or place in frame 1 |
 | **the close** | it lands on another shot or another kind of close (a loop instead of a punchline, back-to-hook instead of a final fact) |
 | **the voice** | one is narrated and the other is not |
-| **the shots** | at least 40 % of them are different material, not the same material reordered |
+| **the order** | the story told from another end: payoff first, a countdown reversed, the day backwards |
 
 What **does not** count, however it is labelled:
 

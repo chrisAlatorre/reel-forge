@@ -318,7 +318,84 @@ def two_variants_a_viewer_cannot_tell_apart_fail(tmp):
     def run(other):
         return uv(ENGINE / "compare_variants.py", tmp / "base.json", tmp / f"{other}.json").returncode
     assert run("same") == 1 and run("shorter") == 1, "identical or merely shorter must fail"
-    assert run("newhook") == 0 and run("voiced") == 0, "another hook or the voice must pass"
+    # then a round passed with a new hook or a voice over the same middle, and the critic wrote
+    # "after the first 6 s, A and B are the same video": neither passes on its own any more
+    assert run("newhook") == 1 and run("voiced") == 1, "a new hook or voice over the same middle must fail"
+    (tmp / "middle.json").write_text(json.dumps(spec(["x", "b", "y", "z", "w", "f"])))
+    assert run("middle") == 0, "two thirds of the shots changed must pass"
+
+
+@test
+def a_variant_without_new_material_is_refused_before_it_is_built(tmp):
+    """The same failure, caught at the concept: a non-base variant names its new material."""
+    def problems(c):
+        (tmp / "c.json").write_text(json.dumps(c))
+        r = uv(ROOT / "schemas/validate.py", tmp / "c.json", "--type", "concept")
+        return [x for x in (r.stdout + r.stderr).splitlines() if "new_resources, needs" in x]
+    c = {"resources": [f"r{i}" for i in range(10)],
+         "variants": [{"letter": "A", "what": "the reference cut", "differs_in": "base"},
+                      {"letter": "B", "what": "opens on the payoff", "differs_in": "hook",
+                       "hook_resource": "r9", "new_resources": ["n1"]}]}
+    assert problems(c), "one new resource out of ten must be refused"
+    c["variants"][1]["new_resources"] = ["n1", "n2", "n3", "n4"]
+    assert not problems(c)
+
+
+def _live_movie(path, moving):
+    """A 2.4 s phone-like movie: a still pattern, or one with a ball crossing it; both end with the
+    whole frame swinging away, like a phone being lowered."""
+    src = "color=c=gray:size=480x640:rate=30,drawgrid=w=60:h=60:c=white,drawbox=x=100:y=80:w=200:h=120:c=yellow:t=fill"
+    body = ("[0]split[p][q];[p]trim=0:1.9,setpts=PTS-STARTPTS[a];"
+            + ("color=c=red:size=140x140:rate=30,trim=0:1.9[ball];[a][ball]overlay=x='20+t*160':y=300[b];"
+               if moving else "[a]null[b];")
+            + "[q]trim=1.9:2.4,setpts=PTS-STARTPTS,scroll=h=0.02:v=0.03[c];"
+            "[b][c]concat=n=2:v=1:a=0[v]")
+    ff("-f", "lavfi", "-i", src, "-t", "2.4", "-filter_complex", body, "-map", "[v]",
+       "-c:v", "libx264", "-pix_fmt", "yuv420p", path)
+
+
+@test
+def a_live_photo_is_measured_not_guessed(tmp):
+    """Most phone photos are Live Photos; the plugin used them as stills. analyze says which movies
+    have a movement worth playing and trims the phone being lowered at the end."""
+    _live_movie(tmp / "moving.mov", True)
+    _live_movie(tmp / "still.mov", False)
+    r = uv(SOURCES / "live.py", "analyze", tmp / "moving.mov", tmp / "still.mov")
+    assert r.returncode == 0, r.stderr[-600:]
+    mov, still = json.loads(r.stdout)
+    assert mov["usable"] and mov["motion"] == "subject", mov
+    assert mov["end_s"] <= 2.0, f"the swing at the end must be trimmed: {mov}"
+    assert not still["usable"] and still["motion"] == "static", still
+
+
+@test
+def a_live_shot_plays_its_movement_then_lands_on_the_still(tmp):
+    _live_movie(tmp / "m.mov", True)
+    ff("-f", "lavfi", "-i", "color=c=blue:size=480x640", "-frames:v", "1", tmp / "still.png")
+    spec = {"out": str(tmp / "o.mp4"), "fps": 30, "look": "clean", "grain": 0,
+            "segments": [{"src": str(tmp / "m.mov"), "start": 0, "end": 1.0, "dur": 2.0, "kb": 0,
+                          "tail": "still", "still": str(tmp / "still.png")}]}
+    (tmp / "s.json").write_text(json.dumps(spec))
+    r = uv(ENGINE / "render.py", tmp / "s.json")
+    assert r.returncode == 0, r.stderr[-800:]
+    import numpy as np
+    def frame(t):
+        raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", str(t), "-i", str(tmp / "o.mp4"), "-frames:v", "1",
+                              "-vf", "scale=27:48", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                             capture_output=True).stdout
+        return np.frombuffer(raw, np.uint8).reshape(48, 27, 3).mean(axis=(0, 1))
+    early, late = frame(0.4), frame(1.6)
+    assert late[2] > late[0] + 60, f"after `end` the shot must be the still (blue): {late}"
+    assert not (early[2] > early[0] + 60), f"before `end` it must be the movie: {early}"
+
+
+@test
+def the_spanish_fallback_voice_is_the_bundled_one(tmp):
+    r = uv(ROOT / "skills/voices/scripts/resolve_voice.py", "--lang", "es-MX", "--local-only", "--json")
+    d = json.loads(r.stdout)
+    if d["engine"] == "qwen":
+        assert d["voice"] == "narrador-mx" and abs(d["speed"] - 1.15) < 1e-6, d
+    assert (ROOT / "skills/voices/designed/narrador-mx.json").exists()
 
 
 @test

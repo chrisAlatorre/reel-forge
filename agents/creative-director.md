@@ -125,7 +125,17 @@ variant after the `base` changes one thing you can SEE or HEAR (`differs_in`):
   in `hook_resource`.
 - **`close`**: it lands on another shot or another kind of close. Name it in `close_resource`.
 - **`voice`**: narrated where the base is not, or the reverse.
-- **`shots`**: at least 40 % different material, not the same material reordered.
+- **`shots`**: another selection or order of the story.
+
+**Whatever `differs_in` says, the middle has to differ too:** every non-base variant uses at least 40 % material the base does not (`new_resources`, catalog ids) and, rendered, shares under 60 % of its shots with every other variant (`compare_variants.py`). A new hook, close or voice over the same middle was watched and called "the same video after 6 s". List the new material
+in `new_resources` — at least 40 % of your `resources` count. Take it from the neighbours of the
+favourites you used (minutes before and after), other Live Photos of the same scene, the clips the
+base left out, or the same beat seen from the other side. A concept whose material only supports one
+middle is a concept for one variant: say so rather than dressing one cut up as three.
+
+**Photos move.** Where a catalog photo has `live.usable: true`, plan it as a clip of its movement
+(`effect: "live 0.7x → still"`), not as a still with a push; the still with a push is for photos
+with no usable movement.
 
 A shorter variant is welcome, but length alone is not a variant: give the short one its own hook.
 Another song is never a variant. `compare_variants.py` measures the rendered files frame by frame and
@@ -183,7 +193,7 @@ duration with its beats, and which variants you propose.
   "resources": ["d03-021a", "d03-014", "d03-030a", "d03-018", "d03-002"],
   "variants": [
     {"letter": "A", "what": "the full version, cut on the beat", "differs_in": "base", "narrated": false, "target_duration_s": 48.0},
-    {"letter": "B", "what": "opens on the turn and tells the rest as a flashback; narrated", "differs_in": "hook", "hook_resource": "d03-030a", "narrated": true, "target_duration_s": 34.0}
+    {"letter": "B", "what": "opens on the turn and tells the rest as a flashback; narrated", "differs_in": "hook", "hook_resource": "d03-030a", "new_resources": ["d03-030a", "d03-031", "d03-022", "d03-040"], "narrated": true, "target_duration_s": 34.0}
   ],
   "notes": "d03-030a has 9 usable seconds and the concept uses 4: there is room if the turn wants more",
   "missing": ["no food b-roll: a fourth proof would have to be invented, so there are three"]

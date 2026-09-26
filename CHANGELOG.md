@@ -8,6 +8,56 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.8.0
+
+**Breaking: what counts as a variant.** A pair of variants now has to differ in its middle: under 60 %
+of the shots shared once rendered, and every non-base variant names at least 40 % new material in the
+concept (`new_resources`). A new hook, a new close or a voice over the same cut no longer passes on its
+own — a round passed that way on every pair and the critic still wrote *"after the first ~6 s, A and B
+are the same video"*.
+
+### Added
+
+- **Live Photos as movement.** `skills/sources/scripts/live.py` finds which catalog photos are Live
+  Photos (`scan`), puts their ~1.5-3 s movies in the workspace (`export`, from the library or through
+  osxphotos for iCloud-only ones) and measures each one (`analyze`): the phone being raised or lowered
+  is trimmed, and the movement is classed as `subject`, `camera`, `static` or `shaky`. The catalog
+  workflow runs all three. On one real library well over half the photos were Live, favourites
+  included, and the plugin had been using every one of them as a still with a push.
+- **The engine plays a clip and lands on a still.** A video segment takes `end` (the source second
+  where the usable picture stops) and `tail`: `hold` (the old behaviour), `boomerang`, or `still` with
+  a `still` image — the Live Photo's movement, then the sharp photo for the rest of the shot. The
+  shared builder resolves `still` like `src`, and the natural sound stops at `end` too.
+- **The Spanish fallback voice ships with the plugin.** `skills/voices/designed/narrador-mx.json` is
+  the recipe (a description and a seed for Qwen3-TTS VoiceDesign, no recording of anyone);
+  `voice.py` designs it into the cache the first time it is asked for, and `resolve_voice.py` returns
+  it at 1.15x whenever a Spanish run falls back to `qwen`.
+- **`capcut_voice.py --busy-wait MIN`** (default 20, `$REEL_FORGE_CAPCUT_BUSY_WAIT`): when CapCut's
+  server refuses the voice as busy, the batch retries on a 1, 2, 4, 8… min schedule instead of giving
+  up at once. The refusal is per voice and temporary: on 26 sep 2026 it lasted until CapCut was
+  relaunched, and Valentino then generated on the first try.
+
+### Changed
+
+- **CapCut Pro is the recommended setup** for Spanish narration: Valentino, the viral narrator, is an
+  ElevenLabs voice served through CapCut and generates with a signed-in Pro account. Without it, the
+  run narrates with `narrador-mx` and the README says so.
+- The selection rules, the concept reference and the agents (creative director, chief editor,
+  builder, critic, story doctor) say it: **photos move** — a still with a push is for photos with no
+  usable movement — and **variants differ in the middle**.
+
+### Fixed
+
+- **A busy refusal was reported as a missed click.** The server's toast lasts ~2 s and the script
+  polled too slowly to read it, then blamed the voice grid and sent the user to `--calibrate`. It now
+  polls every 0.15 s, reads the "not compatible with text to speech" toast that precedes the refusal,
+  and when the voice tile was found by name and clicked but no track uses it, calls it what it is: a
+  server refusal.
+- `export.py` checks that Photos answers before exporting, instead of hanging on a stuck Photos app.
+- **`schemas/catalog-item.schema.json` was never in the repository**: the `.gitignore` rule for run
+  catalogs (`catalog*.json`) matched it, so a fresh clone had a validator and workflows pointing at a
+  schema that did not exist. It is tracked now.
+
 ## 0.7.1
 
 ### Added

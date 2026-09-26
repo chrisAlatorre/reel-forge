@@ -1,0 +1,9 @@
+{
+ "description": "Hablante nativo de español mexicano, hombre de unos treinta y cinco años, voz clara y cercana, tono de creador de viajes que cuenta algo con entusiasmo contenido, ritmo ágil pero sin atropellarse, sin acento extranjero",
+ "seed": 11,
+ "language": "Spanish",
+ "text": "Bienvenidos a este viaje. Hoy caminamos por mercados, templos y playas, y les voy a contar todo lo que nadie dice antes de aterrizar. Pónganse cómodos, este está bueno.",
+ "model": "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16",
+ "license": "Synthetic voice created with Qwen3-TTS VoiceDesign (Apache-2.0). It is no real person's voice.",
+ "_why": "The plugin's fallback voice for Spanish: the local voice that reads a Spanish run when CapCut's Valentino is unavailable. A recipe, not a recording: voice.py designs it from this description the first time it is asked for, into $REEL_FORGE_CACHE/voices/designed/."
+}

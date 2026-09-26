@@ -55,6 +55,7 @@ contactsheets/
 *.spec.json
 inventory*.json
 catalog*.json
+!schemas/catalog-item.schema.json
 durations.json
 # Word-by-word marks of a generated narration (wordmarks.py): rebuilt from the WAVs.
 words.json

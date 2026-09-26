@@ -27,7 +27,9 @@ Spec summary:
   "bpm": 123.0, "beat0": 0.0,
   "segments": [
     {"src": "photo.jpg", "beats": 2, "focus": [0.5, 0.4], "kb": 0.06, "punch": 0.10},
-    {"src": "clip.mov", "dur": 2.4, "start": 3.0, "speed": 0.5, "flash": true, "subs": true}
+    {"src": "clip.mov", "dur": 2.4, "start": 3.0, "speed": 0.5, "flash": true, "subs": true},
+    {"src": "live/UUID.live.mov", "start": 0.2, "end": 2.1, "speed": 0.7, "dur": 3.4,
+     "tail": "still", "still": "photos/UUID.jpg"}    # a Live Photo: the movement, then the still
   ],
   "captions": [{"t0": 0.0, "t1": 2.0, "text": "...", "style": "clean", "pos": "low",
                 "instant": true},                    # already up on its first frame: for the hook
@@ -721,6 +723,25 @@ def _engine_360():
                      "Remove the `r360` from the segment or point $REEL_FORGE_360_SCRIPTS at that folder.")
 
 
+def _tail(frames, n, s, focus):
+    """Fills a shot longer than its clip. `tail`:
+      hold       (default) the last frame stays — what the engine always did;
+      boomerang  the clip plays back and forth, for a movement that reads either way;
+      still      cuts to `still` (the sharp photo of a Live Photo) for the rest of the shot: the
+                 movement, then the picture the shutter took. The push (kb) carries across."""
+    if len(frames) >= n:
+        return frames[:n]
+    mode = s.get("tail", "still" if s.get("still") else "hold")
+    if mode == "boomerang" and len(frames) > 2:
+        cycle = frames + frames[-2:0:-1]
+        return [cycle[i % len(cycle)] for i in range(n)]
+    if mode == "still" and s.get("still"):
+        WM, HM = int(W * MARGIN), int(H * MARGIN)
+        photo = cover(load_photo(str(config.path(s["still"]))), WM, HM, s.get("still_focus", focus))
+        return frames + [photo] * (n - len(frames))
+    return frames + [frames[-1]] * (n - len(frames))
+
+
 def _segment_base(s, n, fps, src, focus):
     """The segment's frames at the working resolution (W*MARGIN x H*MARGIN). None = a map."""
     WM, HM = int(W * MARGIN), int(H * MARGIN)
@@ -734,10 +755,17 @@ def _segment_base(s, n, fps, src, focus):
         r.setdefault("start", s.get("start", 0))
         return list(reframe360.frames(r, n, fps, WM, HM))
     if src.lower().endswith((".mov", ".mp4", ".m4v", ".mkv", ".insv")):
-        raw = video_frames(src, s.get("start", 0), n, s.get("speed", 1), fps)
-        if s.get("fit") == "blur":
-            return [fit_with_background(c, WM, HM) for c in raw]
-        return [cover(c, WM, HM, focus) for c in raw]
+        start, speed = float(s.get("start", 0)), float(s.get("speed", 1) or 1)
+        take = n
+        if s.get("end") is not None:
+            # `end`: the source second where the usable picture stops (a Live Photo's phone being
+            # lowered, a clip's last good frame). Past it, `tail` decides what fills the shot.
+            take = max(1, min(n, int((float(s["end"]) - start) / speed * fps)))
+        raw = video_frames(src, start, take, speed, fps)[:take]
+        fit = (lambda c: fit_with_background(c, WM, HM)) if s.get("fit") == "blur" \
+            else (lambda c: cover(c, WM, HM, focus))
+        frames = [fit(c) for c in raw]
+        return _tail(frames, n, s, focus)
     photo = load_photo(src)
     single = fit_with_background(photo, WM, HM) if s.get("fit") == "blur" else cover(photo, WM, HM, focus)
     return [single] * n

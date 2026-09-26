@@ -325,13 +325,19 @@ because they were wrong. Always apply them; the user can override any of them, a
    identifiable minors as protagonists, and anything sensitive (documents with personal data, licence
    plates, addresses, banking screens). When you drop something under this rule, note it in the catalog
    with the reason: the user may want it back.
-5. **Actually look at the material.** Contact sheets for photos, frame strips for video, face crops for
+5. **Photos move.** On a phone library most photos are **Live Photos** — ~1.5-3 s of movement and
+   sound around the still. Where `live.py` measured a usable movement (`live.usable`), the photo goes
+   in as a **clip** inside `[live.start_s, live.end_s]`, usually slowed (0.6-0.8x) and landing on the
+   sharp still (`tail: "still"`), with its own sound under it. A still with a Ken Burns push is for
+   photos with no usable movement (static, shaky, not a Live), or for a deliberate freeze. The user's
+   words: *"I don't like it when we put in static photos"*.
+6. **Actually look at the material.** Contact sheets for photos, frame strips for video, face crops for
    expressions. **Never choose by file name, by date or at random.** An agent that didn't look at the
    image produces editing that doesn't land.
-6. **Videos have good parts and filler.** Catalog **ranges with a start and an end**, not whole files. A
+7. **Videos have good parts and filler.** Catalog **ranges with a start and an end**, not whole files. A
    40 s clip usually holds 3-6 usable seconds. The catalog stores `start_s` and `end_s`, and whoever
    builds **cannot step outside that window** without pulling a strip and looking again.
-7. **The second with the good image is not the second with the good audio.** If you use a clip's sound,
+8. **The second with the good image is not the second with the good audio.** If you use a clip's sound,
    separate the image source from the audio source and look at the frame of the entry point before
    pinning it.
 

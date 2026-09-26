@@ -77,8 +77,12 @@ Leave in `<workspace>/concepts/<slug>/common/`, ready and verified:
    and any move the engine can't do itself (a rotation on entry, an animated zoom) pre-rendered at
    1350x2400.
 3. The 360 reframes the concept needs, rendered from the scout's keys — one framing per call.
-4. The music bed, looped and normalized per `audio.md`, if the video runs past the song's preview.
-5. `RESOURCES.json` last, when everything it lists exists: what each file is, which catalog id it came
+4. **The Live Photo movies** of the assigned photos whose catalog item has `live.usable: true`
+   (`live.mov`, already exported by the catalog step; if missing, `live.py export`), linked into
+   `common/live/`, next to their sharp stills in `common/photos/`. Note each one's window
+   (`live.start_s`–`live.end_s`) in `RESOURCES.json`.
+5. The music bed, looped and normalized per `audio.md`, if the video runs past the song's preview.
+6. `RESOURCES.json` last, when everything it lists exists: what each file is, which catalog id it came
    from and what it is for.
 
 If the concept asks for something the material can't give, say so instead of improvising a substitute.
@@ -142,6 +146,12 @@ decide is only what is particular to your variant:
    the grid lands every cut on the beat, and the FIRST shot also absorbs the song's intro), `dur` in
    seconds only when there is no song, and `line` when the shot is narrated (the voice sets its length
    and the cut is pushed to the next half-beat).
+   **A photo with a usable Live Photo goes in as its movement, not as a still:**
+   `{"src": "common/live/<uuid>.live.mov", "start": live.start_s, "end": live.end_s, "speed": 0.7,
+   "tail": "still", "still": "common/photos/<file>.jpg", …}` — the movement, then the sharp still
+   for the rest of the shot, with the Live's own sound under the movement. `tail: "boomerang"` when
+   the movement reads either way (water, flags, a crowd). A still with a push only where the photo has
+   no usable movement, or as a deliberate freeze; say which in the README.
 2. **The sound under each shot** (`audio`): its own track at a LUFS level, a photo borrowing its
    scene's ambience (`"from"`), or `"continue"` so a piece keeps playing across a cut. A photo with no
    sound under it is a hole the gate will see.

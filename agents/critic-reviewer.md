@@ -92,10 +92,14 @@ builder's included. Then:
      uv run ${CLAUDE_PLUGIN_ROOT}/skills/video-engine/scripts/compare_variants.py "<concept folder>"
      ```
 
-     A pair fails when it shares the hook, the close and the voice and most of its shots look alike.
-     That is a blocker, not a nitpick: a whole round shipped as five such pairs and the user saw "no
-     difference between variants". The fix is a different hook, close or voice — never another song
-     (the uploads carry none) and never just fewer shots.
+     A pair fails when 60 % or more of its shots look alike — whatever else differs. That is a
+     blocker, not a nitpick: a round passed the old test (hook OR voice changed) and the critic still
+     wrote "after the first 6 s, A and B are the same video". The fix is other material in the middle
+     (the variant's `new_resources`, neighbours of the favourites, other Live Photos) — never another
+     song (the uploads carry none) and never just fewer shots.
+   - **Still photos where the movement existed.** A photo whose catalog item has `live.usable: true`
+     shown as a still with a push is a defect unless the README says why (a deliberate freeze).
+     The user's words: "I don't like it when we put in static photos".
    - **Uneven look between variants:** compare the **same frame** across A, B, C. A `look` that washes
      out the hook in two of four deliveries is a defect of the set, not of one variant.
    - **Something the user already told us is false.** Run the project's facts over what SHIPS — the

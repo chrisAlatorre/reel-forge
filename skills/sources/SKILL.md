@@ -481,6 +481,33 @@ uv run python -c "import sources, json; print(json.dumps(sources.library_people(
 
 ---
 
+## `live.py`: the movement behind the stills
+
+Most phone photos are **Live Photos**: ~1.5-3 s of movie and sound around the still, stored in the
+library as `<UUID>_3.mov` (or only in iCloud). A still with a push where that movement exists is a
+choice nobody made, so the catalog step finds them, fetches them and measures them:
+
+```bash
+L="uv run ${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/live.py"
+$L scan    --catalog catalog.json [--map library-map.json] --apply   # which photos are Live
+$L export  --catalog catalog.json --dest material/live --only-used --min-quality 3
+$L analyze --catalog catalog.json --apply                            # window + kind of motion
+$L analyze some.live.mov                                             # one movie, printed
+```
+
+Each Live item gets `live: {mov, start_s, end_s, still_s, motion, usable}`. `motion` is `subject`
+(something moves, the camera holds — the best kind), `camera` (a slow steady drift, reads as handheld
+video), `static` (nothing moves: use the still), `shaky` or `short`. The raise/lower of the phone at
+either end is trimmed out of `[start_s, end_s]`. The movie is lower resolution than the still (1440 px
+wide on recent iPhones): fine for a covered 9:16 cut, not for a deep punch-in.
+
+In a shot it is a clip that lands on the still (see the engine's `tail`):
+
+```json
+{"src": "common/live/UUID.live.mov", "start": 0.0, "end": 2.1, "speed": 0.7, "dur": 3.4,
+ "tail": "still", "still": "common/photos/UUID.jpg"}
+```
+
 ## `framecheck.py`: what is in the rectangle
 
 Curation answers two questions and only writes down the easy one. *What was happening* goes into

@@ -522,8 +522,9 @@ adds to it:
 - **Every variant gets its own number of seconds**, in \`per_variant\`, worked out from its own beats:
   ${variants.map((v) => `${v.letter}${v.what ? ` (${v.what})` : ''}`).join(', ')}. Two variants with the
   same recommended length are one variant with two names. And each variant has to be a video a viewer
-  can tell apart — another hook, another close, the voice on or off, or mostly other shots
-  (\`differs_in\`); if the concept's variants only change the length or the song, fix that here, at
+  can tell apart — another hook, another close, the voice on or off (\`differs_in\`) AND a different
+  middle: at least 40 % material the base does not use (\`new_resources\`), under 60 % of shots shared
+  once rendered; if the concept's variants only change the length, the song, or the first shot, fix that here, at
   \`level: "blocks"\`, naming the shot each one should open or close on. A short variant keeps the whole arc and
   loses middle beats, never the close.
 - **Write the fixes as instructions a builder can apply** ("open on <id> instead of <id>", "the close is

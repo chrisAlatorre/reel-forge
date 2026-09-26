@@ -354,7 +354,7 @@
         "what",
         "differs_in"
       ],
-      "description": "One way of executing this same concept. A viewer who watches two variants one after the other has to see a different video: each non-base variant changes the hook, the close, the voice, or at least 40 % of the shots — measured after rendering by compare_variants.py. Another song is never a variant (the clean files carry no music), and neither is the same video shorter.",
+      "description": "One way of executing this same concept. A viewer who watches two variants one after the other has to see a different video, and that means a different MIDDLE: every non-base variant uses at least 40 % material the base does not (`new_resources`), measured again after rendering by compare_variants.py (under 60 % of shots shared). A new hook, close or voice over the same middle is a hook test, not a variant; another song is never one (the clean files carry no music), and neither is the same video shorter.",
       "properties": {
         "letter": {
           "type": "string",
@@ -373,7 +373,7 @@
             "voice",
             "shots"
           ],
-          "description": "What a viewer sees change. `base` is the reference cut (at most one). `hook`: opens on another shot (hook_resource). `close`: lands on another shot (close_resource). `voice`: narrated where the other is not, or the reverse. `shots`: at least 40 % different material."
+          "description": "What a viewer notices FIRST. `base` is the reference cut (at most one). `hook`: opens on another shot (hook_resource). `close`: lands on another shot (close_resource). `voice`: narrated where the other is not. `shots`: another selection or order of the story. Whatever it says, a non-base variant also carries `new_resources`."
         },
         "hook_resource": {
           "type": "string",
@@ -390,6 +390,14 @@
           "type": "number",
           "minimum": 3,
           "description": "A variant may run shorter or longer than the concept, but it keeps the whole arc: a short variant cuts development beats, never the close."
+        },
+        "new_resources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "description": "Catalog ids this variant uses that the base does not: at least 40 % of the concept's `resources` count. Other moments of the same story, other Live Photos, the neighbours of a favourite. Required on every non-base variant."
         }
       }
     },

@@ -117,8 +117,8 @@ What you are hunting for, all of it seen in production:
   planned close into an accident.
 - **A caption still on screen on the last frame**, so the video ends mid-sentence.
 - **The promise paid off and then 4 more seconds of nothing**: it ended and kept running.
-- **Variants a viewer would take for the same video**: same hook, same close, same voice and most of the
-  shots shared. Run `compare_variants.py` over the rendered files; a pair that fails is a blocker, and
+- **Variants a viewer would take for the same video**: 60 % or more of the shots shared, whatever
+  else changed (a new hook over the same middle is a hook test). Run `compare_variants.py` over the rendered files; a pair that fails is a blocker, and
   the fix names the shot the variant should open or close on instead.
 - **A short variant that dropped the close instead of a development beat.** A short variant keeps the
   whole arc; what it loses is the middle.

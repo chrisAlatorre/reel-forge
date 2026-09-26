@@ -1,0 +1,438 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "reel-forge/catalog-item.schema.json",
+  "title": "Catalog item",
+  "description": "One moment of usable material: a photo, a range of a video, or a framing pulled out of a 360 clip. It is the unit every concept and every build refers to by id. A whole video file is never an item: its usable windows are.",
+  "$ref": "#/$defs/item",
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "description": "Unique across the whole project. Convention in schemas/README.md."
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/Users/|/home/|/root/|[A-Za-z]:\\\\Users\\\\)",
+      "description": "Relative to the project folder, or starting with '~'. Never an absolute path carrying somebody's home directory."
+    },
+    "tag": {
+      "type": "string",
+      "enum": [
+        "landscape",
+        "city",
+        "architecture",
+        "interior",
+        "food",
+        "drink",
+        "people",
+        "friends",
+        "animals",
+        "water",
+        "night",
+        "sunset",
+        "transport",
+        "market",
+        "nature",
+        "detail",
+        "motion",
+        "empty",
+        "sky",
+        "crowd",
+        "religious",
+        "art",
+        "sport",
+        "weather"
+      ],
+      "description": "Controlled vocabulary: the builders filter on these exact words. 'empty' = nobody in frame."
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "type"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "path": {
+          "$ref": "#/$defs/path"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "photo",
+            "video",
+            "video360",
+            "live"
+          ]
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}([T ]\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2})?)?$",
+          "description": "Capture date from the metadata, never from the file name or the filesystem."
+        },
+        "place": {
+          "type": "string"
+        },
+        "start_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Required on video and video360: where the usable window starts."
+        },
+        "end_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Required on video and video360: where it stops being usable."
+        },
+        "duration_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Duration of the whole source file, not of the window."
+        },
+        "fps": {
+          "type": "number",
+          "minimum": 1,
+          "description": "60 means real slow motion is available."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 12,
+          "description": "What you SAW inside this exact window: what is there, what light, what expression, what moves. Written in English. 'A temple' is not a description."
+        },
+        "quality": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "description": "Technical: focus, exposure, framing, stability."
+        },
+        "obstructions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/obstruction"
+          },
+          "description": "Empty or absent means: nothing between the camera and the subject. This is about the RECTANGLE, not about what was happening — the two are judged separately and the second one is the easy one. Measure it, don't guess: `uv run skills/sources/scripts/framecheck.py <file> [--from S --to S]`. When this is not empty, `quality` is at most 2 and `notes` has to say either how a crop removes the obstruction or why the shot is worth it anyway."
+        },
+        "hook": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "description": "How much it stops the thumb. 5 is a candidate for the first frame; most material is a 2 or a 3."
+        },
+        "subject_present": {
+          "type": "boolean",
+          "description": "The video's main person is in frame. Counts toward the concept's subject quota."
+        },
+        "favorite": {
+          "type": "boolean",
+          "description": "Starred as a favorite in the library, when the library provides it."
+        },
+        "audio": {
+          "type": "string",
+          "description": "What you HEAR in this window and whether it is usable. Empty string if there is none or it is useless."
+        },
+        "framing": {
+          "type": "string",
+          "enum": [
+            "vertical",
+            "horizontal",
+            "square"
+          ]
+        },
+        "focus": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "description": "Where the subject sits, 0-1, so a horizontal source can be cropped to 9:16 without beheading anyone."
+        },
+        "direction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "yaw",
+            "pitch"
+          ],
+          "properties": {
+            "yaw": {
+              "type": "number",
+              "minimum": -360,
+              "maximum": 360
+            },
+            "pitch": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "fov": {
+              "type": "number",
+              "minimum": 10,
+              "maximum": 180
+            }
+          },
+          "description": "video360 only: the framing this item is. Two items of the same clip closer than 90 degrees in yaw read as the same shot repeated."
+        },
+        "sheet": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Which contact sheet or frame strip this was read off, with its number: 'workspace/sheets/day-03/sheet-01.jpg#14'. This is what makes the catalog auditable."
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/tag"
+          }
+        },
+        "notes": {
+          "type": "string",
+          "description": "What whoever builds needs to know so they do not get it wrong."
+        },
+        "use": {
+          "type": "boolean",
+          "default": true,
+          "description": "false + reason for everything dropped. Nothing is ever deleted."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 3,
+          "description": "Required when use is false."
+        },
+        "live": {
+          "type": "object",
+          "description": "A photo that is a Live Photo: its ~1.5-3 s movie, measured by skills/sources/scripts/live.py (scan → export → analyze --apply). When `usable` is true the photo is used as a CLIP inside [start_s, end_s], landing on the still with the engine's `tail: \"still\"` — a still with a push is what you use only when there is no usable movement.",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "uuid": {
+              "type": "string"
+            },
+            "library_mov": {
+              "type": "string"
+            },
+            "mov": {
+              "type": "string",
+              "description": "the exported movie, <uuid>.live.mov"
+            },
+            "start_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "end_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "still_s": {
+              "type": "number",
+              "minimum": 0,
+              "description": "where the sharp still sits in the movie"
+            },
+            "motion": {
+              "enum": [
+                "subject",
+                "camera",
+                "static",
+                "shaky",
+                "short",
+                "unreadable"
+              ]
+            },
+            "usable": {
+              "type": "boolean"
+            },
+            "why": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "video",
+                  "video360"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "start_s",
+              "end_s"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "use": {
+                "const": false
+              }
+            },
+            "required": [
+              "use"
+            ]
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          },
+          "else": {
+            "required": [
+              "description",
+              "quality",
+              "hook",
+              "subject_present",
+              "sheet",
+              "tags"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "video360"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "direction"
+                ]
+              },
+              {
+                "properties": {
+                  "use": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "use"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "obstructions": {
+                "type": "array",
+                "minItems": 1
+              }
+            },
+            "required": [
+              "obstructions"
+            ]
+          },
+          "then": {
+            "required": [
+              "notes"
+            ],
+            "properties": {
+              "quality": {
+                "maximum": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "batch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "batch",
+        "items",
+        "summary"
+      ],
+      "description": "What one context agent writes: workspace/catalog/catalog-<batch>.json. The merged workspace/catalog/catalog.json has the same shape, with batch set to 'merged'.",
+      "properties": {
+        "batch": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The batch id this agent owned. One agent, one batch, one file."
+        },
+        "agent": {
+          "type": "string",
+          "description": "Which agent wrote it: photo-curator, clip-analyst, 360-scout."
+        },
+        "generated": {
+          "type": "string",
+          "description": "ISO date the file was written."
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/item"
+          }
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 12,
+          "description": "Two or three lines on what is in this batch."
+        },
+        "struck_me": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "string"
+          },
+          "description": "The three things that struck you most. This is the raw material the concepts get written from."
+        },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What you could not cover and why."
+        }
+      }
+    },
+    "obstruction": {
+      "type": "string",
+      "enum": [
+        "glass",
+        "frame",
+        "foreground_people",
+        "foreground_object",
+        "dirt",
+        "reflection"
+      ],
+      "description": "What stands BETWEEN the camera and the thing this shot is about. glass: shot through a window or a screen. frame: a mullion, a bar or a door jamb cutting the picture. foreground_people: bodies or heads near the lens who are not the subject, facing any way. foreground_object: a seat back, a pole, a railing, a hand. dirt: specks or smears on the glass or the lens. reflection: the interior mirrored on the glass."
+    }
+  }
+}

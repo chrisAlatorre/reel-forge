@@ -570,8 +570,20 @@ Your job:
    stands between the lens and the subject. Everything else it saw is in \`catalog.framecheck.json\`.
    A catalog once said "passenger heads in the foreground" in plain words, still rated the clip 4,
    and the clip shipped: the note is there so that cannot happen silently.
-6. Validate the merged file: \`uv run ${SCHEMAS}/validate.py ${WORKSPACE}/catalog/catalog.json --type catalog-item\`.
-7. Update ${LEDGER}: phase \`catalog\` → \`done\`, with \`${WORKSPACE}/catalog/catalog.json\` as its
+6. **Live Photos: the movement behind the stills.** Most phone photos are Live Photos, and a still
+   with a push where ~2 s of real movement exists is a choice nobody made. Mark them, fetch the
+   movies of the photos worth using, and measure each one (all three are idempotent):
+
+   uv run "${PLUGIN_ROOT}/skills/sources/scripts/live.py" scan --catalog ${WORKSPACE}/catalog/catalog.json \\
+       [--map ${WORKSPACE}/catalog/library-map.json] --apply
+   uv run "${PLUGIN_ROOT}/skills/sources/scripts/live.py" export --catalog ${WORKSPACE}/catalog/catalog.json \\
+       --dest ${WORKSPACE}/material/live --only-used --min-quality 3
+   uv run "${PLUGIN_ROOT}/skills/sources/scripts/live.py" analyze --catalog ${WORKSPACE}/catalog/catalog.json --apply
+
+   Report how many photos are Live, how many movies came down, and how many are \`usable\` by motion
+   (subject / camera / static / shaky). Movies still in iCloud that did not download are a gap.
+7. Validate the merged file: \`uv run ${SCHEMAS}/validate.py ${WORKSPACE}/catalog/catalog.json --type catalog-item\`.
+8. Update ${LEDGER}: phase \`catalog\` → \`done\`, with \`${WORKSPACE}/catalog/catalog.json\` as its
    artifact.
 Do not invent moments that are not in the batches.
 
