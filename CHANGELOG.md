@@ -8,6 +8,15 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.9.1
+
+### Fixed
+
+- **`live.py` and `doctor.py` left a 2.4 GB copy of the Photos database behind on every run.** They
+  read a private copy (never the live database while Photos writes to it) and never deleted it:
+  five runs left 12 GB in the temp folder of a disk with 12 GB free. The copy is now removed as
+  soon as it has been read.
+
 ## 0.9.0
 
 ### Added

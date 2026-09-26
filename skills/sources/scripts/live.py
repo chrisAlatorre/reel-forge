@@ -65,34 +65,38 @@ MIN_USABLE_S = 1.0
 
 # --------------------------------------------------------------------------- the library
 
-def _db(library: Path):
-    """A private copy of Photos.sqlite: never read the live database while Photos writes to it."""
+def live_rows(uuids, library=LIBRARY):
+    """{uuid: {"live": bool, "local": Path|None}} for the given photo uuids.
+
+    Reads a private copy of Photos.sqlite (never the live database while Photos writes to it) and
+    deletes the copy before returning: it is ~2.4 GB, and a copy left behind by every run filled
+    12 GB of a disk that had 12 GB free."""
     src = library / "database" / "Photos.sqlite"
     if not src.exists():
         sys.exit(f"live: no Photos database at {src} (set $REEL_FORGE_LIBRARY)")
-    tmp = Path(tempfile.mkdtemp(prefix="rf-live-")) / "Photos.sqlite"
-    for suffix in ("", "-wal", "-shm"):
-        f = Path(str(src) + suffix)
-        if f.exists():
-            shutil.copy2(f, Path(str(tmp) + suffix))
-    return sqlite3.connect(tmp)
-
-
-def live_rows(uuids, library=LIBRARY):
-    """{uuid: {"live": bool, "local": Path|None}} for the given photo uuids."""
-    con = _db(library)
-    out = {}
-    q = "select ZUUID, ZKINDSUBTYPE, ZDIRECTORY from ZASSET where ZUUID in (%s)"
-    uu = list(uuids)
-    for k in range(0, len(uu), 500):
-        chunk = uu[k:k + 500]
-        for uuid, sub, d in con.execute(q % ",".join("?" * len(chunk)), chunk):
-            local = None
-            if sub == LIVE_SUBTYPE and d is not None:
-                cand = library / "originals" / str(d) / f"{uuid}_3.mov"
-                local = cand if cand.exists() else None
-            out[uuid] = {"live": sub == LIVE_SUBTYPE, "local": local}
-    return out
+    tmpdir = Path(tempfile.mkdtemp(prefix="rf-live-"))
+    try:
+        tmp = tmpdir / "Photos.sqlite"
+        for suffix in ("", "-wal", "-shm"):
+            f = Path(str(src) + suffix)
+            if f.exists():
+                shutil.copy2(f, Path(str(tmp) + suffix))
+        con = sqlite3.connect(tmp)
+        out = {}
+        q = "select ZUUID, ZKINDSUBTYPE, ZDIRECTORY from ZASSET where ZUUID in (%s)"
+        uu = list(uuids)
+        for k in range(0, len(uu), 500):
+            chunk = uu[k:k + 500]
+            for uuid, sub, d in con.execute(q % ",".join("?" * len(chunk)), chunk):
+                local = None
+                if sub == LIVE_SUBTYPE and d is not None:
+                    cand = library / "originals" / str(d) / f"{uuid}_3.mov"
+                    local = cand if cand.exists() else None
+                out[uuid] = {"live": sub == LIVE_SUBTYPE, "local": local}
+        con.close()
+        return out
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def item_uuid(item, lmap):

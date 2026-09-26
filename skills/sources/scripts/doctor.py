@@ -62,16 +62,20 @@ def library_names():
     src = LIBRARY / "database" / "Photos.sqlite"
     if not src.exists():
         return {}
-    tmp = Path(tempfile.mkdtemp(prefix="rf-doctor-")) / "Photos.sqlite"
-    for suf in ("", "-wal", "-shm"):
-        if Path(str(src) + suf).exists():
-            shutil.copy2(Path(str(src) + suf), Path(str(tmp) + suf))
+    tmpdir = Path(tempfile.mkdtemp(prefix="rf-doctor-"))
+    tmp = tmpdir / "Photos.sqlite"
     try:
+        for suf in ("", "-wal", "-shm"):
+            if Path(str(src) + suf).exists():
+                shutil.copy2(Path(str(src) + suf), Path(str(tmp) + suf))
         con = sqlite3.connect(tmp)
         rows = con.execute("select a.ZORIGINALFILENAME, z.ZUUID from ZADDITIONALASSETATTRIBUTES a "
                            "join ZASSET z on z.Z_PK = a.ZASSET where z.ZTRASHEDSTATE = 0").fetchall()
+        con.close()
     except sqlite3.Error:
         return {}
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)   # ~2.4 GB per run otherwise
     return {str(n).upper(): u for n, u in rows if n}
 
 
