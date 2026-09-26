@@ -12,6 +12,10 @@ Two paths, and which one runs is **not** the caller's whim: `scripts/resolve_voi
 | **App** (`scripts/capcut_voice.py`) | drives CapCut and collects the WAV | **the default for Spanish**, with **Valentino at 1.4x** |
 | **Local** (`scripts/voice.py`) | open-weight models, run on the machine, clear license | every other language, and the fallback when CapCut is not there |
 
+> **Picking a voice by name.** `pick_voice()` always starts from the top of the catalog and scrolls
+> down; the list is virtualised and keeps the scroll of the last pick, so a voice above it used to
+> come back "not in the catalog". The language chips ("Español"…) are jump anchors, not filters.
+>
 > **Recommended: a CapCut account with Pro.** Since 9.5 the app path needs a signed-in account,
 > and Valentino — the viral narrator, first under *"En tendencia"* in the catalog — is an ElevenLabs
 > voice served through CapCut (`tone_platform: 11labs`). With Pro it generates: **26 sep 2026,
@@ -51,6 +55,11 @@ The order, and it is not negotiable:
    fallback and has to be disclosed like any other. Signed in, generation works — but as of
    **24 sep 2026** Valentino specifically comes back with a server-side "too many people are using
    this feature" and writes nothing, so branch 3 is still what a Spanish run gets today.
+   **If Valentino is refused (after `--busy-wait`) or missing from the catalog, the WHOLE batch is
+   redone with CapCut's "Guía de video"** — a Latin-American male narrator whose pitch matches
+   Valentino's (124 Hz against 123) — never with a Spain-Spanish voice, and never mixing two voices
+   in one video. `--fallback-voice` / `$REEL_FORGE_CAPCUT_FALLBACK` change it ("" turns it off); the
+   voice actually used is written to `voice.json` in the output folder and to the variant's README.
 3. **A local engine** — `qwen` on Apple Silicon, `piper` anywhere else. For Spanish on `qwen` the
    voice is **`narrador-mx` at 1.15x**, the plugin's fallback: a synthetic voice designed with
    Qwen3-TTS VoiceDesign from the recipe in `designed/narrador-mx.json` (a description and a seed, no

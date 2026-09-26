@@ -1,6 +1,7 @@
 # /// script
 # requires-python = ">=3.10,<3.13"
-# dependencies = ["numpy<2.3", "opencv-python", "mediapipe==0.10.21"]
+# dependencies = ["numpy<2.3", "opencv-python", "mediapipe==0.10.21",
+#                 "pyobjc-framework-Vision; sys_platform == 'darwin'"]
 # ///
 """What is actually in the rectangle, measured — not what was happening when it was shot.
 
@@ -40,6 +41,7 @@ deliberately loose: this flags what deserves a second look, it does not throw ma
 """
 import argparse
 import json
+import re
 import math
 import os
 import sys
@@ -257,6 +259,87 @@ def clear_band(img, blocking_faces, crossing):
     return round(max(best, 1.0 - cursor), 3)
 
 
+# Text that identifies a stranger. A delivered variant showed a Hong Kong licence plate, legible,
+# on a passing car; only the critic's eye caught it. OCR finds the text, these patterns say which of
+# it is private. Plates are short letter+digit runs (HK "VK 9312", MX "ABC-123-D", TH "1กข 2345",
+# CN "京A·12345"); phones and e-mails are what they look like.
+PLATE = re.compile(r"^[A-Z]{1,3}[\s·.-]?\d{2,4}(?:[\s-]?[A-Z]{1,2})?$|^\d{1,4}[\s·.-]?[A-Z]{1,3}$"
+                   r"|^[A-Z]{3}[\s-]?\d{2,3}[\s-]?[A-Z]$"                   # MX: ABC-123-D
+                   r"|^[\u4e00-\u9fff][A-Z][·\s]?[A-Z0-9]{5,6}$"            # CN: 京A·12345
+                   r"|^\d?[\u0e01-\u0e2e]{1,2}\s?\d{1,4}$")                 # TH: 1กข 2345
+PHONE = re.compile(r"\+?\d[\d\s().-]{7,}\d")
+EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
+
+
+def _ocr(img):
+    """[(text, conf, x0, y0, x1, y1)] in normalised top-left coordinates, or [] off macOS."""
+    try:
+        import Vision
+        from Foundation import NSData
+    except ImportError:
+        return []
+    ok, png = cv2.imencode(".png", img)
+    if not ok:
+        return []
+    handler = Vision.VNImageRequestHandler.alloc().initWithData_options_(
+        NSData.dataWithBytes_length_(png.tobytes(), len(png)), None)
+    req = Vision.VNRecognizeTextRequest.alloc().init()
+    req.setRecognitionLevel_(0)                     # accurate
+    req.setUsesLanguageCorrection_(False)           # a plate is not a word
+    if not handler.performRequests_error_([req], None)[0]:
+        return []
+    out = []
+    for obs in req.results() or []:
+        cand = obs.topCandidates_(1)
+        if cand:
+            b = obs.boundingBox()
+            out.append((str(cand[0].string()).strip(), float(cand[0].confidence()),
+                        b.origin.x, 1 - b.origin.y - b.size.height,
+                        b.origin.x + b.size.width, 1 - b.origin.y))
+    return out
+
+
+def _lines(words):
+    """Plates come back in pieces ("VK" … "9312"): join the words that sit on one line, close."""
+    words = sorted(words, key=lambda w: (round((w[3] + w[5]) / 2, 2), w[2]))
+    out = []
+    for w in words:
+        if out:
+            t, c, x0, y0, x1, y1 = out[-1]
+            h = max(y1 - y0, w[5] - w[3])
+            if abs((y0 + y1) / 2 - (w[3] + w[5]) / 2) < h * 0.6 and 0 <= w[2] - x1 < h * 2.5:
+                out[-1] = (t + " " + w[0], min(c, w[1]), x0, min(y0, w[3]), w[4], max(y1, w[5]))
+                continue
+        out.append(w)
+    return out
+
+
+def private_text(img, min_conf=0.5):
+    """[{kind, text, cx, cy, h}] — legible text in the frame that identifies someone: plates,
+    phones, e-mails. macOS Vision OCR over the frame and over four enlarged quarters (a plate is a
+    few dozen pixels); elsewhere, or without pyobjc, [] and nothing is said."""
+    H, W = img.shape[:2]
+    words = list(_ocr(img))
+    for qy in (0, 1):
+        for qx in (0, 1):
+            y0, x0 = int(qy * H * 0.45), int(qx * W * 0.45)
+            tile = img[y0:y0 + int(H * 0.55), x0:x0 + int(W * 0.55)]
+            tile = cv2.resize(tile, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+            for t, c, a, b, cc, d in _ocr(tile):
+                words.append((t, c, (x0 + a * tile.shape[1] / 2) / W, (y0 + b * tile.shape[0] / 2) / H,
+                              (x0 + cc * tile.shape[1] / 2) / W, (y0 + d * tile.shape[0] / 2) / H))
+    seen, out = set(), []
+    for t, c, x0, y0, x1, y1 in _lines([w for w in words if w[1] >= min_conf]):
+        kind = ("plate" if PLATE.fullmatch(t) else "phone" if PHONE.search(t)
+                and len(re.sub(r"\D", "", t)) >= 8 else "email" if EMAIL.search(t) else None)
+        key = (kind, re.sub(r"\W", "", t))
+        if kind and key not in seen:
+            seen.add(key)
+            out.append({"kind": kind, "text": t, "cx": round((x0 + x1) / 2, 3),
+                        "cy": round((y0 + y1) / 2, 3), "h": round(y1 - y0, 3)})
+    return out
+
+
 def measure(img):
     f = faces(img)
     n_lines, crossing = straight_lines(img)
@@ -274,11 +357,16 @@ def measure(img):
         "contrast": round(float(gray.std()), 1),
         "clear_band": clear_band(img, [{"cy": cy, "height_share": hs} for cy, hs in f
                                        if cy >= FACE_LOW_Y and hs >= FACE_BIG], crossing),
+        "private_text": private_text(img),
     }
 
 
 def findings(m):
     out = []
+    for t in m.get("private_text") or []:
+        out.append(f"a legible {t['kind']} ({t['text']!r}) at x {t['cx']:.2f}, y {t['cy']:.2f}: "
+                   "a stranger's data on screen. Blur it in the source (a copy in common/) or crop "
+                   "it out; never ship it readable.")
     band = m.get("people_by_third") or {}
     if blocking_people(m):
         out.append(f"the bottom third is {band['bottom']:.2f} people with their backs to the lens "
@@ -411,6 +499,12 @@ def check_catalog(catalog: Path, root: Path, samples: int, ratio, apply: bool, o
         print(f"  [{k}/{len(todo)}] {it['id']:<18} "
               f"{'clean' if v['clean'] else ', '.join(v['obstructions']) or 'look at it'}",
               file=sys.stderr, flush=True)
+        private = [f for f in v["findings"] if f.startswith("a legible ")]
+        report[it["id"]]["private_text"] = private
+        if apply and private and "framecheck, private text" not in (it.get("notes") or ""):
+            it["notes"] = ((it.get("notes") or "").rstrip() + " | framecheck, private text: "
+                           + "; ".join(x[:120] for x in private[:2])).strip(" |")
+            changed += 1
         if apply and "foreground_people" in v["obstructions"]:
             # Annotate, never demote. On the first full catalog this ran over (296 moments), 7 got
             # flagged and about 2 were real — tourists in front of a temple, pedestrians in front of

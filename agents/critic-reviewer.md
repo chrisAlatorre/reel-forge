@@ -97,6 +97,9 @@ builder's included. Then:
      wrote "after the first 6 s, A and B are the same video". The fix is other material in the middle
      (the variant's `new_resources`, neighbours of the favourites, other Live Photos) — never another
      song (the uploads carry none) and never just fewer shots.
+   - **A stranger's data on screen** — a licence plate, a phone, an e-mail. `framecheck` flags
+     legible ones ("a legible plate…"); look at every flag and blur or crop in the source. A
+     delivered variant once showed a readable plate that only a human caught.
    - **Still photos where the movement existed.** A photo whose catalog item has `live.usable: true`
      shown as a still with a push is a defect unless the README says why (a deliberate freeze).
      The user's words: "I don't like it when we put in static photos".

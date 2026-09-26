@@ -152,11 +152,20 @@ decide is only what is particular to your variant:
    for the rest of the shot, with the Live's own sound under the movement. `tail: "boomerang"` when
    the movement reads either way (water, flags, a crowd). A still with a push only where the photo has
    no usable movement, or as a deliberate freeze; say which in the README.
+   A handheld clip or Live that shakes gets `"stabilize": true` (ffmpeg deshake). A shot whose
+   framecheck notes "private text" (a plate, a phone, an e-mail) goes in only from a copy in
+   `common/` with that region blurred, or cropped so it is out of frame.
 2. **The sound under each shot** (`audio`): its own track at a LUFS level, a photo borrowing its
    scene's ambience (`"from"`), or `"continue"` so a piece keeps playing across a cut. A photo with no
    sound under it is a hole the gate will see.
 3. **The words**: `captions`, and the `voice-script.json` if it is narrated. A caption on the first
    shot with `lead` ≤ 0.05 is put on screen from frame 1 — that is the hook, and it is the default.
+   The length floor is automatic now: when the real voice reads faster than planned, `variant.py`
+   gives the missing seconds back to shots that can hold longer (`refit`, floor = `min_s` or the
+   user's length preference) and warns when the story itself is too short — then add a beat.
+   If the gate fails only because the voice sits under the clips, `variant.py` lowers the natural
+   sound 4 dB and rebuilds by itself (twice at most). The concept README gets a status block per
+   file on every build; keep your prose, don't hand-edit that block.
 4. **The close**: a held last shot, or `{"loop_to_first": true, "beats": 2}` to end on the video's own
    first frame (the gate then measures the seam instead of looking for a fade).
 

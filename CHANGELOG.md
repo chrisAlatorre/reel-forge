@@ -8,6 +8,48 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.9.0
+
+### Added
+
+- **Narrated variants keep the length the user asked for.** A voice that reads faster than planned
+  (CapCut's Valentino at 1.4x) shortened a narrated variant to 38 s against a 45-90 s preference.
+  `variant.py` now refits after the real voice: the missing seconds go to shots that can hold
+  longer — stills, Lives landing on their still, clips with source left — never past a clip's
+  end and never to the close. The floor is `min_s` or the user's length preference; when the story
+  is simply too short it says so ("add a beat") instead of padding.
+- **The voice is balanced against the clips by itself.** When the gate fails only because the voice
+  sits under the clips' own sound, `variant.py` lowers the natural sound 4 dB and rebuilds (twice at
+  most), and the final mix now has a limiter, so a louder voice can no longer push it past the
+  -0.5 dBTP ceiling. Both were fixed by hand, a few dB at a time, in the previous round.
+- **Strangers' plates, phones and e-mails are flagged.** `framecheck.py` reads the text in each
+  frame with macOS Vision (the whole frame and four enlarged quarters, fragments of one line joined)
+  and reports a legible plate, phone or e-mail as a finding; in catalog mode it leaves a "private
+  text" note. A delivered variant had shown a readable licence plate that only a human caught.
+- **`doctor.py`: is every catalog moment still on disk?** It repoints moved files (same name, or a
+  working copy that still holds the window, originals preferred over a round's trimmed copies) and
+  marks the rest `missing`, with the Photos uuid when the file only lives in the library. The
+  catalog workflow runs it before the concepts: one round had 88 broken paths that every director
+  went looking for on its own.
+- **A Spanish fallback voice that sounds like the default.** If Valentino is refused or missing,
+  `capcut_voice.py` redoes the whole batch with CapCut's "Guía de video" (a Latin-American male
+  narrator at Valentino's pitch) instead of dropping to the local voice; `--fallback-voice`
+  changes it. One voice per video, always, and the one used is recorded.
+- **Every build writes its status into the concept's README**, between markers: length, cuts,
+  voice (and whether it was a fallback), gate, framecheck. After a re-render, seven READMEs had kept
+  the old voice and the old seconds.
+- **Live Photos: Apple's own data.** `live.py` reads the still's exact instant from Apple's one-sample
+  metadata track (1.17 s into one movie, not the assumed middle) and Apple's
+  `LivePhotoVitalityScore`, which now also keeps a lifeless Live as a still.
+- **`stabilize: true`** on a clip runs ffmpeg's deshake first, for handheld Lives and walking shots.
+
+### Fixed
+
+- `pick_voice()` could not find a voice above the one picked last: it only ever scrolled down. It
+  now starts from the top of the catalog, and goes back up once when the list stops moving.
+- Before building a new CapCut project because the text clip "disappeared", the timeline is scrolled
+  up: stacked voice tracks push the text track off screen, out of the accessibility tree.
+
 ## 0.8.2
 
 ### Fixed

@@ -83,6 +83,10 @@ CAPCUT = Path(os.path.expanduser(os.environ.get(
 DEFAULT_VOICE = os.environ.get("REEL_FORGE_CAPCUT_VOICE", "Valentino")
 # The pace of the documentary-narration trend, applied OUTSIDE CapCut with atempo (pitch is kept).
 DEFAULT_SPEED = 1.4
+# The voice a Spanish batch switches to, WHOLE, when Valentino is refused or gone from the catalog:
+# a popular CapCut narrator with a Mexican accent, never a Spain-Spanish one (the user: "no quiero
+# vocecita española"). Set with --fallback-voice or $REEL_FORGE_CAPCUT_FALLBACK; "" disables it.
+FALLBACK_VOICE = os.environ.get("REEL_FORGE_CAPCUT_FALLBACK", "Guía de video")
 # Coordinates in logical points with CapCut's window at (0, 33) and a size of 1728x999
 # (a 1728x1117 point screen). With another screen or version, recalibrate with --calibrate.
 WINDOW = {"pos": (0, 33), "size": (1728, 999)}
@@ -364,6 +368,7 @@ def ax_texts():
 
 
 PICKED = {}   # voice -> whether its tile was found by name and clicked in this run
+VOICE_FAILED = None   # why the requested voice (not the machinery) failed, when it did
 
 
 def read_toast(seconds=9.0):
@@ -531,6 +536,13 @@ def pick_voice(voice: str, max_scrolls: int = 220) -> bool:
     """
     top, bot = VOICE_BAND
     probe = None
+    last_seen, still = None, 0
+    # Start from the top of the catalog every time: the list keeps the scroll of the last pick,
+    # and a voice above that point was never found (a run of 12 candidates found only the first).
+    first = next((n for n in ax_nodes() if n["desc"].startswith(AX95["voice_prefix"])), None)
+    if first:
+        scroll(first["center"][0], first["center"][1], 50, 40)
+        time.sleep(0.6)
     for _ in range(max_scrolls):
         nodes = ax_nodes()
         hit = ax_find(AX95["voice_prefix"] + voice, nodes, contains=True)
@@ -549,7 +561,17 @@ def pick_voice(voice: str, max_scrolls: int = 220) -> bool:
                 return True
             scroll(probe[0], probe[1], -1 if y > bot else 1, 1)
         else:
-            scroll(probe[0], probe[1], -3, 3)
+            # At the bottom the tiles stop changing. The last voice picked left the list scrolled
+            # far down, and a voice ABOVE it was never found (every candidate after the first came
+            # back "not in the catalog"). So once the list stops moving, go back to the top once.
+            names = tuple(n["desc"] for n in nodes if n["desc"].startswith(AX95["voice_prefix"]))
+            still = still + 1 if names == last_seen else 0
+            last_seen = names
+            if still >= 3:
+                scroll(probe[0], probe[1], 50, 40)
+                still, last_seen = -1000, None       # only one trip back to the top
+            else:
+                scroll(probe[0], probe[1], -3, 3)
         time.sleep(0.3)
     return False
 
@@ -589,6 +611,16 @@ def set_text(line: str, voice: str = DEFAULT_VOICE):
     nodes = ax_nodes()
     clip = next((n for n in nodes if n["desc"].startswith(AX95["clip_prefix"])), None)
     if clip is None:
+        # Every generation stacks another audio track, and after ~5 of them the text track is
+        # pushed above the visible part of the timeline: still in the project, just off screen,
+        # so not in the accessibility tree. Scroll the timeline up before concluding it is gone.
+        tl = ax_find(AX95["timeline_root"], nodes)
+        if tl:
+            scroll(tl["center"][0], tl["center"][1], 20, 6)
+            time.sleep(0.8)
+            nodes = ax_nodes()
+            clip = next((n for n in nodes if n["desc"].startswith(AX95["clip_prefix"])), None)
+    if clip is None:
         if REBUILDING:
             die("there is no text clip on the timeline (nothing called MTLSTextP:… in the "
                 "accessibility tree), and a brand-new project did not get one either. Follow "
@@ -608,6 +640,7 @@ def set_text(line: str, voice: str = DEFAULT_VOICE):
     ax_click("tts_tab", 2.5, what="the right panel's 'Texto a voz' tab")
     PICKED[voice] = pick_voice(voice)
     if not PICKED[voice]:
+        globals()["VOICE_FAILED"] = "is not in the catalog"
         die(f"I scrolled the whole voice catalog and {voice!r} is not in it. CapCut's catalog "
             "changes by country and by version, and in 9.5 the name carries an emoji "
             "(\"Valentino💌\"), which the substring match handles. Open the 'Texto a voz' panel and "
@@ -1043,53 +1076,8 @@ def wait_out_busy(tr: Path, line: str, a, i: int):
     return None
 
 
-def main():
-    ap = argparse.ArgumentParser(description="CapCut's narrator voice, driven by clicks (macOS)")
-    ap.add_argument("lines", nargs="?", help="JSON file with the list of sentences")
-    ap.add_argument("out", nargs="?", help="output folder for l0.wav, l1.wav… and durations.json")
-    ap.add_argument("--speed", type=float, default=DEFAULT_SPEED,
-                    help=f"{DEFAULT_SPEED} is the trend's pace (default), applied with atempo after CapCut")
-    ap.add_argument("--voice", default=DEFAULT_VOICE,
-                    help=f"the voice's name in the catalog (default: {DEFAULT_VOICE}). On 9.x it is "
-                         "matched as a case-insensitive substring, so 'Valentino' finds 'Valentino💌'")
-    ap.add_argument("--assume-version", metavar="X.Y",
-                    help="use this profile instead of the installed CapCut's version (7.5 or 9.5)")
-    ap.add_argument("--prepare", action="store_true")
-    ap.add_argument("--calibrate", action="store_true")
-    ap.add_argument("--preflight", action="store_true",
-                    help="only run the checks (CapCut, version, window, permissions, project) and exit")
-    ap.add_argument("--new-project-on-saturation", action=argparse.BooleanOptionalAction, default=True,
-                    help="when the project stops generating, create a new one and retry once (default: yes)")
-    ap.add_argument("--busy-wait", type=float, metavar="MIN",
-                    default=float(os.environ.get("REEL_FORGE_CAPCUT_BUSY_WAIT", "20")),
-                    help="when the server says the voice is busy, keep retrying for up to MIN minutes "
-                         "(default 20, $REEL_FORGE_CAPCUT_BUSY_WAIT; 0 = give up at once)")
-    ap.add_argument("--keep-raw", action="store_true", help="also keeps the wav exactly as CapCut produced it")
-    ap.add_argument("--split", metavar="AUDIO.WAV",
-                    help="plan B: cuts an audio file holding the whole script by silences (uses 'out' as the folder)")
-    ap.add_argument("--threshold", default="-38dB")
-    ap.add_argument("--min-silence", type=float, default=0.45)
-    a = ap.parse_args()
-    _lock = machine_lock()   # noqa: F841 — held until the process exits; see machine_lock()
-    if a.prepare:
-        return prepare()
-    if a.calibrate:
-        return calibrate(a.voice, a.assume_version)
-    if a.split:
-        out = a.out or a.lines
-        lines_file = a.lines if a.out else None
-        if not out:
-            ap.error("--split needs the output folder: --split AUDIO.WAV OUT_FOLDER")
-        n = len(json.load(open(lines_file))) if lines_file else 0
-        return split_by_silence(Path(a.split), Path(out), n, a.speed, a.threshold, a.min_silence)
-    if a.preflight:
-        return preflight(a.voice, long_batch=False, assumed=a.assume_version)
-    if not a.lines or not a.out:
-        ap.error("lines.json and the output folder are missing")
-
-    lines = json.load(open(a.lines))
-    out = Path(a.out)
-    out.mkdir(parents=True, exist_ok=True)
+def generate(lines, out, a):
+    """Every line of the batch in ONE voice (a.voice). Returns {lN: seconds}."""
     pending = sum(1 for i in range(len(lines)) if not (out / f"l{i}.wav").exists())
     awake = keep_awake()
     first = next((l for i, l in enumerate(lines) if not (out / f"l{i}.wav").exists()), None)
@@ -1128,6 +1116,7 @@ def main():
             if kind in ("ui", "unreadable"):
                 die(head + kept, EXIT_UI if kind == "ui" else EXIT_ENV)
             if kind == "server":     # un proyecto nuevo no arregla un no del servidor
+                globals()["VOICE_FAILED"] = "was refused by CapCut's server"
                 die(head + kept, EXIT_SATURATED)
             if kind == "login":
                 die(head + kept, EXIT_LOGIN)
@@ -1156,10 +1145,81 @@ def main():
         loudnorm_2pass(raw, final, a.speed)
         durations[f"l{i}"] = duration(final)
         print(f"l{i} {durations[f'l{i}']}s  ·  {line[:60]}", flush=True)
-    json.dump(durations, open(out / "durations.json", "w"), ensure_ascii=False, indent=1)
-    print(f"\n{len(lines)} lines in {out} (+ durations.json)")
     if awake:
         awake.terminate()
+    return durations
+
+
+def main():
+    ap = argparse.ArgumentParser(description="CapCut's narrator voice, driven by clicks (macOS)")
+    ap.add_argument("lines", nargs="?", help="JSON file with the list of sentences")
+    ap.add_argument("out", nargs="?", help="output folder for l0.wav, l1.wav… and durations.json")
+    ap.add_argument("--speed", type=float, default=DEFAULT_SPEED,
+                    help=f"{DEFAULT_SPEED} is the trend's pace (default), applied with atempo after CapCut")
+    ap.add_argument("--voice", default=DEFAULT_VOICE,
+                    help=f"the voice's name in the catalog (default: {DEFAULT_VOICE}). On 9.x it is "
+                         "matched as a case-insensitive substring, so 'Valentino' finds 'Valentino💌'")
+    ap.add_argument("--assume-version", metavar="X.Y",
+                    help="use this profile instead of the installed CapCut's version (7.5 or 9.5)")
+    ap.add_argument("--prepare", action="store_true")
+    ap.add_argument("--calibrate", action="store_true")
+    ap.add_argument("--preflight", action="store_true",
+                    help="only run the checks (CapCut, version, window, permissions, project) and exit")
+    ap.add_argument("--new-project-on-saturation", action=argparse.BooleanOptionalAction, default=True,
+                    help="when the project stops generating, create a new one and retry once (default: yes)")
+    ap.add_argument("--fallback-voice", default=FALLBACK_VOICE,
+                    help="the voice the WHOLE batch is redone with if --voice is refused or missing "
+                         f"(default: {FALLBACK_VOICE!r}; '' = none). Never mixes two voices in one folder")
+    ap.add_argument("--busy-wait", type=float, metavar="MIN",
+                    default=float(os.environ.get("REEL_FORGE_CAPCUT_BUSY_WAIT", "20")),
+                    help="when the server says the voice is busy, keep retrying for up to MIN minutes "
+                         "(default 20, $REEL_FORGE_CAPCUT_BUSY_WAIT; 0 = give up at once)")
+    ap.add_argument("--keep-raw", action="store_true", help="also keeps the wav exactly as CapCut produced it")
+    ap.add_argument("--split", metavar="AUDIO.WAV",
+                    help="plan B: cuts an audio file holding the whole script by silences (uses 'out' as the folder)")
+    ap.add_argument("--threshold", default="-38dB")
+    ap.add_argument("--min-silence", type=float, default=0.45)
+    a = ap.parse_args()
+    _lock = machine_lock()   # noqa: F841 — held until the process exits; see machine_lock()
+    if a.prepare:
+        return prepare()
+    if a.calibrate:
+        return calibrate(a.voice, a.assume_version)
+    if a.split:
+        out = a.out or a.lines
+        lines_file = a.lines if a.out else None
+        if not out:
+            ap.error("--split needs the output folder: --split AUDIO.WAV OUT_FOLDER")
+        n = len(json.load(open(lines_file))) if lines_file else 0
+        return split_by_silence(Path(a.split), Path(out), n, a.speed, a.threshold, a.min_silence)
+    if a.preflight:
+        return preflight(a.voice, long_batch=False, assumed=a.assume_version)
+    if not a.lines or not a.out:
+        ap.error("lines.json and the output folder are missing")
+
+    lines = json.load(open(a.lines))
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    used = out / "voice.json"
+    if used.exists() and json.loads(used.read_text()).get("voice"):
+        a.voice = json.loads(used.read_text())["voice"]     # a resumed batch keeps its voice
+    try:
+        durations = generate(lines, out, a)
+    except SystemExit:
+        fb = a.fallback_voice
+        if not (VOICE_FAILED and fb and fb.lower() != a.voice.lower()):
+            raise
+        print(f"· {a.voice} {VOICE_FAILED}: redoing the whole batch with {fb} (one voice per video)",
+              flush=True)
+        for w in out.glob("l*.wav"):
+            w.unlink()
+        globals()["VOICE_FAILED"] = None
+        globals()["TR_OVERRIDE"] = None
+        a.voice, a.fallback_voice = fb, ""
+        durations = generate(lines, out, a)
+    json.dump({"voice": a.voice, "speed": a.speed}, open(used, "w"))
+    json.dump(durations, open(out / "durations.json", "w"), ensure_ascii=False, indent=1)
+    print(f"\n{len(lines)} lines in {out} (+ durations.json) · voice {a.voice}")
 
 
 if __name__ == "__main__":

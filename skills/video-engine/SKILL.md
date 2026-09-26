@@ -172,6 +172,7 @@ Every segment contributes **image only**. Its duration is declared with `dur` (s
 //    (see sources/live.py), then its sharp photo. This is how photos with movement go in.
 {"src": "live/UUID.live.mov", "start": 0.0, "end": 2.1, "speed": 0.7, "dur": 3.4,
  "tail": "still", "still": "photos/UUID.jpg"}
+//    `stabilize: true` runs ffmpeg's deshake on the clip first (handheld Lives, walking shots).
 
 // 3. A 360 clip reframed with a virtual camera (needs the plugin's 360 engine)
 {"src": "VID_0012.insv", "dur": 4, "start": 12, "r360": "keys.json"}

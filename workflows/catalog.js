@@ -557,12 +557,21 @@ Your job:
 3. Mark the candidates for the first frame (hook 5) and count how many moments carry the subject.
 4. Say what is MISSING (\`gaps\`): an uncovered day, a clip whose audio was never reviewed, a stretch
    of the trip with no b-roll, a batch that returned nothing. That is what goes to the next round.
-5. **Judge the rectangle, not just the moment.** The curators described what was HAPPENING; run the
+5. **Is everything on disk?** Before anyone plans on the catalog, find the moments whose files moved:
+
+   uv run "${PLUGIN_ROOT}/skills/sources/scripts/doctor.py" --catalog ${WORKSPACE}/catalog/catalog.json --apply
+
+   It repoints what it finds (same name, or a working copy that still holds the window) and marks
+   the rest \`missing: true\`, with the library uuid when the file only lives in Photos. Report the
+   counts; a moment marked missing is a gap, not something a director should plan on.
+6. **Judge the rectangle, not just the moment.** The curators described what was HAPPENING; run the
    frame check over the merged catalog, in one process, so it measures what the 9:16 crop will show:
 
    uv run "${PLUGIN_ROOT}/skills/sources/scripts/framecheck.py" \\
        --catalog ${WORKSPACE}/catalog/catalog.json --apply
 
+   It also reads the text in each frame (macOS) and notes "framecheck, private text" where a
+   stranger's plate, phone or e-mail is legible: that shot is only usable blurred or cropped.
    \`--apply\` leaves a "framecheck, needs a look" note on each moment with bystanders near the lens
    and their backs to it; it never changes \`quality\` or \`obstructions\` — most of its flags on a
    real catalog were crowds and POVs, people who ARE the shot. Look at each flagged frame and decide:
@@ -570,7 +579,7 @@ Your job:
    stands between the lens and the subject. Everything else it saw is in \`catalog.framecheck.json\`.
    A catalog once said "passenger heads in the foreground" in plain words, still rated the clip 4,
    and the clip shipped: the note is there so that cannot happen silently.
-6. **Live Photos: the movement behind the stills.** Most phone photos are Live Photos, and a still
+7. **Live Photos: the movement behind the stills.** Most phone photos are Live Photos, and a still
    with a push where ~2 s of real movement exists is a choice nobody made. Mark them, fetch the
    movies of the photos worth using, and measure each one (all three are idempotent):
 
@@ -582,8 +591,8 @@ Your job:
 
    Report how many photos are Live, how many movies came down, and how many are \`usable\` by motion
    (subject / camera / static / shaky). Movies still in iCloud that did not download are a gap.
-7. Validate the merged file: \`uv run ${SCHEMAS}/validate.py ${WORKSPACE}/catalog/catalog.json --type catalog-item\`.
-8. Update ${LEDGER}: phase \`catalog\` → \`done\`, with \`${WORKSPACE}/catalog/catalog.json\` as its
+8. Validate the merged file: \`uv run ${SCHEMAS}/validate.py ${WORKSPACE}/catalog/catalog.json --type catalog-item\`.
+9. Update ${LEDGER}: phase \`catalog\` → \`done\`, with \`${WORKSPACE}/catalog/catalog.json\` as its
    artifact.
 Do not invent moments that are not in the batches.
 

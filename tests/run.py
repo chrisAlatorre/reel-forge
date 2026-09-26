@@ -163,6 +163,45 @@ def narrated_cut_is_pushed_to_the_next_half_beat(tmp):
 
 
 @test
+def a_fast_voice_gives_the_time_back_instead_of_shipping_short(tmp):
+    """CapCut at 1.4x read a narrated variant in 38 s against a 45-90 s preference. refit() lends
+    the missing seconds to shots that can hold longer — never to a clip past its end, never to the
+    close — and says so when the story is simply too short."""
+    s = _stills(tmp, 4)
+    ff("-f", "lavfi", "-i", "testsrc2=size=320x568:rate=30", "-t", "2.0", "-pix_fmt", "yuv420p",
+       tmp / "c.mp4")
+    shots = [{"src": s[0], "line": 0}, {"src": str(tmp / "c.mp4"), "line": 1},
+             {"src": s[1], "line": 2}, {"src": s[2], "line": 3}]
+    v = _variant(tmp, {"name": "t", "delivery": str(tmp / "out"), "min_s": 12.0,
+                       "voice": {"script": "x.json", "lead": 0.1, "tail": 0.2, "close_hold": 0.6},
+                       "shots": shots})
+    durs = {"l0": 1.5, "l1": 1.4, "l2": 1.5, "l3": 1.6}
+    g0 = v.grid(durs)
+    g = v.refit(g0, durs)
+    assert g0[-1]["t1"] < 12.0 <= g[-1]["t1"] + 0.01, (g0[-1]["t1"], g[-1]["t1"])
+    assert g[1]["dur"] <= 2.0 + 1e-6, f"the 2 s clip must not be held past its end: {g[1]}"
+    assert abs(g[-1]["dur"] - g0[-1]["dur"]) < 1e-6, "the close keeps its own length"
+    v2 = _variant(tmp, {"name": "t2", "delivery": str(tmp / "out"), "min_s": 60.0,
+                        "voice": {"script": "x.json"}, "shots": shots})
+    v2.refit(v2.grid(durs), durs)
+    assert any("another beat" in w for w in v2.warnings), v2.warnings
+
+
+@test
+def the_readme_says_what_the_last_build_was(tmp):
+    """Seven READMEs still said "local voice" and the old seconds after a re-render."""
+    s = _stills(tmp, 1)
+    v = _variant(tmp, {"name": "t-A", "delivery": str(tmp / "out"), "shots": [{"src": s[0], "dur": 1}]})
+    v.res.mkdir(parents=True, exist_ok=True)
+    (v.res / "README.md").write_text("# Concept\n\nThe director's prose.\n")
+    v.readme_block(40.0, {"engine": "qwen", "voice": "narrador-mx", "fallback": True}, True, {}, 12)
+    v.readme_block(52.3, {"engine": "capcut", "voice": "Valentino", "speed": 1.4}, True, {}, 14)
+    text = (v.res / "README.md").read_text()
+    assert "The director's prose." in text and text.count("<!-- build:t-A -->") == 1, text
+    assert "52.3 s" in text and "Valentino" in text and "narrador-mx" not in text, text
+
+
+@test
 def seconds_grid_when_there_is_no_song(tmp):
     s = _stills(tmp, 2)
     v = _variant(tmp, {"name": "t", "delivery": str(tmp / "out"),
@@ -419,6 +458,39 @@ def projects_live_in_the_videos_folder_under_reel_forge(tmp):
     assert config.APP_FOLDER == "Reel Forge"
     if not os.environ.get("REEL_FORGE_HOME"):
         assert config.HOME.name == "Reel Forge" and config.HOME.parent.name in ("Movies", "Videos"), config.HOME
+
+
+@test
+def a_stranger_plate_in_frame_is_flagged(tmp):
+    """A delivered variant showed a legible licence plate; only the critic's eye caught it."""
+    if sys.platform != "darwin":
+        return
+    import cv2
+    import numpy as np
+    img = np.full((1920, 1080, 3), 128, np.uint8)
+    cv2.rectangle(img, (360, 1180), (740, 1310), (0, 220, 255), -1)
+    cv2.putText(img, "VK 9312", (380, 1275), cv2.FONT_HERSHEY_SIMPLEX, 2.6, (0, 0, 0), 7)
+    cv2.imwrite(str(tmp / "p.png"), img)
+    r = uv(SOURCES / "framecheck.py", tmp / "p.png", "--crop", "none", "--json", tmp / "fc.json")
+    got = json.loads((tmp / "fc.json").read_text())["samples"][0]["private_text"]
+    assert any(t["kind"] == "plate" for t in got), (got, r.stderr[-400:])
+
+
+@test
+def the_doctor_finds_a_moved_file_and_leaves_the_rest_marked(tmp):
+    """88 catalog moments pointed at files that had moved; every director went looking on its own."""
+    (tmp / "proj/workspace/catalog").mkdir(parents=True)
+    (tmp / "elsewhere").mkdir()
+    ff("-f", "lavfi", "-i", "color=c=red:size=64x64", "-frames:v", "1", tmp / "elsewhere/IMG_0001.jpg")
+    cat = tmp / "proj/workspace/catalog/catalog.json"
+    cat.write_text(json.dumps({"items": [
+        {"id": "a", "type": "photo", "path": str(tmp / "proj/gone/IMG_0001.jpg")},
+        {"id": "b", "type": "photo", "path": str(tmp / "proj/gone/IMG_0002.jpg")}]}))
+    r = uv(SOURCES / "doctor.py", "--catalog", cat, "--roots", tmp, "--apply",
+           env={"REEL_FORGE_LIBRARY": str(tmp / "no-library")})
+    items = {i["id"]: i for i in json.loads(cat.read_text())["items"]}
+    assert items["a"]["path"].endswith("elsewhere/IMG_0001.jpg"), (r.stdout, items["a"])
+    assert items["b"].get("missing") is True and r.returncode == 1, items["b"]
 
 
 # --------------------------------------------------------------------------- runner

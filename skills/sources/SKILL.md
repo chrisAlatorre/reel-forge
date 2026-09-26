@@ -481,6 +481,21 @@ uv run python -c "import sources, json; print(json.dumps(sources.library_people(
 
 ---
 
+## `doctor.py`: is every moment still on disk?
+
+```bash
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/doctor.py --catalog catalog.json          # report
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/sources/scripts/doctor.py --catalog catalog.json --apply  # repoint
+```
+
+Material gets reorganised between rounds, and a catalog keeps pointing at the old place: one round
+had 88 of 1,479 moments on paths that did not exist, and every director went looking on its own.
+The doctor looks under the project and `~/Movies` for the same file name, then for a working copy
+named after the same original (`…-IMG_6202-1080.mp4`) that still holds the moment's window, and
+finally in the Photos library by original file name. `--apply` repoints what it finds (`path_was`
+keeps the old one) and marks the rest `missing: true` with the reason — and the library uuid when
+the file only lives in Photos. Run it before the concepts; the catalog workflow does.
+
 ## `live.py`: the movement behind the stills
 
 Most phone photos are **Live Photos**: ~1.5-3 s of movie and sound around the still, stored in the
@@ -495,7 +510,10 @@ $L analyze --catalog catalog.json --apply                            # window + 
 $L analyze some.live.mov                                             # one movie, printed
 ```
 
-Each Live item gets `live: {mov, start_s, end_s, still_s, motion, usable}`. `motion` is `subject`
+Each Live item gets `live: {mov, start_s, end_s, still_s, motion, usable, vitality}`. `still_s` is
+read from Apple's own marker (a one-sample metadata track at the shutter's instant), and `vitality`
+is Apple's `LivePhotoVitalityScore` (0-1, via exiftool) — the score Photos uses to decide which Lives
+to animate; under 0.2 with little measured movement, the photo is kept as a still. `motion` is `subject`
 (something moves, the camera holds — the best kind), `camera` (a slow steady drift, reads as handheld
 video), `static` (nothing moves: use the still), `shaky` or `short`. The raise/lower of the phone at
 either end is trimmed out of `[start_s, end_s]`. The movie is lower resolution than the still (1440 px

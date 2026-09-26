@@ -29,7 +29,8 @@ Spec summary:
     {"src": "photo.jpg", "beats": 2, "focus": [0.5, 0.4], "kb": 0.06, "punch": 0.10},
     {"src": "clip.mov", "dur": 2.4, "start": 3.0, "speed": 0.5, "flash": true, "subs": true},
     {"src": "live/UUID.live.mov", "start": 0.2, "end": 2.1, "speed": 0.7, "dur": 3.4,
-     "tail": "still", "still": "photos/UUID.jpg"}    # a Live Photo: the movement, then the still
+     "tail": "still", "still": "photos/UUID.jpg"},   # a Live Photo: the movement, then the still
+    {"src": "walk.mov", "dur": 3.0, "start": 1.0, "stabilize": true}   # deshake a handheld clip
   ],
   "captions": [{"t0": 0.0, "t1": 2.0, "text": "...", "style": "clean", "pos": "low",
                 "instant": true},                    # already up on its first frame: for the hook
@@ -134,12 +135,15 @@ def load_photo(src):
     return np.asarray(im)
 
 
-def video_frames(src, start, n, speed, fps):
-    """Yields n RGB frames of the clip, already SDR, rotation applied, at the working resolution."""
+def video_frames(src, start, n, speed, fps, stabilize=False):
+    """Yields n RGB frames of the clip, already SDR, rotation applied, at the working resolution.
+    `stabilize`: ffmpeg's deshake first — for handheld Live Photos and walking clips that shake."""
     info = _ffprobe(src)
     vf = []
     if info["hdr"]:
         vf.append("colorspace=all=bt709:iall=bt2020:itrc=bt2020-10:format=yuv420p")
+    if stabilize:
+        vf.append("deshake=rx=32:ry=32:edge=mirror")
     if speed != 1:
         vf.append(f"setpts=PTS/{speed}")
     vf.append(f"fps={fps}")
@@ -761,7 +765,7 @@ def _segment_base(s, n, fps, src, focus):
             # `end`: the source second where the usable picture stops (a Live Photo's phone being
             # lowered, a clip's last good frame). Past it, `tail` decides what fills the shot.
             take = max(1, min(n, int((float(s["end"]) - start) / speed * fps)))
-        raw = video_frames(src, start, take, speed, fps)[:take]
+        raw = video_frames(src, start, take, speed, fps, bool(s.get("stabilize")))[:take]
         fit = (lambda c: fit_with_background(c, WM, HM)) if s.get("fit") == "blur" \
             else (lambda c: cover(c, WM, HM, focus))
         frames = [fit(c) for c in raw]
@@ -936,7 +940,10 @@ def main():
         # aresample first_pts=0: if NO track starts at at=0, the mix comes out with an initial pts
         # equal to the first adelay and the atrim below clips the audio to (total - that adelay).
         filters.append(f"{mixed}amix=inputs={len(tracks)}:normalize=0:duration=longest,"
-                       f"apad=whole_dur={total},aresample=async=1:first_pts=0,atrim=0:{total}{audio_tail}[a]")
+                       f"apad=whole_dur={total},aresample=async=1:first_pts=0,atrim=0:{total}{audio_tail},"
+                       # a ceiling on the sum: a louder voice or a hotter clip used to push the mix
+                       # past the gate's -0.5 dBTP with nothing in the chain to stop it
+                       f"alimiter=limit=0.84:attack=3:release=60:level=false[a]")
         cmd += ["-filter_complex", ";".join(filters), "-map", "[a]", "-t", str(total), str(wav)]
         subprocess.run(cmd, check=True, timeout=600)
         subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(silent), "-i", str(wav), "-map", "0:v",

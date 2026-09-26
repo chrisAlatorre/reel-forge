@@ -247,6 +247,8 @@ class Variant:
         atomic_json(self.path(p), d)
 
     def lock(self):
+        if getattr(self, "_lockf", None):
+            return                                   # already ours (a rebuild inside this run)
         self.dir.mkdir(parents=True, exist_ok=True)
         self._lockf = open(self.dir / ".build.lock", "a+")
         try:
@@ -329,8 +331,17 @@ class Variant:
                          "--speed", str(v.get("speed") or 1.4), "--voice", v.get("voice") or "Valentino"],
                         check=False, capture_output=True, text=True)
                 if dfile.exists():
-                    info = {"engine": "capcut", "voice": v.get("voice") or "Valentino",
-                            "speed": v.get("speed") or 1.4, "fallback": False, "disclose": None}
+                    asked = v.get("voice") or "Valentino"
+                    used = asked
+                    try:                     # the voice CapCut actually read it with
+                        used = json.loads((self.voice_dir / "voice.json").read_text()).get("voice") or asked
+                    except (OSError, ValueError):
+                        pass
+                    fb = used.lower() != asked.lower()
+                    info = {"engine": "capcut", "voice": used, "speed": v.get("speed") or 1.4,
+                            "fallback": fb,
+                            "disclose": (f"Narrated with CapCut's {used}, not {asked}: {asked} was "
+                                         "refused or missing when this ran." if fb else None)}
                     atomic_json(info_f, info)
                     return json.loads(dfile.read_text()), info
                 tail = (r.stdout + r.stderr).strip().splitlines()
@@ -376,8 +387,10 @@ class Variant:
         n = math.ceil((t - self.beat0) / unit - 1e-6)
         return self.beat0 + n * unit
 
-    def grid(self, durs=None):
-        """[{i, t0, t1, voice_at, voice_dur}] — cut times on an ABSOLUTE grid, never accumulated."""
+    def grid(self, durs=None, extra=None):
+        """[{i, t0, t1, voice_at, voice_dur}] — cut times on an ABSOLUTE grid, never accumulated.
+        `extra`: {shot index: seconds} added to a shot's hold by refit()."""
+        extra = extra or {}
         v = self.voice_cfg or {}
         lead0, lead, tail = 0.0, float(v.get("lead", 0.14)), float(v.get("tail", 0.30))
         hold = float(v.get("close_hold", 0.95))
@@ -390,7 +403,7 @@ class Variant:
                 if durs is None:
                     raise Bad(f"shot {i} carries `line` but there is no voice")
                 vd = float(durs[f"l{s['line']}"])
-                need = (lead0 if i == 0 else lead) + vd + (hold if last else tail)
+                need = (lead0 if i == 0 else lead) + vd + (hold if last else tail) + extra.get(i, 0.0)
                 if self.beats_mode:
                     t1 = self.snap(t + need, half)
                 else:
@@ -398,7 +411,7 @@ class Variant:
             elif self.beats_mode:
                 if "beats" not in s:
                     raise Bad(f"shot {i} needs `beats` in a beat grid (or `line` if narrated)")
-                b = float(s["beats"])
+                b = float(s["beats"]) + round(extra.get(i, 0.0) / self.beat)
                 if i == 0:
                     t1 = self.beat0 + b * self.beat
                 else:
@@ -406,7 +419,7 @@ class Variant:
             else:
                 if "dur" not in s:
                     raise Bad(f"shot {i} needs `dur` in a seconds grid")
-                t1 = t + float(s["dur"])
+                t1 = t + float(s["dur"]) + extra.get(i, 0.0)
             row = {"i": i, "t0": round(t, 4), "t1": round(t1, 4), "dur": round(t1 - t, 4)}
             if vd is not None:
                 row["voice_at"] = round(t + (lead0 if i == 0 else lead), 4)
@@ -430,6 +443,62 @@ class Variant:
             print(f"  {r['i']:2}  {r['t0']:7.3f} → {r['t1']:7.3f}  ({r['dur']:.2f}){b}{vl}   {src}")
         # a narrated gap longer than the gate's silence floor, with nothing natural under it
         return total
+
+    # ------------------------------------------------------------------ the length the user asked for
+
+    def min_seconds(self):
+        """The floor for this variant: `min_s` in variant.json, else the user's length preference
+        (long 45, medium 25, short 15), else none."""
+        if self.cfg.get("min_s") is not None:
+            return float(self.cfg["min_s"])
+        pref = Path(os.path.expanduser(os.environ.get("REEL_FORGE_CONFIG", "~/.config/reel-forge"))) / "preferences.json"
+        try:
+            length = json.loads(pref.read_text()).get("length")
+        except (OSError, ValueError):
+            return None
+        return {"long": 45.0, "medium": 25.0, "short": 15.0}.get(length)
+
+    def room(self, i, dur_now):
+        """How many more seconds shot i can hold without freezing a clip or repeating a frame."""
+        s = self.shots[i]
+        src = s.get("src")
+        if s.get("loop_to_first") or not src or "map" in s:
+            return 0.0
+        if is_photo(src) or s.get("tail") in ("still", "boomerang"):
+            return max(0.0, 4.5 - dur_now)            # a still or a Live landing on its still
+        spd = float(s.get("speed", 1) or 1)
+        start = float(s.get("start", 0) or 0)
+        stop = float(s["end"]) if s.get("end") is not None else duration(src)
+        return max(0.0, (stop - start) / spd - dur_now - 0.05)
+
+    def refit(self, g, durs):
+        """A voice that reads faster than the plan (CapCut at 1.4x) shortened narrated variants to
+        38 s against a 45-90 s preference. Give the time back where the picture can take it: longer
+        holds after lines and on stills, never a frozen clip, never a padded close."""
+        floor = self.min_seconds()
+        total = g[-1]["t1"]
+        if not floor or total >= floor:
+            return g
+        extra, missing = {}, floor - total
+        for _ in range(6):
+            rooms = {r["i"]: self.room(r["i"], r["dur"])   # g already carries the extra
+                     for r in g[:-1]}             # the close keeps its own length
+            rooms = {i: x for i, x in rooms.items() if x > 0.05}
+            if not rooms:
+                break
+            share = missing / len(rooms)
+            for i, x in rooms.items():
+                extra[i] = extra.get(i, 0.0) + min(x, share, 1.2)
+            g = self.grid(durs, extra)
+            missing = floor - g[-1]["t1"]
+            if missing <= 0:
+                break
+        now = g[-1]["t1"]
+        if now < floor:
+            self.warnings.append(f"{now:.1f} s after giving every shot the room it had, under the "
+                                 f"{floor:.0f} s floor: the story needs another beat, not padding")
+        log(f"refit: {total:.1f} s → {now:.1f} s (floor {floor:.0f} s)")
+        return g
 
     # ------------------------------------------------------------------ the loop shot
 
@@ -600,6 +669,48 @@ class Variant:
                 spec[extra] = self.cfg[extra]
         return spec
 
+    # ------------------------------------------------------------------ the concept's README
+
+    def readme_block(self, total, voice_info, gate_ok, flagged, cuts):
+        """The facts of this build, written into the concept's README between markers, every build.
+
+        READMEs were written once by the builder and the critic; after a re-render (another voice,
+        another length) seven of them still said "local voice" and gave the old seconds, and an
+        agent had to go and rewrite them by hand. The prose stays theirs; this block is the build's
+        and is replaced each time, so it cannot go stale."""
+        readme = self.res / "README.md"
+        lang = (self.voice_cfg.get("language") if self.voice_cfg else None) or self.cfg.get("language") \
+            or os.environ.get("REEL_FORGE_LANG") or "en"
+        es = lang.lower().startswith("es")
+        L = ({"none": "sin voz", "fb": "respaldo, no la voz por defecto", "cuts": "cortes", "voice": "voz",
+              "pass": "pasa", "fail": "NO pasa", "fc": "framecheck marcó {} corte(s)",
+              "head": "## Estado de cada archivo (se reescribe en cada build)"} if es else
+             {"none": "no voice", "fb": "fallback, not the default voice", "cuts": "cuts", "voice": "voice",
+              "pass": "passes", "fail": "FAILS", "fc": "framecheck flagged {} cut(s)",
+              "head": "## Status of each file (rewritten on every build)"})
+        voice = L["none"]
+        if voice_info:
+            voice = f"{voice_info.get('voice') or voice_info.get('engine')} ({voice_info.get('engine')}"
+            voice += f", {voice_info.get('speed')}x)" if voice_info.get("speed") else ")"
+            if voice_info.get("fallback"):
+                voice += f" — {L['fb']}"
+        stamp = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")
+        body = (f"<!-- build:{self.name} -->\n"
+                f"**{self.name}** · {total:.1f} s · {cuts} {L['cuts']} · {L['voice']}: {voice} · "
+                f"gate: {L['pass'] if gate_ok else L['fail']}"
+                + (" · " + L["fc"].format(len(flagged)) if flagged else "")
+                + f" · build {stamp}\n<!-- /build:{self.name} -->")
+        text = readme.read_text(encoding="utf-8") if readme.exists() else ""
+        rx = re.compile(rf"<!-- build:{re.escape(self.name)} -->.*?<!-- /build:{re.escape(self.name)} -->",
+                        re.S)
+        if rx.search(text):
+            text = rx.sub(body, text)
+        else:
+            if L["head"] not in text:
+                text = text.rstrip() + "\n\n" + L["head"] + "\n"
+            text = text.rstrip() + "\n\n" + body + "\n"
+        readme.write_text(text, encoding="utf-8")
+
     # ------------------------------------------------------------------ outputs
 
     def light(self, src, dst):
@@ -655,6 +766,17 @@ class Variant:
 
 # --------------------------------------------------------------------------- the build
 
+def _only_voice_buried(report_path):
+    """True when the gate failed on voice_audible alone."""
+    try:
+        rep = json.loads(Path(report_path).read_text())
+    except (OSError, ValueError):
+        return False
+    checks = rep.get("checks") or rep
+    failed = [k for k, x in checks.items() if isinstance(x, dict) and x.get("status") == "fail"]
+    return failed == ["voice_audible"]
+
+
 def build(v: Variant, a):
     v.lock()
     if v.up_to_date() and not a.force and not (a.plan or a.spec):
@@ -679,6 +801,8 @@ def build(v: Variant, a):
         durs = {f"l{i}": round(0.33 * len(t.split()) + 0.2, 2) for i, t in enumerate(texts)}
 
     g = v.grid(durs)
+    if durs is not None and not a.plan:
+        g = v.refit(g, durs)
     total = v.plan(g)
     if a.plan:
         if lines:
@@ -777,12 +901,29 @@ def build(v: Variant, a):
         _, flagged = v.framecheck(g)
 
     notes = v.publish_notes(g, total, voice_info, gate_ok, flagged)
+    v.readme_block(total, voice_info, gate_ok, flagged, len(g))
     result = {"name": v.name, "file": str(v.out), "duration_s": round(total, 3), "cuts": len(g),
               "grid": "beats" if v.beats_mode else "seconds", "loop": v.loop,
               "voice": voice_info, "gate_ok": gate_ok, "framecheck_flagged": flagged,
               "warnings": v.warnings, "publish_notes": str(notes), "fingerprint": v.fingerprint(),
               "built_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")}
     atomic_json(v.dir / "build.json", result)
+    if not gate_ok and vs_data is not None and _only_voice_buried(v.res / f"{v.name}-verify.json"):
+        tries = int((v.cfg.get("natural") or {}).get("_balanced", 0))
+        if tries < 2:
+            # The voice is there and in sync but does not rise over the clips' own sound. Twice in
+            # one round that was fixed by hand, a few dB at a time; do it here instead: the clips
+            # go 4 dB down (the limiter keeps the sum honest) and the variant is rebuilt once more.
+            nat = dict(v.cfg.get("natural") or {})
+            nat["lufs"] = float(nat.get("lufs", -16)) - 4
+            nat["_balanced"] = tries + 1
+            v.cfg["natural"] = nat
+            raw = json.loads(v.cfg_path.read_text())
+            raw["natural"] = nat
+            atomic_json(v.cfg_path, raw)
+            log(f"the voice sits under the clips: natural sound to {nat['lufs']:.0f} LUFS, rebuilding")
+            a.force = True
+            return build(v, a)
     v.progress("done", status="done" if gate_ok else "failed", duration_s=round(total, 3))
     print(f"\n{v.out}  ({total:.2f} s) — gate {'passed' if gate_ok else 'FAILED'}"
           + (f", framecheck flagged {len(flagged)} cut(s)" if flagged else ""))

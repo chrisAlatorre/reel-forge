@@ -152,9 +152,39 @@ def _frames(mov: Path):
 
 
 def still_time(mov: Path, duration: float) -> float:
-    """Where the still sits in the movie. Apple writes it in a timed-metadata track that ffprobe
-    does not expose; on every iPhone Live Photo it is ~1.5 s in, i.e. about the middle."""
+    """Where the still sits in the movie. Apple marks it with a timed-metadata track that holds ONE
+    sample, at the shutter's instant (1.17 s into a 2.7 s movie, not the middle); read it from
+    there, and fall back to ~1.5 s (the documented offset) when the track is not there."""
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=index,codec_type",
+                        "-of", "json", str(mov)], capture_output=True, text=True)
+    for st in json.loads(r.stdout or "{}").get("streams", []):
+        if st.get("codec_type") != "data":
+            continue
+        q = subprocess.run(["ffprobe", "-v", "error", "-select_streams", str(st["index"]),
+                            "-show_entries", "packet=pts_time", "-of", "csv=p=0", str(mov)],
+                           capture_output=True, text=True)
+        pts = [x for x in q.stdout.split() if x.strip()]
+        if len(pts) == 1:
+            try:
+                t = float(pts[0])
+            except ValueError:
+                continue
+            if 0 < t < (duration or 99):
+                return round(t, 3)
     return round(min(1.5, duration / 2) if duration else 1.5, 2)
+
+
+def vitality(mov: Path):
+    """Apple's own score of how alive a Live Photo is (0-1, `LivePhotoVitalityScore`), when
+    exiftool is installed; None otherwise. Photos uses it to decide which Lives to animate."""
+    if not shutil.which("exiftool"):
+        return None
+    r = subprocess.run(["exiftool", "-s3", "-LivePhotoVitalityScore", str(mov)],
+                       capture_output=True, text=True)
+    try:
+        return round(float(r.stdout.strip()), 3)
+    except ValueError:
+        return None
 
 
 def analyze(mov: Path) -> dict:
@@ -199,7 +229,8 @@ def analyze(mov: Path) -> dict:
     run_res = res[best_rng[0]:best_rng[1]] if best else res
     cam_med, res_med = float(np.median(run_cam)), float(np.percentile(run_res, 75))
     still = still_time(mov, dur)
-    out = {**base, "start_s": round(max(0.0, s0), 2), "end_s": round(max(0.0, s1), 2),
+    vit = vitality(mov)
+    out = {**base, "vitality": vit, "start_s": round(max(0.0, s0), 2), "end_s": round(max(0.0, s1), 2),
            "still_s": still, "camera": round(cam_med, 3), "subject": round(res_med, 2),
            "swing_trimmed": [round(best_rng[0] / FPS, 2), round(max(0.0, dur - best_rng[1] / FPS), 2)]}
     span = out["end_s"] - out["start_s"]
@@ -209,6 +240,9 @@ def analyze(mov: Path) -> dict:
     if span < MIN_USABLE_S:
         return {**out, "usable": False, "motion": "short",
                 "why": f"only {span:.1f} s of steady picture once the swing is trimmed"}
+    if vit is not None and vit < 0.2 and res_med < SUBJECT_MIN * 2:
+        return {**out, "usable": False, "motion": "static",
+                "why": f"Apple rates its movement {vit:.2f} of 1 and little moves in it: use the still"}
     if res_med >= SUBJECT_MIN and cam_med < CAMERA_SWING:
         return {**out, "usable": True, "motion": "subject",
                 "why": "something in the frame moves and the camera holds"}
@@ -314,7 +348,8 @@ def cmd_analyze(a):
                 r = analyze(Path(lv["mov"]))
                 results.append(r)
                 if a.apply:
-                    lv.update({k: r[k] for k in ("start_s", "end_s", "still_s", "motion", "usable", "why")
+                    lv.update({k: r[k] for k in ("start_s", "end_s", "still_s", "motion", "usable", "why",
+                                                 "vitality")
                                if k in r})
         if a.apply:
             Path(a.catalog).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
