@@ -8,6 +8,16 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.7.1
+
+### Added
+
+- **`notes` for a run.** Both workflows take `args.notes` and hand it to every agent of the run, as
+  context that adds to their definitions and overrides nothing. There was no way to tell the catalog
+  agents what a run had prepared for them — that the file names carry the capture time and a
+  favourite flag, that the dates live in a sidecar because thumbnails have no EXIF — short of editing
+  the workflow.
+
 ## 0.7.0
 
 **Breaking: where things are saved.** Projects now live in the user's videos folder under `Reel

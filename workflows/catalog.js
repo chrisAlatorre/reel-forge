@@ -24,6 +24,7 @@
 //   lang            BCP-47 tag for the ON-SCREEN TEXT and the narration, and the market the trend
 //                   research targets: "es-MX", "en-US", "pt-BR"… (default "en")
 //   subject         how to refer to the person in the material, with no proper names ("the user")
+//   notes           run-specific context every agent gets: what a file name encodes, where dates live…
 //
 // RESUMING. Two mechanisms, and they stack:
 //   1. In the same session, Workflow({ scriptPath, resumeFromRunId: "<runId>" }) replays the
@@ -241,6 +242,10 @@ const CHECKPOINT = {
 // copy the rules in. Repeating a contract in six prompts means six copies to keep in sync, and the
 // one that drifts is the one that produces the batch you have to redo.
 
+// Context for THIS run that no definition can know: how the material was prepared, what a file
+// name encodes, where the dates live. It adds to the agents' definitions; it overrides nothing.
+const RUN_NOTES = A.notes ? `\n\nNOTES FOR THIS RUN, from the orchestrator (context, not new rules):\n${A.notes}` : ''
+
 const CONTRACT = `
 You are a reel-forge context agent. Your job is to LOOK at the material and describe it, not edit it.
 
@@ -256,7 +261,7 @@ Platform: ${PLATFORM}, vertical 9:16. Output language for the on-screen text: ${
 written in English; the language tag is there so you can flag copy that appears in the footage itself
 (a sign, a menu) and might need translating on screen. The main person is referred to as ${SUBJECT},
 with no proper names anywhere in the file.
-`.trim()
+${RUN_NOTES}`.trim()
 
 // The progress protocol. This is the part that survives a sleeping laptop, and it is why every agent
 // owns exactly one progress file that nobody else writes.

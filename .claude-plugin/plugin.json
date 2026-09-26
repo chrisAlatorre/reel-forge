@@ -1,7 +1,7 @@
 {
   "name": "reel-forge",
   "displayName": "Reel Forge",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Turns your photo and video library into vertical TikToks/Reels: inventory, curation with parallel agents, trend research, an arc per concept with the duration that story needs, automatic editing, captions cut from the narration itself, and several variants per concept.",
   "author": {
     "name": "reel-forge contributors",

@@ -381,6 +381,8 @@ If \`${artifact}\` already exists, verified and complete, read it back and stop 
 // What everyone on this concept shares. It says where the rules are; it does not copy them in.
 // `story` is the story-doctor's first pass, when it ran: its fixes are binding, so they DO get copied
 // in — they are specific to this concept and they exist nowhere else.
+const RUN_NOTES = A.notes ? `\n\nNOTES FOR THIS RUN, from the orchestrator (context, not new rules):\n${A.notes}` : ''
+
 function contract(concept, story) {
   return `
 You are a reel-forge build agent on concept "${concept.id}" — ${concept.title}.
@@ -462,7 +464,7 @@ Fixed facts for this concept:
   has the ceilings per kind). Count the cuts by hand.
 - **Nobody redoes the shared work.** The originals, the crops, the 360 renders and the music bed are
   already in the common folder, made once. Do not re-export and do not touch another variant's folder.
-`.trim()
+${RUN_NOTES}`.trim()
 }
 
 // Narration and on-screen text. Two rules that only make sense together: the voice is generated FIRST
