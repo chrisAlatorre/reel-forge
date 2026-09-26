@@ -334,7 +334,9 @@ class Variant:
                     atomic_json(info_f, info)
                     return json.loads(dfile.read_text()), info
                 tail = (r.stdout + r.stderr).strip().splitlines()
-                why = next((t for t in reversed(tail) if "Diagnosis" in t or "CapCut" in t),
+                # the script's own verdict, not its banner: "CapCut 9.5.0 → profile…" also says
+                # CapCut, and a v10 round recorded that banner as the reason for eight fallbacks
+                why = next((t for t in reversed(tail) if "Diagnosis" in t or t.startswith("capcut_voice:")),
                            tail[-1] if tail else f"capcut_voice.py exit {r.returncode}")
                 refused.write_text(why[:400])
             log(f"CapCut did not narrate ({why[:120]}); local voice instead")

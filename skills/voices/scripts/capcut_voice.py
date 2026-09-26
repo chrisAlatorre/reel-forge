@@ -589,9 +589,16 @@ def set_text(line: str, voice: str = DEFAULT_VOICE):
     nodes = ax_nodes()
     clip = next((n for n in nodes if n["desc"].startswith(AX95["clip_prefix"])), None)
     if clip is None:
-        die("there is no text clip on the timeline (nothing called MTLSTextP:… in the "
-            "accessibility tree). Follow --prepare: a new project, Texto → Texto predeterminado → "
-            "the + button, and the voice applied once by hand.", EXIT_UI)
+        if REBUILDING:
+            die("there is no text clip on the timeline (nothing called MTLSTextP:… in the "
+                "accessibility tree), and a brand-new project did not get one either. Follow "
+                "--prepare by hand and run this again: the batch resumes.", EXIT_UI)
+        # The project lost its text clip — a v10 round of 30 videos left one with six stacked
+        # voice tracks and no text clip, and eight narrated variants fell back to the local voice
+        # over it. A new project with a fresh clip is the cure; the caller picks the new folder up.
+        print("· the project has no text clip: building a new project", flush=True)
+        globals()["TR_OVERRIDE"] = new_project(voice, line)
+        return
     cliclick(f"c:{clip['center'][0]},{clip['center'][1]}")
     time.sleep(1.2)
     ax_click("text_tab", 1.5, what="the right panel's 'Texto' tab")
@@ -728,12 +735,30 @@ def menu_new_project() -> bool:
     return "ok" in (r.stdout or "")
 
 
+REBUILDING = False
+TR_OVERRIDE = None   # a textReading folder set_text() switched to by building a new project
+
+
 def new_project(voice: str, sample: str) -> Path:
     """Creates a fresh CapCut project and rebuilds the text clip in it. Returns its textReading."""
+    global REBUILDING
+    REBUILDING = True
+    try:
+        return _new_project(voice, sample)
+    finally:
+        REBUILDING = False
+
+
+def _new_project(voice: str, sample: str) -> Path:
     before = {str(p) for p in drafts()}
-    print("· the project is saturated: creating a new one and rebuilding the text clip", flush=True)
+    print("· creating a new project and rebuilding the text clip", flush=True)
     if not menu_new_project():
         cliclick("kd:cmd", "t:n", "ku:cmd")
+    # 9.5 asks first: "¿Seguro que quieres crear un nuevo proyecto? El proyecto actual se guardará
+    # automáticamente", with OK as the default button. Unanswered, the batch waited on it and then
+    # looked for a text clip in the OLD project (seen 26 sep 2026).
+    time.sleep(1.5)
+    osa('tell application "System Events" to tell process "CapCut" to keystroke return')
     time.sleep(6)
     place_window()
 
@@ -897,7 +922,7 @@ def calibrate(voice=DEFAULT_VOICE, assumed=None):
               "sit on top of the panel.")
 
 
-def preflight(voice: str = DEFAULT_VOICE, long_batch: bool = True, assumed=None) -> Path:
+def preflight(voice: str = DEFAULT_VOICE, long_batch: bool = True, assumed=None, sample=None) -> Path:
     """Everything that has to be true before the first click. Returns the project's textReading."""
     global MODE, P
     if sys.platform != "darwin":
@@ -925,8 +950,11 @@ def preflight(voice: str = DEFAULT_VOICE, long_batch: bool = True, assumed=None)
           f"  text clip: {(e.get('text') or '')[:50]!r} · voices on the timeline: {sorted(set(voices))}\n"
           f"  generations on this project: {len(voices)}")
     if e.get("text") is None:
-        die("this project has no text clip, so there is nothing to paste into. Follow --prepare: a "
-            "new project, one text clip, the voice applied and generated once by hand.", EXIT_ENV)
+        if not sample:
+            die("this project has no text clip, so there is nothing to paste into. Follow --prepare: "
+                "a new project, one text clip, the voice applied and generated once by hand.", EXIT_ENV)
+        print("  this project has no text clip: building a new project for the batch")
+        return new_project(voice, sample)
     if MODE == "ax":
         missing = [k for k, d in AX95.items()
                    if not k.endswith("_prefix") and k not in ("default_text_tile",)
@@ -948,6 +976,9 @@ def preflight(voice: str = DEFAULT_VOICE, long_batch: bool = True, assumed=None)
                 "again.", EXIT_LOGIN)
     if not any(voice.lower() in v.lower() for v in voices):
         print(f"  WARNING: no audio clip uses {voice}: apply the voice again (see --prepare)")
+    if len(voices) >= SATURATION_REFUSE and long_batch and sample:
+        print(f"  {len(voices)} generations on this project: building a new one for the batch")
+        return new_project(voice, sample)
     if len(voices) >= SATURATION_REFUSE and long_batch:
         die(f"this project already carries {len(voices)} generations, past the ~{SATURATION_REFUSE} "
             "point where CapCut stops writing WAVs without saying so. Start a NEW project "
@@ -1061,7 +1092,8 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     pending = sum(1 for i in range(len(lines)) if not (out / f"l{i}.wav").exists())
     awake = keep_awake()
-    tr = preflight(a.voice, long_batch=pending > 0, assumed=a.assume_version)
+    first = next((l for i, l in enumerate(lines) if not (out / f"l{i}.wav").exists()), None)
+    tr = preflight(a.voice, long_batch=pending > 0, assumed=a.assume_version, sample=first)
 
     durations = {}
     recovered = False   # the new-project retry is allowed exactly once per run
@@ -1075,6 +1107,9 @@ def main():
         for attempt in (1, 2):
             before = set(tr.glob("*.wav"))
             set_text(line, a.voice)
+            if TR_OVERRIDE:
+                tr, before = TR_OVERRIDE, set()
+                globals()["TR_OVERRIDE"] = None
             raw = wait_for_wav(tr, before)
             if raw:
                 break

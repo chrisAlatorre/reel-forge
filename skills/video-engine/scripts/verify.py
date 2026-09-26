@@ -98,6 +98,25 @@ def level_db(video, t0, t1):
 
 # ------------------------------------------------------------ the voice script
 
+def script_durations(path):
+    """How long each line of a JSON voice script actually speaks (`duration_hint_s`, `dur`, or
+    `end_s` - `start_s`), aligned with parse_script(); None where the script does not say."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8", errors="ignore"))
+    except (ValueError, OSError):
+        return None
+    lines = data.get("lines", data) if isinstance(data, dict) else data
+    out = []
+    for ln in lines if isinstance(lines, list) else []:
+        if not (isinstance(ln, dict) and str(ln.get("text", "")).strip()):
+            continue
+        d = ln.get("duration_hint_s") or ln.get("dur")
+        if d is None and ln.get("end_s") is not None and ln.get("start_s") is not None:
+            d = float(ln["end_s"]) - float(ln["start_s"])
+        out.append(float(d) if d else None)
+    return out
+
+
 def parse_script(path):
     """[(second, text)] from a voice script: the JSON contract, or the old plain text."""
     raw = Path(path).read_text(encoding="utf-8", errors="ignore")
@@ -531,8 +550,14 @@ def main():
             skip(report, "voice_audible", f"no lines parsed out of {a.script}")
         else:
             windows = []
+            durs = script_durations(a.script) or []
             for i, (t, _text) in enumerate(lines):
-                end = min(lines[i + 1][0] - 0.2, t + 2.5) if i + 1 < len(lines) else t + 2.5
+                # The window is the line itself when the script says how long it speaks. A fixed
+                # 2.5 s window measured ~1 s of silence after every short line and failed a CapCut
+                # narration at 1.4x (lines of 1.4-1.9 s) that transcribed word for word (26 sep 2026).
+                d = durs[i] if i < len(durs) else None
+                span = (d - 0.1) if d else 2.5
+                end = min(lines[i + 1][0] - 0.2, t + span) if i + 1 < len(lines) else t + span
                 windows.append((t + 0.15, min(v_dur, max(t + 0.6, end))))
             # background = the stretches where nobody is speaking, away from the ramps
             gaps, cursor = [], 0.0

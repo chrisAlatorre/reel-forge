@@ -8,6 +8,22 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.8.2
+
+### Fixed
+
+- **Eight narrated variants of a 30-video round fell back to the local voice** over a CapCut project
+  that had lost its text clip. `capcut_voice.py` now builds a new project on its own — before the
+  batch when the project has no text clip or is saturated, and mid-batch when the clip disappears —
+  and answers 9.5's *"¿Seguro que quieres crear un nuevo proyecto?"*, which it used to leave open
+  while it looked for the clip in the old project. The same eight then narrated with Valentino.
+- **`voice_audible` failed CapCut's narration for the wrong reason.** It measured a fixed 2.5 s after
+  every line; Valentino at 1.4x says a line in ~1.4-1.9 s, so the window was mostly silence and a
+  narration that transcribes word for word came out "barely over the background". The window is now
+  the line's own duration (`duration_hint_s`, `dur` or `end_s`, from the voice script).
+- `variant.py` recorded CapCut's banner line ("CapCut 9.5.0 → profile…") as the reason it fell back;
+  it now records the script's own verdict.
+
 ## 0.8.1
 
 ### Fixed

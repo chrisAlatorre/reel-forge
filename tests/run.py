@@ -60,6 +60,21 @@ def verify_reads_start_s_not_zero(tmp):
 
 
 @test
+def a_short_line_is_measured_over_itself_not_over_the_silence_after_it(tmp):
+    """voice_audible measured a fixed 2.5 s after each line. CapCut's voice at 1.4x says a line in
+    ~1.4 s, so the window was mostly silence and a narration that transcribed word for word failed.
+    The window now comes from the line's own duration, read from the voice script."""
+    import verify
+    f = tmp / "vs.json"
+    f.write_text(json.dumps({"lines": [
+        {"start_s": 0.0, "text": "uno", "duration_hint_s": 1.4},
+        {"start_s": 3.0, "text": "dos", "end_s": 4.6},
+        {"start_s": 6.0, "text": "tres"}]}))
+    got = verify.script_durations(f)
+    assert got[0] == 1.4 and abs(got[1] - 1.6) < 1e-9 and got[2] is None, got
+
+
+@test
 def transcribe_reads_start_s_not_zero(tmp):
     """Same contract, same bug, in the aligner: every subtitle piled up in the first seconds."""
     import transcribe
