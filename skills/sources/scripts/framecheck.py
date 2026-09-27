@@ -330,7 +330,9 @@ def private_text(img, min_conf=0.5):
                               (x0 + cc * tile.shape[1] / 2) / W, (y0 + d * tile.shape[0] / 2) / H))
     seen, out = set(), []
     for t, c, x0, y0, x1, y1 in _lines([w for w in words if w[1] >= min_conf]):
-        kind = ("plate" if PLATE.fullmatch(t) else "phone" if PHONE.search(t)
+        # a plate has 4+ characters; "51D" and "16C" on a highway are exit signs, not plates
+        plate = PLATE.fullmatch(t) and len(re.sub(r"[\s·.-]", "", t)) >= 4
+        kind = ("plate" if plate else "phone" if PHONE.search(t)
                 and len(re.sub(r"\D", "", t)) >= 8 else "email" if EMAIL.search(t) else None)
         key = (kind, re.sub(r"\W", "", t))
         if kind and key not in seen:

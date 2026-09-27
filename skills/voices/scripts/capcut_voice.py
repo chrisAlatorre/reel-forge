@@ -525,7 +525,7 @@ def scroll(x, y, clicks, n=1):
         time.sleep(0.05)
 
 
-def pick_voice(voice: str, max_scrolls: int = 220) -> bool:
+def pick_voice(voice: str, max_scrolls: int = 600) -> bool:
     """Scrolls the voice grid until `voice` is visible and clicks it. 9.x only.
 
     The catalog is one long virtualised list (categories first, then a section per language) and
@@ -1180,6 +1180,10 @@ def generate(lines, out, a):
                 set_text(line, a.voice)
                 raw = wait_for_wav(tr, before)
             if not raw:
+                # a fresh project that still writes nothing, with the text on the clip and the tile
+                # clicked, is the voice being refused without a toast: let the fallback voice try
+                if PICKED.get(a.voice):
+                    globals()["VOICE_FAILED"] = "produced nothing even on a brand-new project"
                 die(head + "\n  A brand-new project did not generate either, so this is not the "
                            "saturation wall. Check by hand whether CapCut asks you to sign in or to "
                            "join Pro; if it does, use the local path, `voice.py --engine qwen`."

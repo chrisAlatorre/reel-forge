@@ -8,6 +8,19 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.9.5
+
+### Fixed
+
+- **Highway exit signs were flagged as licence plates.** "51D", "16C": a plate now needs 4+
+  characters.
+- **The fallback voice was not found after a layout reset.** A docked, narrower panel has more rows,
+  and `pick_voice()` ran out of scrolls before reaching it: it now allows 600.
+- **A silent refusal never reached the fallback voice.** When Valentino's tile was clicked, the text
+  was on the clip and even a brand-new project wrote nothing, the batch stopped as "saturated" and
+  the run fell to the local voice; that case now counts as the voice failing, and the whole batch is
+  redone with the fallback voice first.
+
 ## 0.9.4
 
 ### Fixed
