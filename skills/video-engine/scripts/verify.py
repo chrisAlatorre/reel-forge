@@ -54,6 +54,7 @@ last frame — so the check works on any MP4, including one somebody else render
 """
 import argparse
 import json
+import shutil
 import os
 import re
 import subprocess
@@ -97,6 +98,41 @@ def level_db(video, t0, t1):
 
 
 # ------------------------------------------------------------ the voice script
+
+def _norm_words(text):
+    import unicodedata
+    t = unicodedata.normalize("NFKD", text.lower())
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    return [w for w in re.findall(r"[a-z0-9]+", t) if len(w) > 2]
+
+
+def recall(line, heard_words):
+    """Share of the line's words (3+ letters, accents folded) that the transcription heard."""
+    want = _norm_words(line)
+    if not want:
+        return 1.0
+    got = set(_norm_words(" ".join(heard_words)))
+    return sum(1 for w in want if w in got) / len(want)
+
+
+def asr_words(video, lang=None):
+    """[(start, word)] heard in the final mix, via transcribe.py; None when it cannot run."""
+    tr = Path(__file__).resolve().parent / "transcribe.py"
+    out = Path(tempfile.mkdtemp(prefix="rf-verify-asr-")) / "t.json"
+    cmd = ["uv", "run", "-q", str(tr), str(video), "--out", str(out)]
+    if lang:
+        cmd += ["--language", lang]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+        data = json.loads(out.read_text())
+    except Exception:
+        return None
+    finally:
+        pass
+    words = [(w["t0"], w["text"]) for seg in data.get("raw", []) for w in seg.get("words", [])]
+    shutil.rmtree(out.parent, ignore_errors=True)
+    return words
+
 
 def script_durations(path):
     """How long each line of a JSON voice script actually speaks (`duration_hint_s`, `dur`, or
@@ -423,6 +459,8 @@ def main():
     ap.add_argument("--tolerance", type=float, default=0.25, help="seconds of slack on the length")
     ap.add_argument("--max-silence", type=float, default=0.6, help="the longest acceptable audio hole")
     ap.add_argument("--peak", type=float, default=-0.5, help="the true-peak ceiling in dBTP")
+    ap.add_argument("--script-lang", dest="script_lang",
+                    help="the narration's language for the ASR fallback of voice_audible (es, en…)")
     ap.add_argument("--voice-margin", type=float, default=4.0,
                     help="dB the voice band has to rise over the background while someone speaks")
     # 18 dB, calibrated on real footage at grain 0.006: a loop that meets scores 24.2 dB; an
@@ -567,21 +605,64 @@ def main():
                 cursor = max(cursor, s1)
             if v_dur - cursor > 1.0:
                 gaps.append((cursor + 0.4, v_dur - 0.4))
-            gaps = sorted(gaps, key=lambda g: g[1] - g[0], reverse=True)[:6]
-            floor = sorted(x for x in (level_db(video, *g) for g in gaps) if x is not None)
+            # Each line against the background NEAR it (the closest gaps within 10 s), not one median
+            # for the whole video: a finale of un-ducked crowd noise after the narration ends made
+            # every early line — clearly audible over its own ducked bed — read as buried.
+            # the stretch after the last line is the ending's own sound (a crowd, a roar), designed
+            # to be loud: it is not the background the narration was mixed against
+            last_end = windows[-1][1] if windows else 0
+            gap_levels = [(g, level_db(video, *g)) for g in gaps if g[0] < last_end]
+            gap_levels = [(g, x) for g, x in gap_levels if x is not None]
+            floor = sorted(x for _, x in gap_levels)
             background = floor[len(floor) // 2] if floor else None
-            weak = []
+
+            def local_background(s0, s1):
+                near = sorted((min(abs(g[0] - s1), abs(g[1] - s0)), x) for g, x in gap_levels
+                              if g[1] >= s0 - 10 and g[0] <= s1 + 10)
+                if not near:
+                    return None          # nothing quiet nearby to compare with: say so, don't guess
+                picks = [x for _, x in near[:2]]
+                return sum(picks) / len(picks)
+
+            weak, unmeasured, by_ear = [], 0, 0
             for (s0, s1), (t, text) in zip(windows, lines):
                 lv = level_db(video, s0, s1)
                 if lv is None:
                     continue
+                bg = local_background(s0, s1)
+                if bg is None and lv >= -45:
+                    unmeasured += 1
                 if lv < -45:
                     weak.append(f"{t:.2f}s silent ({lv:.1f} dB)")
-                elif background is not None and lv - background < a.voice_margin:
-                    weak.append(f"{t:.2f}s only {lv - background:+.1f} dB over the background")
+                elif bg is not None and lv - bg < a.voice_margin:
+                    weak.append(f"{t:.2f}s only {lv - bg:+.1f} dB over the background around it")
+            if weak:
+                # Level is a proxy. When it says "buried", ask the question it stands for: can the
+                # words be understood in the mix? A narration over a loud designed beat (a banquet
+                # chant, a crowd) measured "under the background" and transcribed word for word.
+                heard = asr_words(video, a.script_lang)
+                if heard is not None:
+                    still = []
+                    for w_line in weak:
+                        t = float(w_line.split("s", 1)[0])
+                        i = next((k for k, (lt, _) in enumerate(lines) if abs(lt - t) < 0.01), None)
+                        if i is None:
+                            still.append(w_line)
+                            continue
+                        s0, s1 = windows[i]
+                        got = recall(lines[i][1], [w for (a0, w) in heard if s0 - 0.8 <= a0 <= s1 + 1.2])
+                        if got < 0.6:
+                            still.append(f"{w_line}, {got:.0%} of its words recognised")
+                    if len(still) < len(weak):
+                        by_ear = len(weak) - len(still)
+                        weak = still
             base = f"background {background:.1f} dB, " if background is not None else "no background to compare, "
+            tail = (f" ({unmeasured} line(s) with no quiet stretch within 10 s: compared only for silence)"
+                    if unmeasured else "")
+            if by_ear:
+                tail += f" ({by_ear} line(s) under the level margin but understood in the mix by ASR)"
             check(report, "voice_audible", not weak,
-                  base + ("every line rises over it" if not weak else "; ".join(weak[:5])))
+                  base + ("every line rises over it" if not weak else "; ".join(weak[:5])) + tail)
 
     # 7. the text: tied to the voice that says it, and to the shot it belongs to
     timeline = load_timeline(video, a.timeline, not a.no_timeline)

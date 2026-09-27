@@ -8,6 +8,18 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.9.3
+
+### Fixed
+
+- **`voice_audible` failed narrations anyone could understand.** It compared every line with one
+  background for the whole video; a narration interleaved with a loud, designed beat (a banquet
+  chant that is the payoff) read as "under the background" and transcribed word for word. Each line
+  is now compared with the quiet stretches near it (within 10 s, never the ending's own sound after
+  the last line), and when the level still says "buried" the mix is transcribed: a line whose words
+  are recognised (60 %+, accents folded) is audible. `--script-lang` sets the ASR language;
+  `variant.py` passes it.
+
 ## 0.9.2
 
 ### Fixed

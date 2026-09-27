@@ -507,6 +507,16 @@ def dark_caption_cards_do_not_make_two_variants_the_same(tmp):
 
 
 @test
+def a_line_understood_in_the_mix_is_not_called_buried(tmp):
+    """The level test failed a narration over a loud banquet chant that transcribed word for word;
+    the fallback asks whether the words are recognised, accents folded."""
+    import verify
+    assert verify.recall("Pero el círculo que más vueltas dio estaba en Huzhou",
+                         ["el", "circulo", "que", "mas", "vueltas", "dio", "estaba", "en", "Hucho"]) >= 0.6
+    assert verify.recall("una rueda de la fortuna en Pekín", ["nada", "que", "ver"]) < 0.6
+
+
+@test
 def renders_wait_for_a_slot_on_a_busy_machine(tmp):
     import variant
     os.environ["REEL_FORGE_RENDERS"] = "3"

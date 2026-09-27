@@ -931,7 +931,8 @@ def build(v: Variant, a):
     if prev.exists():
         vcmd += ["--preview", prev]
     if vs_data is not None:
-        vcmd += ["--script", v.path(v.voice_cfg["script"])]
+        vcmd += ["--script", v.path(v.voice_cfg["script"]),
+                 "--script-lang", (v.voice_cfg.get("language") or "es")[:2]]
     gate_ok = run(vcmd, check=False, capture_output=True, text=True).returncode == 0
 
     flagged = {}
