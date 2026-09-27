@@ -108,6 +108,20 @@ def item_uuid(item, lmap):
         v = lmap[item["id"]]
         return v.get("uuid") if isinstance(v, dict) else v
     m = UUID_RE.search(str(item.get("path", "")))
+    if m:
+        return m.group(0).upper()
+    # a sidecar beside the file (<folder>/_metadata.json: {file name: {"uuid": …}}), which is how
+    # material exported as thumbnails named by capture time keeps its library link
+    path = Path(os.path.expanduser(str(item.get("path", ""))))
+    side = path.parent / "_metadata.json"
+    if side.exists():
+        try:
+            entry = json.loads(side.read_text()).get(path.name) or {}
+            if entry.get("uuid"):
+                return str(entry["uuid"]).upper()
+        except (OSError, ValueError):
+            pass
+    m = UUID_RE.search(str(item.get("notes", "")))
     return m.group(0).upper() if m else None
 
 

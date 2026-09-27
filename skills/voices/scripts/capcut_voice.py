@@ -608,6 +608,7 @@ def set_text(line: str, voice: str = DEFAULT_VOICE):
 
     # 9.x: the text clip is published as MTLSTextP:<its own text>, so it gets clicked by name and
     # there is no scrolling-the-timeline-far-enough ritual any more.
+    dock_panels()
     nodes = ax_nodes()
     clip = next((n for n in nodes if n["desc"].startswith(AX95["clip_prefix"])), None)
     if clip is None:
@@ -977,6 +978,7 @@ def preflight(voice: str = DEFAULT_VOICE, long_batch: bool = True, assumed=None,
             "loose, CapCut's layout menu → 'Restablecer diseño actual' puts it back.", EXIT_ENV)
     sh("open", "-a", "CapCut")
     time.sleep(2)
+    dock_panels()
     place_window(strict=True)
 
     tr = project()
@@ -1031,6 +1033,26 @@ def preflight(voice: str = DEFAULT_VOICE, long_batch: bool = True, assumed=None,
         print(f"  WARNING: {len(voices)} generations on this project. It usually gives out around "
               f"{SATURATION_REFUSE}; if it starts failing, this script will create a new one.")
     return tr
+
+
+def dock_panels() -> bool:
+    """Puts back a side panel that came loose. CapCut 9.5 lets the inspector float as its own window
+    ("setting", an AXFloatingWindow): a drag or a stray click detaches it, and from then on every
+    anchor is wrong and the window looks like a modal. Twice in two rounds that sent narrated
+    variants to the local voice blaming "the sign-in sheet". The menu CapCut → Diseño → "Restablecer
+    diseño actual" docks it again. Returns True if it had to."""
+    r = osa('tell application "System Events" to tell process "CapCut" to get name of every window')
+    names = [n.strip() for n in (r.stdout or "").split(",")]
+    if "setting" not in names:
+        return False
+    osa('tell application "CapCut" to activate\n'
+        'tell application "System Events" to tell process "CapCut" to click menu item '
+        '"Restablecer diseño actual" of menu 1 of menu item "Diseño" of menu 1 of '
+        'menu bar item "CapCut" of menu bar 1')
+    time.sleep(2)
+    print("· CapCut's side panel had come loose: layout reset (CapCut → Diseño → Restablecer)",
+          flush=True)
+    return True
 
 
 def capcut_paused():

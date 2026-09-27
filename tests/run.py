@@ -27,6 +27,9 @@ ENGINE = ROOT / "skills/video-engine/scripts"
 SOURCES = ROOT / "skills/sources/scripts"
 sys.path[:0] = [str(ENGINE), str(SOURCES)]
 
+# The user's own preferences (a 45 s floor, say) must not leak into synthetic fixtures.
+os.environ["REEL_FORGE_CONFIG"] = tempfile.mkdtemp(prefix="rf-test-config-")
+
 TESTS = []
 
 

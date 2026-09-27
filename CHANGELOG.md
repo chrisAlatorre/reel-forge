@@ -8,6 +8,20 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.9.4
+
+### Fixed
+
+- **CapCut's side panel came loose and the batch gave up.** CapCut 9.5 lets its inspector float as a
+  window of its own ("setting"); once detached, every anchor was wrong and the script took the
+  window for a modal ("usually the sign-in sheet") — twice in two rounds, sending narrated variants
+  to the local voice. `capcut_voice.py` now docks it back through CapCut → Diseño → "Restablecer
+  diseño actual" before a batch and before every line.
+- **The length refit only helped narrated variants.** A beat-cut variant with no voice came out at
+  40 s against a 45 s floor; `refit()` now runs on every build.
+- **`live.py` could not link photos named by capture time** to their Live Photo: it now also reads
+  the library uuid from a `_metadata.json` beside the file, and from the item's notes.
+
 ## 0.9.3
 
 ### Fixed

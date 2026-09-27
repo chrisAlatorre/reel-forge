@@ -840,8 +840,8 @@ def build(v: Variant, a):
         durs = {f"l{i}": round(0.33 * len(t.split()) + 0.2, 2) for i, t in enumerate(texts)}
 
     g = v.grid(durs)
-    if durs is not None and not a.plan:
-        g = v.refit(g, durs)
+    if not a.plan:
+        g = v.refit(g, durs)     # narrated or not: a beat-cut variant can come out short too
     total = v.plan(g)
     if a.plan:
         if lines:
