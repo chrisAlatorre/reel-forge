@@ -968,6 +968,13 @@ def preflight(voice: str = DEFAULT_VOICE, long_batch: bool = True, assumed=None,
         die("ffmpeg is missing: brew install ffmpeg", EXIT_ENV)
     version = capcut_version()
     family, MODE = profile_for(version, assumed)
+    paused = capcut_paused()
+    if paused:
+        die("macOS has PAUSED CapCut: the Mac ran out of memory (the 'Forzar salida de las "
+            "aplicaciones' window lists it as 'en pausa'). Every click would land on that window, and "
+            "the batch used to report it as a sign-in sheet. Select CapCut there and press "
+            "'Reanudar' (or quit something heavy), then run this again; if CapCut's side panel came "
+            "loose, CapCut's layout menu → 'Restablecer diseño actual' puts it back.", EXIT_ENV)
     sh("open", "-a", "CapCut")
     time.sleep(2)
     place_window(strict=True)
@@ -1003,6 +1010,9 @@ def preflight(voice: str = DEFAULT_VOICE, long_batch: bool = True, assumed=None,
             print(f"  note: not on screen right now (normal until a clip is selected): "
                   f"{', '.join(missing)}")
         mods = modal_windows()
+        if mods and capcut_paused():
+            die("macOS paused CapCut for lack of memory: resume it from the 'Forzar salida' window "
+                "and run this again.", EXIT_ENV)
         if mods:
             die("CapCut has a modal dialog open (usually the sign-in sheet). Close it, or sign in "
                 "by hand if you want the app's voices; this script never signs in. Then run this "
@@ -1021,6 +1031,18 @@ def preflight(voice: str = DEFAULT_VOICE, long_batch: bool = True, assumed=None,
         print(f"  WARNING: {len(voices)} generations on this project. It usually gives out around "
               f"{SATURATION_REFUSE}; if it starts failing, this script will create a new one.")
     return tr
+
+
+def capcut_paused():
+    """True when macOS has suspended CapCut for lack of memory (process state T). Seen on 26 sep
+    2026 with 30 renders running: CapCut 'en pausa', a Force Quit window on top, and five narrated
+    variants that fell back to the local voice blaming a sign-in sheet that was never there."""
+    r = subprocess.run(["pgrep", "-x", "CapCut"], capture_output=True, text=True)
+    for pid in r.stdout.split():
+        st = subprocess.run(["ps", "-o", "stat=", "-p", pid], capture_output=True, text=True).stdout
+        if "T" in st:
+            return True
+    return False
 
 
 def machine_lock(timeout_s=int(os.environ.get("REEL_FORGE_CAPCUT_WAIT", "1800"))):

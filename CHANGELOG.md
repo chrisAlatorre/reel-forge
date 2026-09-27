@@ -8,6 +8,21 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.9.2
+
+### Fixed
+
+- **A round of 30 variants ran the Mac out of memory.** A dozen builders rendered at once, each
+  holding its clips' frames in memory; macOS paused CapCut, and five narrations fell back to the
+  local voice. Renders now take one of a few machine-wide slots (`$REEL_FORGE_RENDERS`, default one
+  per ~12 GB of RAM, 1-4) and wait for a free one.
+- **A paused CapCut was reported as a sign-in sheet.** `capcut_voice.py` now checks whether macOS
+  suspended CapCut (process state T, "en pausa" in the Force Quit window) and says so, with the way
+  out — and how to put back a side panel that came loose ("Restablecer diseño actual").
+- **Dark caption cards made different variants look the same.** `compare_variants.py` compares
+  frames that identify a shot; darkened or featureless frames (a quiz's blurred cards, black) are
+  left out, after a pair with no clip in common measured 64 % shared.
+
 ## 0.9.1
 
 ### Fixed

@@ -127,9 +127,22 @@ def seen_shots(video: Path):
     return frames, float(tl.get("duration") or tl["shots"][-1]["t1"])
 
 
+def _flat(t: bytes) -> bool:
+    """A frame with almost no detail (black, a blur, a title card): every two of them look alike,
+    so they say nothing about whether two variants share a SHOT. A sound quiz that opens every round
+    on a dark blur read as 64 % shared between two variants that had no clip in common."""
+    if not t:
+        return True
+    m = sum(t) / len(t)
+    # dark (a darkened blur under a caption card) or featureless: neither identifies a shot
+    return m < 45 or (sum((x - m) ** 2 for x in t) / len(t)) ** 0.5 < 12
+
+
 def compare_seen(name_a, fa, da, voiced_a, name_b, fb, db, voiced_b):
-    shared = sum(1 for x in fa if any(_alike(x, y) for y in fb))
-    share = shared / max(1, min(len(fa), len(fb)))
+    ra = [x for x in fa if not _flat(x)] or fa
+    rb = [y for y in fb if not _flat(y)] or fb
+    shared = sum(1 for x in ra if any(_alike(x, y) for y in rb))
+    share = shared / max(1, min(len(ra), len(rb)))
     ratio = min(da, db) / max(da, db) if max(da, db) else 1.0
     axes = []
     if share < 0.60:

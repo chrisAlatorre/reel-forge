@@ -493,6 +493,30 @@ def the_doctor_finds_a_moved_file_and_leaves_the_rest_marked(tmp):
     assert items["b"].get("missing") is True and r.returncode == 1, items["b"]
 
 
+@test
+def dark_caption_cards_do_not_make_two_variants_the_same(tmp):
+    """A sound quiz opens every round on a darkened blur under a caption: two variants with no clip
+    in common measured 64 % shared, because every dark card looked like every other."""
+    import compare_variants as cv
+    dark = bytes([20] * 48 * 86)
+    card = bytes([230 if (i % 48) in range(14, 34) and (i // 48) in range(40, 46) else 20
+                  for i in range(48 * 86)])             # one caption line on a dark blur
+    assert cv._flat(dark) and cv._flat(card)
+    busy = bytes([(i * 37) % 256 for i in range(48 * 86)])
+    assert not cv._flat(busy)
+
+
+@test
+def renders_wait_for_a_slot_on_a_busy_machine(tmp):
+    import variant
+    os.environ["REEL_FORGE_RENDERS"] = "3"
+    try:
+        assert variant.render_slots() == 3
+    finally:
+        del os.environ["REEL_FORGE_RENDERS"]
+    assert 1 <= variant.render_slots() <= 4
+
+
 # --------------------------------------------------------------------------- runner
 
 def main():

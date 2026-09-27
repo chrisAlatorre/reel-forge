@@ -766,6 +766,45 @@ class Variant:
 
 # --------------------------------------------------------------------------- the build
 
+def render_slots():
+    """How many renders this machine runs at once: $REEL_FORGE_RENDERS, else one per ~12 GB of RAM
+    (1-4). A round of 30 variants rendered a dozen at a time on a 36 GB Mac; each render holds its
+    clips' frames in memory, macOS ran out, paused CapCut, and five narrations fell back."""
+    if os.environ.get("REEL_FORGE_RENDERS"):
+        return max(1, int(os.environ["REEL_FORGE_RENDERS"]))
+    try:
+        ram = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True).stdout)
+    except (ValueError, OSError):
+        ram = 16 * 2**30
+    return max(1, min(4, ram // (12 * 2**30)))
+
+
+class RenderSlot:
+    """One of render_slots() machine-wide slots (flock on ~/.cache/reel-forge/render/slot-N)."""
+
+    def __enter__(self):
+        d = Path(os.path.expanduser(os.environ.get("REEL_FORGE_CACHE", "~/.cache/reel-forge"))) / "render"
+        d.mkdir(parents=True, exist_ok=True)
+        n, waited = render_slots(), 0
+        while True:
+            for i in range(n):
+                f = open(d / f"slot-{i}", "a+")
+                try:
+                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    self.f = f
+                    return self
+                except BlockingIOError:
+                    f.close()
+            if waited % 60 == 0:
+                log(f"waiting for a render slot ({n} at a time on this machine)")
+            time.sleep(5)
+            waited += 5
+
+    def __exit__(self, *exc):
+        fcntl.flock(self.f, fcntl.LOCK_UN)
+        self.f.close()
+
+
 def _only_voice_buried(report_path):
     """True when the gate failed on voice_audible alone."""
     try:
@@ -859,7 +898,8 @@ def build(v: Variant, a):
 
     v.progress("render")
     log("render")
-    run(["uv", "run", RENDER, spec_f])
+    with RenderSlot():
+        run(["uv", "run", RENDER, spec_f])
 
     v.progress("upload")
     log("upload-ready encode")
