@@ -8,6 +8,14 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.10.2
+
+### Fixed
+
+- **A builder killed four sibling builds.** To stop its own render it matched every
+  `resources/A/.build.lock` on the machine. The builder's instructions now say: stop only the PID in
+  your own lock file, never `pkill` by pattern, and report a stuck sibling instead of killing it.
+
 ## 0.10.1
 
 ### Added

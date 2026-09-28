@@ -67,6 +67,12 @@ done. So:
 - **Write every output the moment you have it.** A render on disk is a render nobody has to redo.
 - If your delivery already exists and passes the gate, read it back and stop. Don't rebuild it.
 
+## Never stop a process you did not start
+Several builders run at once on one machine. To stop YOUR build, kill only the PID written in your
+own variant's `.build.lock` (`cat resources/<L>/.build.lock`), never `pkill` by a pattern: a filter
+matching every `resources/A/.build.lock` once killed four sibling variants mid-render. If you think
+another build is stuck, report it; don't kill it.
+
 ## If your job is the common folder
 
 Leave in `<workspace>/concepts/<slug>/common/`, ready and verified:
