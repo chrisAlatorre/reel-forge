@@ -159,9 +159,9 @@ def cmd_show(a) -> int:
 def cmd_brief(a) -> int:
     data = load(facts.project_dir(a.project))
     if not data["stories"]:
-        print("No stories from the user for this project yet. Ask them (stories.py questions) before "
-              "writing concepts: a concept with no memory of the user's behind it is the video they "
-              "called 'fine, but missing a human touch'.")
+        print("No stories from the user for this project (he may have preferred not to answer). Anchor "
+              "every concept instead on the top of the best-moments ranking — `rank_moments.py "
+              "--catalog <catalog>` — the real laughs, reactions and voices; never invent a memory.")
         return 0
     print("What the user remembers about this trip, IN THEIR OWN WORDS. Anchor every concept on at "
           "least one of these (its id in `anchor_story`). Narration may say them in first person, "

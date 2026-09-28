@@ -566,6 +566,17 @@ def the_user_vetoes_shots_of_himself_by_number(tmp):
     assert items["m1"]["use"] is False and items["m0"].get("use", True) is not False, items
 
 
+@test
+def a_laugh_outranks_the_prettiest_empty_frame(tmp):
+    import rank_moments
+    items = [{"id": "sky", "hook": 5, "favorite": True, "human": {"emotion": "none"}},
+             {"id": "laugh", "hook": 2, "human": {"emotion": "laughter", "reaction": True,
+                                                  "real_voice": "jaja", "candid": True, "story_potential": 3}},
+             {"id": "gone", "hook": 5, "use": False, "human": {"emotion": "laughter"}}]
+    got = [m["id"] for m in rank_moments.rank(items)]
+    assert got == ["laugh", "sky"], got
+
+
 # --------------------------------------------------------------------------- runner
 
 def main():

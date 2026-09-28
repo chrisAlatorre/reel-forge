@@ -8,6 +8,15 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.10.1
+
+### Added
+
+- **`rank_moments.py`: the best moments, ranked.** For the user who would rather not answer the
+  interview ("instead of random, rank the best moments"): every usable moment scored from the
+  catalog's `human` signals — a laugh, a reaction, a real voice, a moment where something happens —
+  over how pretty it is. With no stories, `stories.py brief` now points the directors at it.
+
 ## 0.10.0
 
 **Breaking: every concept needs a human heart.** Three rounds of well-made videos were judged "fine
