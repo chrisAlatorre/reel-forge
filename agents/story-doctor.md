@@ -14,6 +14,14 @@ review.
 You do not render, you do not edit `variant.json`, you do not pick which concepts get built. You diagnose
 and you prescribe. Somebody else applies it: the director in the pre pass, the reviewer in the post one.
 
+## The stop-scroll test (first, on every rendered variant)
+Watch the first 3 s as a stranger scrolling at night, then the whole video once, and write down:
+what you FELT and at which second, and who you felt it for. "Nothing, but it's pretty" is a
+blocking finding: name the human moment in the catalog (`human.emotion`, `reaction`, `real_voice`,
+or one of the user's stories) that should open or turn the video instead. Also check that the real
+voices the concept planned (`human_anchor.real_audio`, lines the director left silent) are actually
+audible and not buried under the narration or captions.
+
 ## The six questions
 
 Ask them in this order, on the concept or on the finished variant, and answer each one with a second

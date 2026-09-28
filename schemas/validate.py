@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import math
 import sys
 from pathlib import Path
@@ -266,8 +267,28 @@ def check_variant_material(c: dict) -> list[str]:
     return out
 
 
+def check_human(c: dict) -> list[str]:
+    """A concept needs a human heart: the user's memory behind it and one human moment at its hook or
+    turn. Three rounds without either were "fine, but missing something that grabs me"."""
+    out = []
+    if not c.get("human_anchor"):
+        out.append("human_anchor: missing. Name the one real human moment (a reaction, a real voice, "
+                   "a face feeling something) the video turns on, and where it sits (hook or turn).")
+    project = os.environ.get("REEL_FORGE_PROJECT")
+    stories_f = Path(project) / "stories.json" if project else None
+    if stories_f and stories_f.exists():
+        ids = {s["id"] for s in json.loads(stories_f.read_text()).get("stories", [])}
+        used = set(c.get("anchor_story") or [])
+        if ids and not used:
+            out.append("anchor_story: the user told stories about this trip and this concept uses none. "
+                       "Build on at least one (its id).")
+        for sid in used - ids:
+            out.append(f"anchor_story: {sid} is not in {stories_f}.")
+    return out
+
+
 def check_concept(c: dict) -> list[str]:
-    out = check_arc(c) + check_variant_material(c)
+    out = check_arc(c) + check_variant_material(c) + check_human(c)
     blocks = c.get("structure", [])
     for a, b in zip(blocks, blocks[1:]):
         if b.get("t0", 0) < a.get("t1", 0):

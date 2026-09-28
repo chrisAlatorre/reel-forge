@@ -530,6 +530,42 @@ def renders_wait_for_a_slot_on_a_busy_machine(tmp):
     assert 1 <= variant.render_slots() <= 4
 
 
+@test
+def a_concept_without_a_human_heart_is_sent_back(tmp):
+    """Three rounds of clever devices over pretty shots were "fine, but missing a human touch": a
+    concept names the human moment it turns on, and builds on the user's own memories when he gave
+    some."""
+    proj = tmp / "proj"
+    (proj / "workspace").mkdir(parents=True)
+    r = uv(SOURCES / "stories.py", "--project", proj, "add", "--q", "2", "Me perdí buscando el estacionamiento")
+    assert r.returncode == 0, r.stderr
+    c = {"resources": ["r0"], "variants": [{"letter": "A", "what": "the reference cut", "differs_in": "base"}]}
+    (tmp / "c.json").write_text(json.dumps(c))
+    r = uv(ROOT / "schemas/validate.py", tmp / "c.json", "--type", "concept", env={"REEL_FORGE_PROJECT": str(proj)})
+    out = r.stdout + r.stderr
+    assert "human_anchor: missing" in out and "anchor_story" in out, out[-800:]
+    c.update({"anchor_story": ["s-001"], "human_anchor": {"resource": "r0", "at_s": 0, "what": "he laughs at the wrong turn"}})
+    (tmp / "c.json").write_text(json.dumps(c))
+    r = uv(ROOT / "schemas/validate.py", tmp / "c.json", "--type", "concept", env={"REEL_FORGE_PROJECT": str(proj)})
+    out = r.stdout + r.stderr
+    assert "human_anchor: missing" not in out and "anchor_story:" not in out, out[-800:]
+
+
+@test
+def the_user_vetoes_shots_of_himself_by_number(tmp):
+    (tmp / "p/workspace/catalog").mkdir(parents=True)
+    for i in range(3):
+        ff("-f", "lavfi", "-i", f"color=c=0x{40 * i:02x}8080:size=120x200", "-frames:v", "1", tmp / f"p/s{i}.jpg")
+    cat = tmp / "p/workspace/catalog/catalog.json"
+    cat.write_text(json.dumps({"items": [{"id": f"m{i}", "type": "photo", "path": str(tmp / f"p/s{i}.jpg"),
+                                          "subject_present": True} for i in range(3)]}))
+    r = uv(SOURCES / "contact_sheet.py", "sheet", "--catalog", cat, "--subject", "--out", tmp / "sheet.jpg")
+    assert r.returncode == 0 and (tmp / "sheet.jpg").exists(), r.stderr[-500:]
+    r = uv(SOURCES / "contact_sheet.py", "veto", "--catalog", cat, "--sheet", tmp / "sheet.json", "2")
+    items = {i["id"]: i for i in json.loads(cat.read_text())["items"]}
+    assert items["m1"]["use"] is False and items["m0"].get("use", True) is not False, items
+
+
 # --------------------------------------------------------------------------- runner
 
 def main():

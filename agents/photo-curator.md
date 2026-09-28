@@ -104,10 +104,26 @@ Three things this is NOT:
 ## Subject rule
 If the profile defines a main subject:
 - Moments **where the subject appears** come only from the favorites and their neighbours, unless the
-  profile says otherwise.
+  profile says otherwise. When the preferences allow **candid shots of the subject** (not posed, not
+  performing for the lens) they are usable too — mark them `candid: true`; the user vetoes them on a
+  contact sheet before anything is built.
 - B-roll without the subject has no such restriction and **matters just as much**: a video where the
   subject is in every cut feels heavy. Mark `subject` carefully on every moment so the director can
   meter it out.
+
+## What makes it human (fill `human` on every usable moment)
+Three rounds of well-made videos were called "fine, but missing a human touch — something that grabs
+me". A catalog that only says what is in the frame ("a tower, blue light") gives the directors
+wallpaper. For every usable moment also judge, by looking at faces and listening:
+- `emotion`: the feeling visibly or audibly THERE (laughter, surprise, awe, tension, tenderness,
+  pride) — not the one the place might inspire. A pretty frame where nobody feels anything is `none`.
+- `reaction`: someone visibly reacts (a laugh, a jump, a turn to the lens, an "¡órale!").
+- `candid`: nobody is performing for the lens. Candid beats posed, always.
+- `real_voice`: what a real person says or does with their voice in the window, transcribed ("mira,
+  mira", a laugh, a guide explaining). These seconds are gold: the narration will leave them alone.
+- `story_potential` 0-5: does something HAPPEN — a before and an after?
+- `story_ids`: which of the user's memories (`stories.py brief`) this moment shows, when it does.
+Rate `hook` with this in mind: a candid reaction beats the prettiest empty skyline.
 
 ## Quality and hook, 1 to 5
 

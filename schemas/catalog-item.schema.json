@@ -264,6 +264,54 @@
               "type": "string"
             }
           }
+        },
+        "human": {
+          "type": "object",
+          "description": "What makes this moment HUMAN, which is what makes a viewer stop — judged by looking and listening, never by guessing. A pretty frame with nobody feeling anything is `emotion: none`; that is fine for b-roll and useless as a hook.",
+          "properties": {
+            "emotion": {
+              "enum": [
+                "joy",
+                "laughter",
+                "surprise",
+                "awe",
+                "tender",
+                "tension",
+                "fear",
+                "pride",
+                "none"
+              ],
+              "description": "the feeling visibly or audibly in the moment (a face, a voice, a gesture), not the one the place might inspire"
+            },
+            "reaction": {
+              "type": "boolean",
+              "description": "someone is visibly reacting to something (a laugh, a jump, a turn to the camera, an 'oh!')"
+            },
+            "candid": {
+              "type": "boolean",
+              "description": "not posed: nobody is performing for the lens"
+            },
+            "real_voice": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "what a real person says or does with their voice in the window (a laugh, 'mira, mira', a local explaining), transcribed; null when nobody speaks. These are the seconds the narration should leave alone."
+            },
+            "story_potential": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5,
+              "description": "how much of a story this moment carries on its own (5: something happens, there is a before and after)"
+            },
+            "story_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "ids from the project's stories.json this moment shows (the user's own memories)"
+            }
+          }
         }
       },
       "allOf": [

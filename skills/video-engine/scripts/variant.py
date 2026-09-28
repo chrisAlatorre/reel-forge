@@ -73,7 +73,8 @@ Defaults that used to be each builder's to remember, and were forgotten:
 
 Exit codes: 0 delivered and the gate passed · 1 the gate failed (the files are there, the result says
 why) · 2 bad variant.json · 3 another build of this variant is running · 4 a line contradicts the
-project's facts (nothing rendered).
+project's facts (nothing rendered) · 5 the pinned voice is strict and CapCut did not produce it
+(nothing rendered; run it again later).
 """
 from __future__ import annotations
 
@@ -106,6 +107,14 @@ VOICES = PLUGIN / "skills/voices/scripts"
 
 DEFAULT_LUFS = -18.0
 PHOTO_EXT = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".tif", ".tiff", ".avif"}
+
+
+class VoiceUnavailable(SystemExit):
+    """The pinned voice is strict and could not be generated: nothing is rendered (exit 5)."""
+
+    def __init__(self, msg):
+        super().__init__(f"variant: {msg}")
+        self.code = 5
 
 
 class Bad(SystemExit):
@@ -321,14 +330,26 @@ class Variant:
             except json.JSONDecodeError:
                 res = {"engine": "qwen", "reason": "resolve_voice.py gave no answer"}
             engine = res.get("engine", "qwen")
-            v = {**{"voice": res.get("voice"), "speed": res.get("speed")}, **{k: x for k, x in v.items() if x is not None}}
+            v = {**{"voice": res.get("voice"), "speed": res.get("speed"), "strict": res.get("strict")},
+                 **{k: x for k, x in v.items() if x is not None}}
         refused = self.dir / ".capcut-refused"
+        if engine == "capcut" and v.get("strict") is None:
+            # a variant.json that names the engine itself never asked resolve_voice, and so never
+            # learned the user's pin is strict — and shipped the local voice anyway
+            try:
+                pin = json.loads((Path(os.path.expanduser(os.environ.get("REEL_FORGE_CONFIG", "~/.config/reel-forge")))
+                                  / "voice.json").read_text())
+                if pin.get("strict") and str(pin.get("engine", "")).lower() in ("capcut", "app"):
+                    v = {**v, "strict": True, "voice": v.get("voice") or pin.get("voice")}
+            except (OSError, ValueError):
+                pass
         if engine == "capcut":
             if refused.exists() and not v.get("retry_capcut"):
                 why = refused.read_text().strip()
             else:
                 r = run(["uv", "run", VOICES / "capcut_voice.py", lines_f, self.voice_dir,
-                         "--speed", str(v.get("speed") or 1.4), "--voice", v.get("voice") or "Valentino"],
+                         "--speed", str(v.get("speed") or 1.4), "--voice", v.get("voice") or "Valentino"]
+                        + (["--fallback-voice", ""] if v.get("strict") else []),
                         check=False, capture_output=True, text=True)
                 if dfile.exists():
                     asked = v.get("voice") or "Valentino"
@@ -350,6 +371,12 @@ class Variant:
                 why = next((t for t in reversed(tail) if "Diagnosis" in t or t.startswith("capcut_voice:")),
                            tail[-1] if tail else f"capcut_voice.py exit {r.returncode}")
                 refused.write_text(why[:400])
+            if v.get("strict"):
+                # The user chose this voice and no other ("quiero solo la de Valentino"): render
+                # nothing rather than ship another voice. Run it again later; it resumes here.
+                refused.unlink(missing_ok=True)
+                raise VoiceUnavailable(f"{v.get('voice') or 'Valentino'} is the only voice allowed "
+                                       f"(voice.json strict) and CapCut did not narrate: {why[:200]}")
             log(f"CapCut did not narrate ({why[:120]}); local voice instead")
         # the local engine
         raw = self.dir / "voice-raw"

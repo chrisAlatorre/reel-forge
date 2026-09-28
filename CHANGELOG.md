@@ -8,6 +8,35 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.10.0
+
+**Breaking: every concept needs a human heart.** Three rounds of well-made videos were judged "fine
+overall, but missing a more human touch — something that grabs me". They were clever devices
+(scoreboards, quizzes, clocks) over good-looking shots, read by a synthetic voice, with the person
+rarely in them and nothing that came from what he lived. A concept now names its `human_anchor` — the
+real reaction, voice or face it turns on — and, when the user told stories about the trip, the ones it
+is built on (`anchor_story`). `validate.py` sends back a concept without them.
+
+### Added
+
+- **`stories.py`: the interview.** Six short questions (the best moment, what went wrong or made you
+  laugh, a surprise, someone you remember, when you felt far from home, the one story you'd tell a
+  friend), answered by text or voice note (`from-audio` transcribes it), stored in the project's
+  `stories.json` and handed to every agent with `brief`. Only the user's words; never an inferred
+  feeling. `/reel` asks them before the concepts.
+- **`human` on every catalog moment**: the emotion actually there, whether someone reacts, whether it
+  is candid, what a real person says (transcribed), its story potential and the stories it shows.
+- **`contact_sheet.py`: the user's veto over shots of himself.** When the preferences allow candid
+  (not posed) shots of the subject, one numbered sheet goes to the user and `veto` strikes the numbers
+  he names. Nothing with his face is used before he has seen it.
+- **The director, the chief editor, the story doctor and the critic** now judge the human heart first:
+  a real human moment at the hook or the turn, 2-3 moments where real people are heard and the
+  narration is silent, narration from the user's own words, and a stop-scroll test on every render
+  ("nothing, but it's pretty" is a blocker).
+- **A strict pinned voice.** `voice.json` with `strict: true` means that voice or none: no fallback
+  voice, no local voice; a variant whose voice could not be generated renders nothing (exit 5) and is
+  run again later. `variant.py` honours it even when its own `variant.json` names the engine.
+
 ## 0.9.5
 
 ### Fixed

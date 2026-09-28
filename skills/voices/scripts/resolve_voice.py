@@ -143,7 +143,9 @@ def pinned_choice() -> dict:
     if engine == "app":
         engine = "capcut"
     out = {"engine": engine, "voice": p.get("voice"), "lang": p.get("lang"),
-           "speed": p.get("speed"), "fx": p.get("fx"), "chosen_on": p.get("chosen_on")}
+           "speed": p.get("speed"), "fx": p.get("fx"), "chosen_on": p.get("chosen_on"),
+           # strict: this voice or none — no fallback voice, no local voice. A variant waits for it.
+           "strict": bool(p.get("strict")) or None}
     return {k: v for k, v in out.items() if v not in (None, "")}
 
 
@@ -212,7 +214,8 @@ def resolve_voice(lang=None, engine=None, voice=None, speed=None, local_only=Fal
                         "language": language or pin_lang or "", "source": "pinned",
                         "reason": f"the voice pinned in {PINNED}"
                                   + (f" on {pin['chosen_on']}" if pin.get("chosen_on") else ""),
-                        "fallback": False, "disclose": None, "warnings": warnings}
+                        "fallback": False, "disclose": None, "warnings": warnings,
+                        "strict": bool(pin.get("strict"))}
 
     # 2. The default for Spanish: CapCut's Valentino at 1.4x.
     if spanish and capcut_ok and not local_only:

@@ -534,6 +534,42 @@
             "type": "string"
           },
           "description": "Material the idea wanted and the catalog does not have. Say it here; never request it as if it existed."
+        },
+        "anchor_story": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^s-\\d{3}$"
+          },
+          "minItems": 1,
+          "description": "The user's own memories (ids in the project's stories.json) this concept is built on. Required whenever the project has stories: a concept that comes only from what the camera saw is the video the user called 'fine, but missing a human touch'."
+        },
+        "human_anchor": {
+          "type": "object",
+          "required": [
+            "resource",
+            "at_s",
+            "what"
+          ],
+          "additionalProperties": false,
+          "description": "The one human moment the video turns on — a real reaction, a real voice, a face that feels something — placed in the hook or at the turn. A device (a scoreboard, a quiz, a clock) is fine as a frame, never as the heart.",
+          "properties": {
+            "resource": {
+              "type": "string"
+            },
+            "at_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "what": {
+              "type": "string",
+              "minLength": 8
+            },
+            "real_audio": {
+              "type": "boolean",
+              "description": "its own sound plays, and the narration is silent over it"
+            }
+          }
         }
       },
       "allOf": [

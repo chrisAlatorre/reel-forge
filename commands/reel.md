@@ -263,6 +263,22 @@ each other in silence, and an agent that invents its own format forces the batch
 **The catalog's `start_s`/`end_s` window is binding**: whoever ignores it ends up using a frame that is
 not the one that was cataloged.
 
+## Step 5.5 — The interview and the veto sheet (before any concept)
+
+Two things only the user can give, asked in ONE message:
+
+1. **What he remembers.** `stories.py --project <p> questions` prints six short questions (the best
+   moment, what went wrong or made him laugh, a surprise, someone he remembers, when he felt far from
+   or at home, the one story he'd tell a friend). He answers by text or voice note; store each with
+   `stories.py add` / `stories.py from-audio`. Every concept anchors on one (`anchor_story`). Three
+   rounds built only from what the camera saw were "fine, but missing a human touch".
+2. **His veto over candid shots of himself**, when the preferences allow them:
+   `contact_sheet.py sheet --catalog … --subject --out sheet.jpg`, send it, and strike what he names
+   with `contact_sheet.py veto`. Nothing with his face is used before he has seen it.
+
+With `--auto`, send the questions anyway and carry on without them; say in the delivery that the
+concepts had no memories to anchor on.
+
 ## Step 6 — Concepts (directors + chief editor)
 
 Two steps, and the order matters.

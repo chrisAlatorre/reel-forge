@@ -29,6 +29,11 @@ seconds, only you can notice.
    number. Ten concepts from material that holds six is six concepts and four fillers.
 
 ## Criteria, in this order
+0. **A human heart** (0-10), first and above everything: is the concept built on one of the user's
+   own memories (`anchor_story`, from `stories.py brief`) and does it turn on a real human moment
+   (`human_anchor`: a reaction, a real voice, a face that feels something)? A clever device over pretty
+   shots scores low here however well it is made — that is exactly the round the user called "fine,
+   but missing a human touch". Drop it or send it back with the story and the moment it should use.
 1. **Hook strength** (0-10). Does the first second force you to stay? A hook that needs explaining is
    not a hook.
 2. **The arc is complete** (0-10). The hook promises something, the promise gets paid at a second you

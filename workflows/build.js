@@ -393,6 +393,10 @@ Structure: ${concept.structure || '(decide it yourself; every block carries its 
 Close: ${concept.close || '(plan it: the shot it closes on, its `kind`, and the last caption)'}
 Length the concept argues for: ${concept.duration_s ? `${concept.duration_s} s` : '(from the beats)'}${concept.duration_rationale ? ` — ${concept.duration_rationale}` : ''}
 Platform: ${PLATFORM} 9:16 · Output language: ${LANG}
+THE HUMAN HEART: the concept's \`human_anchor\` (a real reaction, voice or face) must land where the
+concept puts it, and every moment it marks \`real_audio\` plays its own sound at full level with the
+narration SILENT over it (no \`line\` on that shot; raise its \`audio.lufs\`). Narration lines come from
+the user's own words (\`stories.py brief\`); never add a feeling he did not say.
 ${concept.music ? `Music: ${concept.music}` : ''}
 ${concept.narration ? `Narration: ${concept.narration}` : ''}
 ${concept.moments && concept.moments.length ? `Catalog moments assigned: ${concept.moments.join(', ')}` : ''}

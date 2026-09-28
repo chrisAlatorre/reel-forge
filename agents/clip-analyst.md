@@ -35,6 +35,20 @@ or a 2:1 equirectangular), **it isn't yours**: hand it to `360-scout` and say so
 5. **Mark the ranges.** Each one with a real start and end, with at least 0.3 s of padding before and
    after the action.
 
+## What makes it human (fill `human` on every usable moment)
+Three rounds of well-made videos were called "fine, but missing a human touch — something that grabs
+me". A catalog that only says what is in the frame ("a tower, blue light") gives the directors
+wallpaper. For every usable moment also judge, by looking at faces and listening:
+- `emotion`: the feeling visibly or audibly THERE (laughter, surprise, awe, tension, tenderness,
+  pride) — not the one the place might inspire. A pretty frame where nobody feels anything is `none`.
+- `reaction`: someone visibly reacts (a laugh, a jump, a turn to the lens, an "¡órale!").
+- `candid`: nobody is performing for the lens. Candid beats posed, always.
+- `real_voice`: what a real person says or does with their voice in the window, transcribed ("mira,
+  mira", a laugh, a guide explaining). These seconds are gold: the narration will leave them alone.
+- `story_potential` 0-5: does something HAPPEN — a before and an after?
+- `story_ids`: which of the user's memories (`stories.py brief`) this moment shows, when it does.
+Rate `hook` with this in mind: a candid reaction beats the prettiest empty skyline.
+
 ## What makes a range good
 - Something **happens** or something **is revealed**: a movement, a reaction, an animal, food arriving,
   a view opening up.

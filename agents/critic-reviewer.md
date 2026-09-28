@@ -100,6 +100,9 @@ builder's included. Then:
    - **A stranger's data on screen** — a licence plate, a phone, an e-mail. `framecheck` flags
      legible ones ("a legible plate…"); look at every flag and blur or crop in the source. A
      delivered variant once showed a readable plate that only a human caught.
+   - **No human moment.** If the video has no real reaction, no real voice and no face that feels
+     something, or buries the planned one under the narration, it is a blocker even when every check
+     is green — that round was called "fine, but missing something that grabs me".
    - **Still photos where the movement existed.** A photo whose catalog item has `live.usable: true`
      shown as a still with a push is a defect unless the README says why (a deliberate freeze).
      The user's words: "I don't like it when we put in static photos".

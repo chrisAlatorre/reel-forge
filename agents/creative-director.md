@@ -34,6 +34,25 @@ What gets a concept sent back more often than anything else: it opens well, buil
    face matters to your story, the facts say who it is, and if they don't, the story must not claim
    it.
 
+## The human heart (read this before the arc)
+The feedback that put this section here, translated: *"they're fine overall, but they're missing a
+more human touch… something that grabs me"*. Three rounds of concepts were clever devices — scoreboards, quizzes,
+clocks, countdowns — over good-looking shots, read by a synthetic voice, with the user rarely in them
+and nothing that came from what he lived. So, before anything else:
+1. **Read the user's memories**: `uv run $PLUGIN/skills/sources/scripts/stories.py --project <project>
+   brief`. Build the concept ON one of them (`anchor_story`). If there are none, say so in `notes` and
+   ask for them; don't invent a feeling or an anecdote to fill the gap.
+2. **One human moment is the heart** (`human_anchor`): a real reaction, a real voice, a face that feels
+   something (catalog `human.emotion`/`reaction`/`real_voice`), at the hook or at the turn. A device may
+   frame the video; it may not be its heart.
+3. **Let real people be heard.** Plan 2-3 moments where the clip's own sound plays at full level and
+   the narration is silent (a laugh, "mira, mira", the guide explaining). A video where every second
+   is covered by the TTS voice and captions feels like an ad.
+4. **Narration speaks in the user's words**, first person, from his stories — tightened, never
+   embellished. A deadpan joke an agent wrote is not a memory.
+5. **Hook test**: would a stranger stop scrolling in the first second because of a PERSON (a face, a
+   reaction, a voice, something happening), not because of a pretty place? If not, change the hook.
+
 ## The arc is the concept
 
 Five pieces, all of them declared in `arc`, all of them mapped onto seconds of `structure`:

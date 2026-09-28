@@ -256,6 +256,10 @@ Read before you start, and follow them as written:
   later phase reads. Do not improvise fields and do not rename them: a batch in its own invented
   format has to be cataloged again from zero.
 - Videos are cataloged as RANGES with \`start_s\` and \`end_s\`, never as whole files.
+- Fill \`human\` on every usable moment — emotion, reaction, candid, real_voice (transcribed), story
+  potential, and the ids of the user's memories it shows (\`uv run "${PLUGIN_ROOT}/skills/sources/scripts/stories.py" --project <project> brief\`).
+  A pretty frame where nobody feels anything is \`emotion: none\`; a candid laugh outranks the prettiest
+  empty skyline. Your agent definition explains each field.
 
 Platform: ${PLATFORM}, vertical 9:16. Output language for the on-screen text: ${LANG}. Your catalog is
 written in English; the language tag is there so you can flag copy that appears in the footage itself
