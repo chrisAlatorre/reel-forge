@@ -741,8 +741,11 @@ class Variant:
     # ------------------------------------------------------------------ outputs
 
     def light(self, src, dst):
-        ff("-i", src, "-vf", "scale=720:-2", "-c:v", "libx264", "-crf", "26", "-preset", "slow",
-           "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", dst)
+        # The light copy is what gets sent to a phone, where uploads stop at 30 MB. CRF alone made a
+        # 63 s river clip 36 MB (water never compresses); a bitrate ceiling keeps any length under it.
+        ff("-i", src, "-vf", "scale=720:-2", "-c:v", "libx264", "-crf", "26", "-maxrate", "2800k",
+           "-bufsize", "5600k", "-preset", "slow", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
+           "-movflags", "+faststart", dst)
 
     def framecheck(self, g):
         """Every cut of the RENDERED file, in one process. A report for the critic, not a gate."""

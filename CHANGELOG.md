@@ -12,6 +12,9 @@ publish a version and how it reaches people: [`docs/updating.md`](docs/updating.
 
 ### Fixed
 
+- **A light copy came out 36 MB**, over the 30 MB a phone upload takes: CRF alone does not bound
+  water or foliage. The light copy now has a 2.8 Mbps ceiling.
+
 - **A builder killed four sibling builds.** To stop its own render it matched every
   `resources/A/.build.lock` on the machine. The builder's instructions now say: stop only the PID in
   your own lock file, never `pkill` by pattern, and report a stuck sibling instead of killing it.
