@@ -74,6 +74,33 @@ And what makes a close fail, all of it seen in delivered videos:
 - the payoff landing and then four more seconds of nothing: it ended and kept running
 - `arc.close.lands_because` that says "it's the last clip". That's not a close, that's a leftover.
 
+## The first two seconds and the last two (what the platform rewards)
+
+Scored against 28 top travel videos with one rubric (`rubric.md`), our concepts lost most of their
+points in the same three places. They are rules now, for every concept:
+
+1. **Frame zero is the best image of the video**, already at its peak — not an establishing shot, not
+   a seat before the show, not a hand on a wheel before the smile. If the payoff is the strongest
+   image, the hook can flash it for 0.3 s and promise to explain it.
+2. **The promise is on screen by 0.5 s, in 8 words or fewer**, and it carries **a number or a stake**
+   ("5 cosas que…", "lo que me costó…", "la única regla…"). A title that names the place, or a
+   poetic line that explains nothing, is not a hook. One line, large, the key word in the accent
+   colour.
+3. **An open loop**: something withheld that only the end gives back — a countdown with the best
+   last, a question, a before/after, a counter the viewer watches rise.
+4. **The close answers the hook in picture**, not only in a line: the face reacting, the #1, the
+   thing that was promised, held 1.5-2 s. Never the opening take recycled, never a fade to black.
+5. **Every beat gives something**: a concrete fact (a time, a price, an order, a mistake to avoid) or
+   a first-person opinion. "Place · date" cards give nothing. Where the format allows it, one line
+   near the end tells the viewer why to save or send it.
+
+### Lists and countdowns
+
+The best-scoring list references put a **numbered card** on each item (`#3 · <name> · <why>`), kept
+the strongest item for last and said **why it won**. A list without numbers is a montage, and a #1
+that is weaker than the #3 breaks the promise. The card holds three things at most: number, name,
+one reason or fact.
+
 ## Duration: the story decides it
 
 There is no house length, and nothing in this plugin defaults to 20 or 30 seconds. Each concept
@@ -97,6 +124,9 @@ round that ignores the preference as a bad selection. The two rules that actuall
   abrupt ending. Name the starving beat and give it its seconds.
 - **Padding → it goes down.** A 40 s concept with 12 s of pretty shots that add nothing is a 28 s
   concept.
+- **A length preference is served with more beats, never with longer shots.** A "long" user gets a
+  45 s video with nine beats, not one with five beats held twice as long: the `renewal` gate fails
+  anything that goes 5 s with nothing new, whatever length was asked for.
 
 Past 75 s the material has to earn every second, and the concept says why in `notes`. And across a
 delivery: **if the concepts of a round all land within 5 s of each other, the durations came from a template

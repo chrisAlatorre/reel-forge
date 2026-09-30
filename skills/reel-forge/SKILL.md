@@ -46,6 +46,7 @@ The detail of each phase is in `references/`. Read them when you reach the phase
 | `references/audio.md` | music, diegetic sound, narration and voices |
 | `references/video360.md` | 360 material (Insta360 and similar) to 9:16 |
 | `references/delivery.md` | folders, versions, README and final verification |
+| `references/rubric.md` | **the one ruler** for the platform's videos and ours: 16 criteria, weights, `watch.py` |
 
 ## The files agents write: one shape each
 

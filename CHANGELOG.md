@@ -8,6 +8,51 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.12.0
+
+Scored against the platform. 28 of the most-watched travel TikToks (destination guides, itineraries,
+cinematic montages and couple vlogs, 0.13-9.7 M views) and 11 of our own renders were watched end to end and
+scored with one rubric by six reviewers, each with references and ours side by side. References
+scored 42-76 (mean 59), ours 41-65 (mean 51). Ours already beat them on the open loop, the payoff and
+having a person in it — the 0.10 work showed. What cost ours points was the same everywhere, in pace,
+renewal and filler (3.4-4.0 of 10 against 6.3-7.2): shots held 3.5-6.7 s on
+average with 9-14 s takes where nothing new happened (theirs: 0.9-1.9 s), a first frame that was
+not the best one, a hook with no number or stake, closes that faded to black or recycled the
+opening take, colour that jumped shot to shot, and foreign speech left untranslated.
+
+### Added
+
+- **`references/rubric.md`**: 16 criteria in six groups (hook 25, retention 20, story and heart 25,
+  picture 15, sound 10, packaging 5), anchors per score and a `score.json` format. The critic and the
+  story-doctor now score every variant with it; under 60, or under 5 on promise, open loop or
+  payoff, is blocking.
+- **`watch.py`**: watches a whole video 0-100 % — every frame on labelled sheets (at least one per
+  shot, the last frame always included), cuts and shot lengths, cuts per third, transcript, on-screen
+  text over time, loudness. The same instrument for references and ours.
+- **Gate checks** in `verify.py`: `renewal` fails a stretch over 5 s with no new shot, text or voice
+  line (a segment marked `"hero": true` is exempt); `pace` warns over a 3 s mean shot; `hook` warns
+  when nothing is on screen or said in the first second, or the opening text runs over 8 words. The
+  `ending` check also warns when the last shot is the opening take again.
+- Concepts: **The first two seconds and the last two** (frame zero is the best frame, a promise with a
+  number or a stake by 0.5 s, an open loop, a close that answers the hook in picture, a fact or an
+  opinion in every beat) and numbered cards for lists. Editing: a declared pace curve, split long
+  takes, cut on sound. Audio: subtitle foreign speech; narration to one friend, in first person,
+  from 0.0 s. A length preference is served with more beats, never with longer shots.
+
+### Changed
+
+- **`"grade": "auto"` is one look per video**, voted by the shots' scenes weighted by length, with a
+  separate winner for night shots. The old per-shot behaviour is `"auto-shot"`.
+- Closes hold 1.5-2 s on the payoff with `fade_out` 0-0.3: no fade to black.
+
+### Fixed
+
+- A night grade crushed a dark sky between fireworks under the black threshold. The grade now never
+  darkens deep shadows below the source (cached LUTs carry a revision), and `black_frames` measures
+  true black (`pix_th` 0.05, was 0.12) — a correctly exposed night sky failed the gate.
+- A shot asking for more seconds than its clip holds crashed the grade's probe frame
+  (`UnidentifiedImageError`); the probe is clamped inside the clip.
+
 ## 0.11.1
 
 ### Fixed

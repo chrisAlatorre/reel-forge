@@ -603,6 +603,59 @@ def each_scene_gets_its_grade_and_video_is_graded_while_it_decodes(tmp):
     assert tl["shots"][0].get("grade") == "forest-deep", tl["shots"][0]
 
 
+@test
+def one_look_per_video_and_the_grade_never_crushes_a_night_sky(tmp):
+    """Scored against the platform, our per-shot grades read as cuts jumping between looks; and a
+    night grade pushed a dark sky under the gate's black threshold."""
+    import numpy as np
+    import grade
+    sky = np.full((200, 120, 3), 30, np.uint8)
+    assert grade.apply(sky, "night-city").mean() >= sky.mean() - 0.5
+    for c, n in (("0x287832", "a"), ("0x2a7a30", "b"), ("0x0a0a0c", "n")):
+        ff("-f", "lavfi", "-i", f"color=c={c}:size=320x568:rate=30", "-t", "1", "-pix_fmt", "yuv420p", tmp / f"{n}.mp4")
+    spec = {"out": str(tmp / "o.mp4"), "fps": 30, "grade": "auto",
+            "segments": [{"src": str(tmp / "a.mp4"), "dur": 1.0}, {"src": str(tmp / "b.mp4"), "dur": 1.0}]}
+    (tmp / "s.json").write_text(json.dumps(spec))
+    r = uv(ENGINE / "render.py", tmp / "s.json")
+    assert r.returncode == 0, r.stderr[-800:]
+    g = {s.get("grade") for s in json.loads((tmp / "o.timeline.json").read_text())["shots"]}
+    assert len(g) == 1, g
+
+
+@test
+def the_gate_fails_a_stretch_where_nothing_new_happens(tmp):
+    """Every reference that held attention renewed something every few seconds; ours had 8-14 s
+    takes with nothing on them."""
+    ff("-f", "lavfi", "-i", "testsrc2=size=320x568:rate=30", "-f", "lavfi", "-i", "sine=f=440:sample_rate=48000",
+       "-t", "12", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", tmp / "v.mp4")
+    def tl(shots, hero=False):
+        (tmp / "v.timeline.json").write_text(json.dumps({
+            "duration": 12, "loop": False, "fade_out": 0, "captions": [{"t0": 0, "t1": 2, "text": "tres cosas"}],
+            "voice": [], "words": [],
+            "shots": [dict({"i": i, "t0": a, "t1": b, "dur": b - a, "src": f"{i}.mp4"}, **({"hero": True} if hero else {}))
+                      for i, (a, b) in enumerate(shots)]}))
+        r = uv(ENGINE / "verify.py", tmp / "v.mp4", "--json", tmp / "r.json")
+        return json.loads((tmp / "r.json").read_text())
+    rep = tl([(0, 2), (2, 11), (11, 12)])
+    rep = rep.get("checks", rep)
+    assert rep["renewal"]["status"] == "fail", rep["renewal"]
+    assert rep["hook"]["status"] == "pass", rep["hook"]
+    rep = tl([(0, 2), (2, 11), (11, 12)], hero=True)
+    rep = rep.get("checks", rep)
+    assert rep["renewal"]["status"] == "pass", rep["renewal"]
+
+
+@test
+def watch_covers_every_second_and_every_shot(tmp):
+    """Scoring from five frames missed the ending; the rubric needs 0-100 %."""
+    ff("-f", "lavfi", "-i", "testsrc2=size=320x568:rate=30", "-t", "4", "-pix_fmt", "yuv420p", tmp / "w.mp4")
+    r = uv(ENGINE / "watch.py", tmp / "w.mp4", "--no-asr")
+    assert r.returncode == 0, r.stderr[-800:]
+    w = json.loads((tmp / "w.watch" / "watch.json").read_text())
+    assert w["coverage"]["complete"] and w["coverage"]["last"] >= 3.9, w["coverage"]
+    assert (tmp / "w.watch" / "sheet-01.jpg").exists()
+
+
 # --------------------------------------------------------------------------- runner
 
 def main():

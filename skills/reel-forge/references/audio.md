@@ -50,6 +50,13 @@ ffprobe -v error -select_streams a -show_entries stream=index,codec_type -of csv
   shouts were at 47.6 / 49.1 / 50.5 s, but the camera was pointed at a wall there: the good image was at
   22.4 s. Separate the image source from the audio source and **look at the frame** of the entry point.
 
+### Speech in another language, and the lines that land
+
+Every word said on camera that the viewer's language does not share gets a **subtitle in the output
+language** — large, outlined, in the safe zone. The scorers marked every video down where a guide's
+joke or a stranger's toast played untranslated: the best line of the video was invisible. A funny
+line that lands is also a **payoff**: cut to it, leave it room, and let the music drop under it.
+
 ## Music
 
 - **Don't embed copyrighted music in what gets uploaded.** Two files: `x.mp4` clean and
@@ -72,6 +79,11 @@ freely licensed SFX and **keep the license** next to the files. Never the same h
 turns into noise.
 
 ## Narration
+
+The references that scored highest on voice spoke **to one friend**: first person, from 0.0 s, at
+speed, with an opinion or an aside every few seconds. A narration that reads like a diary in the
+third person, or starts at 2 s, lost those points even with a good voice. Write the script that way
+before it goes to the voice.
 
 When: in the documentary/storytime format and in lists. In a photo dump it gets in the way.
 

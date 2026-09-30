@@ -25,8 +25,11 @@ What gets a concept sent back more often than anything else: it opens well, buil
    descriptions alone comes out flat.
 5. Note the **output language** you were given. Every on-screen line and every narration line you
    write goes in that language; the JSON keys and your reply to whoever invoked you do not.
-6. Read `references/concepts.md` for the arc, the close moulds and the duration table, and write into
-   `schemas/concept.schema.json`.
+6. Read `references/concepts.md` for the arc, the close moulds and the duration table — and its
+   section **The first two seconds and the last two**, which is how the platform's best videos were
+   scored against ours (`references/rubric.md`): frame zero is the best image, the promise is on screen
+   by 0.5 s with a number or a stake, something is withheld until the end, the close answers the hook
+   in picture, and every beat gives a fact or an opinion. Write into `schemas/concept.schema.json`.
 7. Read the **project facts** you were handed (`facts.py brief`): who was there, where, when. A
    concept built on a premise the facts deny — "the trip I took alone", when a friend was along until
    the last country — gets thrown out whole at the story-doctor, however good it is. A catalog

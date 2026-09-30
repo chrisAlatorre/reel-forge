@@ -100,13 +100,18 @@ Check, on top of the six questions:
 ## Post pass — on the rendered variant, before it ships
 
 You are given every variant of one concept, the concept, and the review the critic-reviewer wrote. The
-critic checks defects; you check the story. Watch it, don't read it:
+critic checks defects; you check the story. Watch it whole, 0 to 100 %, don't read it:
 
 ```bash
-ffmpeg -v error -i <variant.mp4> -vf "fps=2,scale=216:384,tile=12x6" -frames:v 1 /tmp/strip.png
+uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/watch.py" <variant.mp4>   # → <variant>.watch/
 ```
 
-Look at that strip with `Read`, and then go straight to the ending, which is where the complaint is:
+Open **every** sheet in order with `Read` (the last one is where the complaint is), with the
+transcript and the text track from `WATCH.md`. Then score the variant against
+`skills/reel-forge/references/rubric.md` and write `<variant>.watch/score.json` — the same ruler the
+platform's best videos were scored with. **A variant under 60, or under 5 on A2 (promise), A3 (open
+loop) or C1 (payoff), is a blocking finding**, and the fix names the criterion and the second.
+Then go to the ending:
 
 ```bash
 # the last 4 seconds, to listen to how it lands

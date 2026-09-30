@@ -122,6 +122,7 @@ GRADES = {
 
 _SKIN = (5, 25)        # OpenCV hue units (10°-50°): where faces live
 _CACHE = {}
+LUT_REV = 3           # bump when apply() changes: the cached .cube files carry it in their name
 
 
 def _hue_luts(p):
@@ -180,6 +181,12 @@ def apply(img: np.ndarray, name: str, strength: float = 0.85) -> np.ndarray:
     if w:
         out[..., 0] += w
         out[..., 2] -= w
+    # Shadow guard: a grade never pushes the deep shadows below where the source had them. A night
+    # sky between two fireworks is already near black; the S-curve and the roll took it past the
+    # gate's black threshold and a real shot read as "black frames".
+    src = img.astype(np.float32)
+    toe = np.clip((64 - src.mean(axis=2, keepdims=True)) / 24, 0, 1)    # full below 40, gone by 64
+    out = out + (np.maximum(out, src) - out) * toe
     out = np.clip(out, 0, 255)
     if strength < 1:
         out = img.astype(np.float32) + (out - img) * strength
@@ -192,7 +199,7 @@ def cube(name: str, strength: float = 0.85, size: int = 65) -> Path:
     import os
     d = Path(os.path.expanduser(os.environ.get("REEL_FORGE_CACHE", "~/.cache/reel-forge"))) / "grades"
     d.mkdir(parents=True, exist_ok=True)
-    out = d / f"{name}-{int(round(strength * 100))}-{size}.cube"
+    out = d / f"{name}-{int(round(strength * 100))}-{size}-r{LUT_REV}.cube"
     if out.exists():
         return out
     g = np.linspace(0, 255, size).round().astype(np.uint8)

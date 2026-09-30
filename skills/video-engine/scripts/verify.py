@@ -31,6 +31,9 @@ Criteria:
 | `text_cut`     | *warns*: text with no voice behind it stays on screen after its shot is gone |
 | `voice_image`  | the voice names something (a segment's `says`) while another shot is on screen |
 | `ending`       | *warns*: with `"loop": true` in the spec, that the last frame does not land on the first; otherwise: it ends on a dry cut — picture still moving, sound at full level, no fade, no closer, last shot under 0.6 s |
+| `renewal`      | a stretch longer than `--max-stale` (5 s) with no new shot, text or voice line — unless the shot is marked `"hero"` |
+| `pace`         | *warns*: the average shot is longer than `--max-mean-shot` (3 s) |
+| `hook`         | *warns*: nothing on screen or said in the first second, or an opening text over 8 words |
 | `preview_size` | the review copy weighs more than `--max-preview-mb` |
 
 `voice_audible` is the one that catches the failure nobody sees in a frame strip: a video delivered
@@ -488,6 +491,10 @@ def main():
     # 280 MB: under the app's own upload ceiling (~287 MB on iOS). The upload profile runs ~14 Mbps,
     # so a 90 s story is ~160 MB — the old 120 MB ceiling would have failed exactly the longer videos
     # the user asked for.
+    ap.add_argument("--max-stale", type=float, default=5.0,
+                    help="longest stretch with nothing new (shot, text, voice line) before `renewal` fails")
+    ap.add_argument("--max-mean-shot", type=float, default=3.0,
+                    help="`pace` warns when the average shot is longer than this")
     ap.add_argument("--max-mb", type=float, default=280.0, help="ceiling for the delivered file")
     ap.add_argument("--max-preview-mb", type=float, default=30.0, help="ceiling for the review copy")
     ap.add_argument("--json", dest="json_out", help="write the report to this file as well")
@@ -530,11 +537,13 @@ def main():
         ok = ok and abs(v_dur - expected) <= a.tolerance
     check(report, "duration", ok, detail)
 
-    # 3. black frames, ignoring the final fade
+    # 3. black frames, ignoring the final fade. The threshold is TRUE black (a missing source, a cut
+    # into nothing sits at 0): at 0.12 a night sky between two fireworks, correctly exposed at
+    # ~8 % above black, failed the gate as "black frames".
     tail = max(0.0, v_dur - 1.0)
     blacks = [(float(m.group(1)), float(m.group(2))) for m in
               re.finditer(r"black_start:(\d+(?:\.\d+)?) black_end:(\d+(?:\.\d+)?)",
-                          ffmpeg_stderr(video, "blackdetect=d=0.08:pix_th=0.12", "v"))]
+                          ffmpeg_stderr(video, "blackdetect=d=0.08:pix_th=0.05", "v"))]
     bad_black = [w for w in blacks if w[0] < tail]
     check(report, "black_frames", not bad_black,
           "no black frames" if not bad_black else
@@ -811,6 +820,51 @@ def main():
             detail = ("it lands: last shot " + (f"{last_dur:.2f} s" if last_dur is not None else "?") +
                       (", with a fade" if faded else ""))
         warn(report, "ending", not bad, detail + (f" [{measured}]" if measured else ""))
+
+    # 9b. retention: the three things every well-scored reference had and our first renders did not
+    # (references/rubric.md, criteria A2, B1, B2). Measured on the timeline, never guessed.
+    shots = (timeline or {}).get("shots") or []
+    if shots:
+        events = sorted({round(x["t0"], 2) for x in shots}
+                        | {round(c["t0"], 2) for c in captions}
+                        | {round(float(w[0]), 2) for w in (timeline.get("voice") or [])})
+        ends = [e for e in events if e < v_dur - 1.0] + [max(0.0, v_dur - 1.0)]
+        stale, at = 0.0, 0.0
+        for x, y in zip(ends, ends[1:]):
+            hero = any(sh.get("hero") and sh["t0"] <= x + 0.01 and sh["t1"] >= y - 0.01 for sh in shots)
+            if y - x > stale and not hero:
+                stale, at = y - x, x
+        check(report, "renewal", stale <= a.max_stale,
+              (f"nothing new for {stale:.1f} s from {at:.2f} s (no cut, no text, no voice line); the "
+               f"ceiling is {a.max_stale:g} s. Split the take into two framings, put a text or a sound "
+               f"beat in it, or mark it \"hero\" if holding it IS the point") if stale > a.max_stale else
+              f"something new at least every {a.max_stale:g} s (longest wait {stale:.1f} s)")
+        durs = [x["dur"] for x in shots]
+        mean = sum(durs) / len(durs)
+        thirds = [sum(1 for x in shots if v_dur * i / 3 <= x["t0"] < v_dur * (i + 1) / 3) for i in range(3)]
+        warn(report, "pace", mean <= a.max_mean_shot,
+             f"{len(shots)} shots, mean {mean:.1f} s, longest {max(durs):.1f} s, cuts per third {thirds}"
+             + ("" if mean <= a.max_mean_shot else
+                f" — the references that scored best averaged 0.9-1.9 s a shot, with a burst and a "
+                f"deliberate hold; ceiling {a.max_mean_shot:g} s"))
+        hook = [c for c in captions if c["t0"] <= 0.5]
+        voice0 = [w for w in (timeline.get("voice") or []) if float(w[0]) <= 1.0]
+        words0 = len(hook[0]["text"].split()) if hook else 0
+        hook_ok = bool(hook or voice0) and words0 <= 8
+        warn(report, "hook", hook_ok,
+             ("the promise is on screen from 0.0 s" if hook else "the voice opens by 1.0 s")
+             + (f" ({words0} words)" if hook else "") if hook_ok else
+             ("nothing on screen or said in the first second: the promise must be there by 0.5 s"
+              if not (hook or voice0) else
+              f"the opening text runs {words0} words; the hook reads in one glance at 8 or fewer"))
+        if "ending" in report and not (timeline or {}).get("loop") and len(shots) > 2 and shots[-1]["src"] and shots[-1]["src"] == shots[0]["src"]:
+            report["ending"]["detail"] += (" — and the last shot is the opening take again: close on "
+                                           "the shot that answers the hook, not on the one that asked it")
+            if report["ending"]["status"] == "pass":
+                report["ending"]["status"] = "warn"
+    else:
+        for k in ("renewal", "pace", "hook"):
+            skip(report, k, "no timeline with shots: re-render, or pass --spec")
 
     # 10. weight: the delivery and the review copy
     preview = Path(a.preview) if a.preview else next(

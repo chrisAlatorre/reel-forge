@@ -22,7 +22,9 @@ Spec summary:
   "format": "9x16",                     # 9x16 (default) | 4x5 | 1x1 | 16x9
   "fps": 30, "crf": 22,
   "look": "film" | "teal" | "clean", "grain": 0.008,
-  "grade": "auto",                      # per-shot colour grade by scene (grade.py); or a name, or "none"
+  "grade": "auto",                      # one grade for the video, picked by its scenes (grade.py); night
+                                        # shots get the night one. "auto-shot": each shot its own. A name,
+                                        # or "none"
   "grade_strength": 0.85,
   "fade_out": 0.4, "audio_fade_out": 1.2,
   "loop": false,                        # true: it closes on its own first frame (put both fades at 0)
@@ -774,6 +776,44 @@ def _graded(frames, s):
     return out
 
 
+NIGHT_GRADES = ("night-city", "neon-night")
+
+
+def unify_grades(spec, fps):
+    """`grade: "auto"` means ONE look for the video, not one per shot. Every reference that scored
+    well on the rubric's `look` held a single grade across all its cuts; per-shot grades made our
+    cuts jump from cold grey to warm orange. Each shot votes with its middle frame, weighted by its
+    length; the day shots all take the day winner and the night shots the night winner (a night
+    street under a daylight grade is wrong, and a real change of light is not a jump)."""
+    if spec.get("grade") != "auto":
+        return None
+    votes = {"day": {}, "night": {}}
+    for s in spec["segments"]:
+        if s.get("grade") not in (None, "auto") or "map" in s or s.get("reframe"):
+            continue
+        src = str(config.path(s["src"])) if s.get("src") else ""
+        try:
+            if src.lower().endswith((".mov", ".mp4", ".m4v", ".mkv")):
+                last = max(0.0, _ffprobe(src)["dur"] - 0.1)
+                img = video_frames(src, min(float(s.get("start", 0)) + 0.5, last), 1, 1, fps)[0]
+            elif src:
+                img = np.asarray(ImageOps.exif_transpose(Image.open(src)).convert("RGB"))
+            else:
+                continue
+        except Exception:
+            continue
+        g = grading.classify(img, s.get("tags") or ())[0]
+        side = "night" if g in NIGHT_GRADES else "day"
+        w = float(s.get("dur") or s.get("beats") or 1)
+        votes[side][g] = votes[side].get(g, 0) + w
+        s["_side"] = side
+    win = {k: max(v, key=v.get) for k, v in votes.items() if v}
+    for s in spec["segments"]:
+        if s.get("grade") in (None, "auto") and s.get("_side") in win:
+            s["grade"] = win[s["_side"]]
+    return win
+
+
 def _segment_base(s, n, fps, src, focus):
     return _graded(_segment_base_raw(s, n, fps, src, focus), s)
 
@@ -801,7 +841,10 @@ def _segment_base_raw(s, n, fps, src, focus):
         g = s.get("grade", GRADE_DEFAULT["grade"])
         if g and g != "none":
             if g == "auto":
-                mid = start + (take / fps) * speed / 2
+                # A shot can ask for more than the clip holds (the tail fills the rest): the probe
+                # frame must still be inside the clip, or ffmpeg returns nothing at all.
+                last = max(0.0, _ffprobe(src)["dur"] - 0.1)
+                mid = min(start + (take / fps) * speed / 2, last)
                 probe = video_frames(src, mid, 1, 1, fps)[0]
                 g = grading.classify(probe, s.get("tags") or ())[0]
             s["_grade"] = g
@@ -829,8 +872,11 @@ def main():
     fmt = set_format(args.format or spec.get("format") or config.FORMAT)
     fps = spec.get("fps", config.FPS)
     look = LOOKS[spec.get("look", "clean" if spec.get("grade") else "film")]
-    GRADE_DEFAULT["grade"] = spec.get("grade")
     GRADE_DEFAULT["strength"] = float(spec.get("grade_strength", 0.85))
+    looks = unify_grades(spec, fps)
+    GRADE_DEFAULT["grade"] = "auto" if spec.get("grade") in ("auto", "auto-shot") else spec.get("grade")
+    if looks:
+        print("grade, one look per light: " + ", ".join(f"{k} {v}" for k, v in looks.items()))
     vig = vignette(look["vig"])
     grain = min(spec.get("grain", 0.008), config.GRAIN_MAX)
     rng = np.random.default_rng(7)
@@ -1016,6 +1062,7 @@ def main():
         "shots": [dict({"i": i, "t0": round(t0, 3), "t1": round(t1, 3), "dur": round(t1 - t0, 3),
                         "src": Path(str(s.get("src", ""))).name or ("map" if "map" in s else "")},
                        **({"says": says_of(s)} if s.get("says") else {}),
+                       **({"hero": True} if s.get("hero") else {}),
                        **({"grade": s["_grade"]} if s.get("_grade") else {}))
                   for i, (s, t0, t1) in enumerate(zip(spec["segments"], starts, cuts))],
         "words": voice_words,

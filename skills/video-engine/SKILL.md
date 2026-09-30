@@ -33,7 +33,9 @@ Files:
 | `scripts/config.py` | Canvas, safe area and paths configurable through environment variables. |
 | `scripts/resources.py` | Downloads the fonts, the base map and the segmentation model. |
 | `scripts/transcribe.py` | Subtitle candidates from a clip's audio, and word-by-word alignment of a narration. |
-| `scripts/verify.py` | The delivery gate: audio, length, holes, peak, audible voice, text in sync, ending, weight. |
+| `scripts/verify.py` | The delivery gate: audio, length, holes, peak, audible voice, text in sync, ending, renewal, pace, hook, weight. |
+| `scripts/watch.py` | Watches a whole video, 0-100 %: every frame on sheets, cuts, transcript, on-screen text. What the rubric is scored from — for the platform's videos and ours alike. |
+| `scripts/grade.py` | Scene colour grades; `"auto"` picks one for the video (and one for its night shots). |
 
 ## Requirements
 
@@ -203,6 +205,7 @@ Every segment contributes **image only**. Its duration is declared with `dur` (s
 | `cutout` | — | Character intro with a cutout (see below). |
 | `subs` | — | Subtitles of **this clip's own audio** (see "Text that stays in sync"). |
 | `says` | — | What the narration names while this shot is on screen; `verify.py` checks it. |
+| `hero` | false | A take whose length is the point (a real-time reveal, a line that plays whole): the `renewal` gate lets it run past 5 s. |
 
 **`behind` — text behind the subject**
 

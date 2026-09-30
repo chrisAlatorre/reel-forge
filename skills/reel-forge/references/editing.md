@@ -85,15 +85,35 @@ the body breathes (1.5-3 s) so what is on screen can actually be seen; the landi
 shot of the video. Cutting at the same interval from beginning to end reads as a slideshow, however
 good the material is.
 
+**Measured against the platform** (28 top travel videos and our own, scored with the same rubric —
+`rubric.md`): the references that held attention averaged **0.9-1.9 s a shot**; ours averaged
+3.5-6.7 s, with single takes of 9-14 s where nothing new happened. What they do, and the gate now
+checks (`renewal`, `pace`, `hook`):
+
+- **A pace curve, declared.** Three stretches with different speeds on purpose: the hook (a held
+  best shot, or a burst of 3-5 flashes of 0.3 s from the payoff), the body on a grid of 1-2 beats,
+  and a slower landing. Write it in the spec's notes before choosing shots.
+- **Nothing stays the same for more than 5 s.** Every stretch gets a new shot, a new text or a new
+  voice line. A good long take is split into two or three framings of the same clip (a punch-in,
+  a different `focus`) instead of held. A take whose length IS the point (a reveal in real time, a
+  line of dialogue that has to play whole) is marked `"hero": true` on its segment, and the gate
+  lets it through.
+- **The cut lands on sound.** A beat when there is music, a hit of natural sound (a laugh, a splash,
+  a glass) when there is not. A reveal that arrives between beats reads as late.
+
 **The ending is a shot, not the point where the material ran out.** These are the ones that fixed the
 "it cuts off too soon" complaint:
 
-- The last shot lasts **0.8-1.5 s**. Under 0.6 s the video reads as a truncated file, and `verify.py`
-  warns about exactly that.
+- The last shot lasts **1.5-2 s** and it is **the shot that answers the hook** — the reaction, the
+  #1, the payoff — in close-up. Never the opening take again (the gate warns), and never one more
+  pretty shot after the payoff. Under 0.6 s the video reads as a truncated file.
 - Something **closes**: the line that answers the hook, the number, the face reacting, the wide shot
   the whole thing was building to. A closing text that lands with the last cut counts.
-- `fade_out` 0.3-0.5 and `audio_fade_out` 1.0-1.5. `0` only on a video built to loop — and then the
-  seam IS the ending, so the last frame has to hand over to the first one.
+- `fade_out` 0-0.3 and `audio_fade_out` 1.0-1.5. The picture does not fade to black: every scorer
+  marked it down as "it stops, it doesn't end". A held, settled last frame with the sound tapering
+  is the ending. Better still, a **loop**: the last frame rhymes with frame zero (`"loop": true`,
+  both fades at 0), so the video starts again without the viewer noticing — the short references
+  that did it got rewatched.
 - The narration must finish **before** the picture does, never at the same second. A voice still
   speaking at the last frame is the same failure heard instead of seen.
 - Do not stretch a video to reach a length: a repeated shot and a held final frame are more obvious
@@ -106,6 +126,13 @@ good the material is.
   subject's point and let it fill the frame. The blurred background is only for what genuinely can't be
   cropped.
 - Check that the crop doesn't cut off heads or leave someone stuck to the edge.
+
+## Look: one per video
+
+`"grade": "auto"` picks **one** grade for the whole video from what its shots show (by length), and one
+for its night shots if it has any. Per-shot grades (`"auto-shot"`) made our cuts jump from cold grey
+to warm orange; the references that scored best held one look across 20-30 locations. Force a name
+(`"grade": "golden-hour"`) when the concept has a mood the scenes alone would not pick.
 
 ## Text
 

@@ -106,9 +106,27 @@ at render time:
 - **The promise is paid on screen**, at the second the concept says — not implied, not left to the
   viewer.
 - **No beat repeats the one before it.** If two do, drop one and give the seconds to a beat that lands.
-- **The close holds.** 0.8-1.5 s of settled picture and a `fade_out` of 0.3-0.5, never a cut in the
-  middle of a movement, a word or a gesture, and never the last frame stretched to fill time. If the
-  close needs more, extend it with material — hold the shot, add the beat the story-doctor named.
+- **The close holds.** 1.5-2 s of settled picture on **the shot that answers the hook** (the reaction,
+  the #1, the payoff), `fade_out` 0-0.3 — no fade to black — or a loop back to frame zero. Never the
+  opening take recycled, never a cut in the middle of a movement, a word or a gesture, and never the
+  last frame stretched to fill time. If the close needs more, extend it with material.
+
+## Pace, look and the first frame (the gate checks them)
+
+Scored against the platform's best travel videos, ours lost on the same things every time; the
+gate now measures them (`renewal` fails, `pace` and `hook` warn — detail in `references/editing.md`):
+
+- **Frame zero is the best frame.** Trim the first take so it starts at its peak — the smile, the
+  splash, the reveal — never on the approach. The hook text is up at 0.0 s (`"instant": true`),
+  8 words or fewer, with a number or a stake.
+- **A declared pace curve**: the hook, a body on a grid of 1-2 beats, a slower landing. Average under
+  3 s a shot.
+- **Nothing new for 5 s fails the build.** Split a long take into two or three framings (another
+  `focus`, a `punch`), add a text beat or a sound hit. A take whose length is the point gets
+  `"hero": true` on its segment — and you say why in `notes`.
+- **Cuts land on the beat or on a sound hit.** Reveals too.
+- **One look.** Leave `"grade": "auto"` (one grade per video, a second one only for night shots).
+- **Speech in another language gets a subtitle** in the output language, large and in the safe zone.
 
 **The duration comes from the story.** The concept's `duration_rationale` counts it in beats (*hook 3 +
 three proofs of 7 + turn 4 + close 3*) and the story-doctor set your variant's seconds from its own
