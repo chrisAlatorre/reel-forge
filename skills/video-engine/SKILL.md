@@ -376,6 +376,44 @@ because a clip was reordered and nobody re-read the script.
 
 ---
 
+## Colour grades by scene (`grade`) — the default
+
+A professional reel is graded shot by shot for what the shot IS: an autumn road under low clouds
+gets glowing oranges, olive greens and slate skies; a jungle gets deep emerald; a neon street gets
+controlled magenta and cyan over clean blacks. `grade.py` holds that library and picks for you:
+
+| `grade` | For | What it does |
+|---|---|---|
+| `autumn-moody` | autumn foliage, clouds, mountains | oranges glow, greens to olive, slate blues, deep shadows, warm highs |
+| `forest-deep` | green woods, jungle, parks | rich deep greens, cool shadows |
+| `golden-hour` | low warm sun | honey highlights, soft contrast |
+| `night-city` | blue hour, night streets | teal shadows, warm lights, clean blacks |
+| `neon-night` | neon, LED towers, casinos | controlled magenta/cyan, crushed blacks |
+| `tropical-water` | sea, rivers, pools, beaches | turquoise water, warm skin and sand |
+| `alpine-snow` | snow, bright white ground | cool clean whites, blue shadows |
+| `overcast-film` | grey sky, rain, flat light | filmic and muted, shaped by contrast |
+| `urban-clean` | city by day | crisp, gentle teal-orange |
+| `food-warm` | food (tag `food`) | warm appetite colours |
+| `interior-warm` | warm indoor light | cosy, the orange cast tamed |
+
+- **`"grade": "auto"`** (the builder's default) looks at each shot — shares of foliage, greens,
+  water, snow, sky, darkness, neon, warmth — and picks one; catalog `tags` (`food`, `interior`,
+  `water`) break the ties pixels can't. The choice is written per shot into the timeline.
+- A segment can name its own (`"grade": "forest-deep"`) or opt out (`"none"`); `grade_strength`
+  (0-1, default 0.85) blends it with the untouched frame so shots from different scenes still sit
+  together. Skin (mid-saturation orange) is protected from the strongest hue moves.
+- Video is graded while it decodes (the grade becomes a 65³ `.cube` for ffmpeg's `lut3d`, cached in
+  `~/.cache/reel-forge/grades/`), photos once per shot: about a second per render, not minutes.
+- With a grade on, the spec's `look` defaults to `clean` (the grade already carries the colour); a
+  `look` still adds vignette and the shared finishing.
+
+```bash
+G="uv run ${CLAUDE_PLUGIN_ROOT}/skills/video-engine/scripts/grade.py"
+$G list                                   # the library
+$G classify shot.jpg                      # which grade, and why
+$G demo a.jpg b.jpg --out sheet.jpg       # before | after, side by side
+```
+
 ## Colour looks and grain
 
 | `look` | What it does | When |

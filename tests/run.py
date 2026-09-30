@@ -577,6 +577,32 @@ def a_laugh_outranks_the_prettiest_empty_frame(tmp):
     assert got == ["laugh", "sky"], got
 
 
+@test
+def each_scene_gets_its_grade_and_video_is_graded_while_it_decodes(tmp):
+    """One flat look treated snow, neon and food the same; the user asked for colour 'depending on
+    the landscape or the shot', like a travel reel's autumn grade."""
+    import numpy as np
+    import grade
+    night = np.full((400, 240, 3), 12, np.uint8)
+    night[300:320, 20:220] = (255, 170, 60)                       # a few warm lights
+    forest = np.zeros((400, 240, 3), np.uint8)
+    forest[:] = (40, 120, 50)
+    assert grade.classify(night)[0] in ("night-city", "neon-night"), grade.classify(night)
+    assert grade.classify(forest)[0] == "forest-deep", grade.classify(forest)
+    out = grade.apply(forest, "forest-deep")
+    assert out.shape == forest.shape and not np.array_equal(out, forest)
+    cube = grade.cube("forest-deep", 0.85, size=17)
+    assert cube.exists() and "LUT_3D_SIZE 17" in cube.read_text()[:200]
+    ff("-f", "lavfi", "-i", "color=c=0x287832:size=320x568:rate=30", "-t", "1", "-pix_fmt", "yuv420p", tmp / "g.mp4")
+    spec = {"out": str(tmp / "o.mp4"), "fps": 30, "grade": "auto",
+            "segments": [{"src": str(tmp / "g.mp4"), "dur": 1.0}]}
+    (tmp / "s.json").write_text(json.dumps(spec))
+    r = uv(ENGINE / "render.py", tmp / "s.json")
+    assert r.returncode == 0, r.stderr[-800:]
+    tl = json.loads((tmp / "o.timeline.json").read_text())
+    assert tl["shots"][0].get("grade") == "forest-deep", tl["shots"][0]
+
+
 # --------------------------------------------------------------------------- runner
 
 def main():

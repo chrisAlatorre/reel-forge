@@ -22,6 +22,8 @@ Spec summary:
   "format": "9x16",                     # 9x16 (default) | 4x5 | 1x1 | 16x9
   "fps": 30, "crf": 22,
   "look": "film" | "teal" | "clean", "grain": 0.008,
+  "grade": "auto",                      # per-shot colour grade by scene (grade.py); or a name, or "none"
+  "grade_strength": 0.85,
   "fade_out": 0.4, "audio_fade_out": 1.2,
   "loop": false,                        # true: it closes on its own first frame (put both fades at 0)
   "bpm": 123.0, "beat0": 0.0,
@@ -73,6 +75,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps  # noqa: E402
 
 import config  # noqa: E402
 import effects  # noqa: E402
+import grade as grading  # noqa: E402
 
 try:
     import pillow_heif
@@ -135,7 +138,7 @@ def load_photo(src):
     return np.asarray(im)
 
 
-def video_frames(src, start, n, speed, fps, stabilize=False):
+def video_frames(src, start, n, speed, fps, stabilize=False, lut=None):
     """Yields n RGB frames of the clip, already SDR, rotation applied, at the working resolution.
     `stabilize`: ffmpeg's deshake first — for handheld Live Photos and walking clips that shake."""
     info = _ffprobe(src)
@@ -148,6 +151,8 @@ def video_frames(src, start, n, speed, fps, stabilize=False):
         vf.append(f"setpts=PTS/{speed}")
     vf.append(f"fps={fps}")
     vf.append("scale='if(gt(iw,ih),2400,-2)':'if(gt(iw,ih),-2,2400)'")
+    if lut:
+        vf.append(f"lut3d=file='{lut}':interp=tetrahedral")
     cmd = ["ffmpeg", "-nostdin", "-v", "error", "-ss", str(start), "-i", src, "-vf", ",".join(vf),
            "-frames:v", str(n), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
@@ -746,7 +751,34 @@ def _tail(frames, n, s, focus):
     return frames + [frames[-1]] * (n - len(frames))
 
 
+GRADE_DEFAULT = {"grade": None, "strength": 0.85}   # set from the spec in main()
+
+
+def _graded(frames, s):
+    """The shot's colour grade (grade.py): `grade` on the segment, else the spec's; "auto" picks it
+    from the shot's middle frame, once, so a clip never changes grade halfway through."""
+    if frames is None or s.get("_graded_in_decode"):
+        return frames
+    g = s.get("grade", GRADE_DEFAULT["grade"])
+    if not g or g == "none":
+        return frames
+    strength = float(s.get("grade_strength", GRADE_DEFAULT["strength"]))
+    if g == "auto":
+        g = grading.classify(frames[len(frames) // 2], s.get("tags") or ())[0]
+    s["_grade"] = g
+    done, out = {}, []
+    for f in frames:                     # a photo is one frame repeated: grade it once
+        if id(f) not in done:
+            done[id(f)] = grading.apply(f, g, strength)
+        out.append(done[id(f)])
+    return out
+
+
 def _segment_base(s, n, fps, src, focus):
+    return _graded(_segment_base_raw(s, n, fps, src, focus), s)
+
+
+def _segment_base_raw(s, n, fps, src, focus):
     """The segment's frames at the working resolution (W*MARGIN x H*MARGIN). None = a map."""
     WM, HM = int(W * MARGIN), int(H * MARGIN)
     if "map" in s:
@@ -765,7 +797,17 @@ def _segment_base(s, n, fps, src, focus):
             # `end`: the source second where the usable picture stops (a Live Photo's phone being
             # lowered, a clip's last good frame). Past it, `tail` decides what fills the shot.
             take = max(1, min(n, int((float(s["end"]) - start) / speed * fps)))
-        raw = video_frames(src, start, take, speed, fps, bool(s.get("stabilize")))[:take]
+        lut = None
+        g = s.get("grade", GRADE_DEFAULT["grade"])
+        if g and g != "none":
+            if g == "auto":
+                mid = start + (take / fps) * speed / 2
+                probe = video_frames(src, mid, 1, 1, fps)[0]
+                g = grading.classify(probe, s.get("tags") or ())[0]
+            s["_grade"] = g
+            s["_graded_in_decode"] = True
+            lut = str(grading.cube(g, float(s.get("grade_strength", GRADE_DEFAULT["strength"]))))
+        raw = video_frames(src, start, take, speed, fps, bool(s.get("stabilize")), lut)[:take]
         fit = (lambda c: fit_with_background(c, WM, HM)) if s.get("fit") == "blur" \
             else (lambda c: cover(c, WM, HM, focus))
         frames = [fit(c) for c in raw]
@@ -786,7 +828,9 @@ def main():
         spec = json.load(fh)
     fmt = set_format(args.format or spec.get("format") or config.FORMAT)
     fps = spec.get("fps", config.FPS)
-    look = LOOKS[spec.get("look", "film")]
+    look = LOOKS[spec.get("look", "clean" if spec.get("grade") else "film")]
+    GRADE_DEFAULT["grade"] = spec.get("grade")
+    GRADE_DEFAULT["strength"] = float(spec.get("grade_strength", 0.85))
     vig = vignette(look["vig"])
     grain = min(spec.get("grain", 0.008), config.GRAIN_MAX)
     rng = np.random.default_rng(7)
@@ -971,7 +1015,8 @@ def main():
         "audio_fade_out": float(spec.get("audio_fade_out", 1.2) or 0),
         "shots": [dict({"i": i, "t0": round(t0, 3), "t1": round(t1, 3), "dur": round(t1 - t0, 3),
                         "src": Path(str(s.get("src", ""))).name or ("map" if "map" in s else "")},
-                       **({"says": says_of(s)} if s.get("says") else {}))
+                       **({"says": says_of(s)} if s.get("says") else {}),
+                       **({"grade": s["_grade"]} if s.get("_grade") else {}))
                   for i, (s, t0, t1) in enumerate(zip(spec["segments"], starts, cuts))],
         "words": voice_words,
         "captions": [{k: (round(p[k], 3) if isinstance(p.get(k), float) else p.get(k))

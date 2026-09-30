@@ -158,6 +158,9 @@ decide is only what is particular to your variant:
    for the rest of the shot, with the Live's own sound under the movement. `tail: "boomerang"` when
    the movement reads either way (water, flags, a crowd). A still with a push only where the photo has
    no usable movement, or as a deliberate freeze; say which in the README.
+   Colour is graded per shot by scene (`grade: "auto"`, on by default — see the engine's
+   "Colour grades by scene"). Override a shot only when the auto pick is wrong for the story (a
+   warm interior that should stay warm), and look at the grades the timeline records.
    A handheld clip or Live that shakes gets `"stabilize": true` (ffmpeg deshake). A shot whose
    framecheck notes "private text" (a plate, a phone, an e-mail) goes in only from a copy in
    `common/` with that region blurred, or cropped so it is out of frame.

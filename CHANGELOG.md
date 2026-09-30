@@ -8,6 +8,22 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.11.0
+
+### Added
+
+- **Colour grades by scene, shot by shot (`grade.py`).** One flat `look` over a whole video treated a
+  snowy peak, a neon street and a plate of food the same; the user pointed at a travel reel's
+  autumn grade and asked for colour "depending on the landscape or the shot". Eleven grades —
+  autumn-moody, forest-deep, golden-hour, night-city, neon-night, tropical-water, alpine-snow,
+  overcast-film, urban-clean, food-warm, interior-warm — built from a colourist's controls (per-hue
+  HSL, contrast curve, lifted or crushed blacks, split toning, warmth, vibrance), with skin
+  protected. `"grade": "auto"`, now the builder's default, picks one per shot from what the frame
+  holds (foliage, greens, water, snow, sky, darkness, neon, warmth; catalog tags for food and
+  interiors) and records it in the timeline; `grade_strength` keeps a video coherent.
+- Video is graded while it decodes: each grade becomes a cached 65³ `.cube` for ffmpeg's `lut3d`;
+  photos are graded once per shot. About a second per render.
+
 ## 0.10.2
 
 ### Fixed

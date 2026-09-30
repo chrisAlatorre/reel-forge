@@ -694,6 +694,9 @@ class Variant:
         for extra in ("map_style", "stamp", "title"):
             if extra in self.cfg:
                 spec[extra] = self.cfg[extra]
+        # colour by scene, shot by shot (grade.py): on unless the variant says "none"
+        spec["grade"] = self.cfg.get("grade", "auto")
+        spec["grade_strength"] = float(self.cfg.get("grade_strength", 0.85))
         return spec
 
     # ------------------------------------------------------------------ the concept's README
