@@ -8,6 +8,16 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.11.1
+
+### Fixed
+
+- **Narrated variants stopped building: the subtitle alignment crashed.** PyAV 19 (resolved fresh by
+  uv) removed `av.open(metadata_errors=…)`, which faster-whisper 1.2 still passes, so `transcribe.py
+  --align` died with `TypeError: open() got an unexpected keyword argument 'metadata_errors'` and
+  every narrated re-render failed. `transcribe.py` and the faster-whisper path of `wordmarks.py` pin
+  `av<19`.
+
 ## 0.11.0
 
 ### Added

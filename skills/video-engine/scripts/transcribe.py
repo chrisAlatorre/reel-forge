@@ -2,6 +2,7 @@
 # requires-python = ">=3.10,<3.13"
 # dependencies = [
 #   "faster-whisper>=1.1",
+#   "av<19",   # PyAV 19 dropped av.open(metadata_errors=…), which faster-whisper 1.2 still passes
 # ]
 # ///
 """Two jobs, one model: what a clip SAYS, and WHEN the narration says each word.

@@ -121,7 +121,10 @@ def transcribe_words(wav, language=None, cache=None, force=False, quiet=False) -
         out = Path(tmp) / "words.json"
         try:
             r = subprocess.run(["uv", "run", "--quiet", "--no-project", "--python", "3.12",
-                                "--with", dep, "python", str(prog), str(wav), str(out),
+                                "--with", dep]
+                               # PyAV 19 dropped av.open(metadata_errors=…), which faster-whisper 1.2 passes
+                               + (["--with", "av<19"] if dep == FASTER_WHISPER else [])
+                               + ["python", str(prog), str(wav), str(out),
                                 kind, model, language or ""], capture_output=True, text=True)
         except OSError as e:
             # No uv on this machine: a RuntimeError like any other failure, so the caller decides
