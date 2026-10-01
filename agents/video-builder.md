@@ -127,6 +127,13 @@ gate now measures them (`renewal` fails, `pace` and `hook` warn — detail in `r
 - **Cuts land on the beat or on a sound hit.** Reveals too.
 - **One look.** Leave `"grade": "auto"` (one grade per video, a second one only for night shots).
 - **Speech in another language gets a subtitle** in the output language, large and in the safe zone.
+- **Long holds split themselves.** `variant.py` cuts any clip held past `max_shot` (2.6 s, in
+  `variant.json`) into consecutive pieces of the same take, alternating wide and a 1.22x punch-in, on
+  half-beats in a beat grid. It leaves alone `hero` shots, photos, Lives landing on their still and
+  anything with its own zoom work. Choose `start` windows knowing the take will play through.
+- **The user's own voice.** A voice-script line with `"own": "<recording>"` plays the user's recording
+  instead of the synthetic voice (silence trimmed, levelled), and the grid takes its real length. Use
+  it when the user gave you recordings; ask for none.
 
 **The duration comes from the story.** The concept's `duration_rationale` counts it in beats (*hook 3 +
 three proofs of 7 + turn 4 + close 3*) and the story-doctor set your variant's seconds from its own

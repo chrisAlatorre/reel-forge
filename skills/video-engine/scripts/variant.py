@@ -40,6 +40,10 @@ variant.json (paths relative to its own folder; `~` and `$VARS` expand):
       "captions": [{"seg": 0, "lead": 0.0, "text": "The wall runs\\ninto the sea"}]
     }
 
+Pace: `"max_shot": 2.6` (default) splits a clip held longer into consecutive cuts of the same take,
+alternating wide and a punch-in; 0 turns it off; a shot with `"hero": true` is never split.
+A voice-script line with `"own": "voice/memo.m4a"` plays the user's recording for that line.
+
 A shot carries any engine segment key (kb, punch, focus, flash, speed, says, fit, subs, drift,
 behind, cutout, map, end, tail, still...) and they pass straight to the spec. A Live Photo is a clip:
 
@@ -407,6 +411,31 @@ class Variant:
         atomic_json(info_f, info)
         return durs, info
 
+    def own_lines(self, vs_data, durs):
+        """Lines the user recorded themselves (`"own": "voice/memo-3.m4a"` on the line). A trend voice
+        reading a diary scored 4 of 10 on voice; the references that scored 8-9 were a person
+        talking. The recording replaces that line's wav — silence trimmed, levelled like the rest —
+        and its real length goes into the grid. The text stays: the subtitles still come from it."""
+        items = vs_data["lines"] if isinstance(vs_data, dict) else vs_data
+        changed = False
+        for i, ln in enumerate(items):
+            if not (isinstance(ln, dict) and ln.get("own")):
+                continue
+            src = self.path(ln["own"])
+            if not src.exists():
+                raise Bad(f"line {i}: the user's recording {src} does not exist")
+            dst = self.voice_dir / f"l{i}.wav"
+            ff("-i", src, "-af", "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,"
+               "areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.08,areverse,"
+               "highpass=f=80,loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "48000", "-ac", "1", dst)
+            durs[f"l{i}"] = round(duration(dst), 3)
+            changed = True
+        if changed:
+            atomic_json(self.voice_dir / "durations.json", durs)
+            log("own voice: " + ", ".join(f"line {i}" for i, ln in enumerate(items)
+                                          if isinstance(ln, dict) and ln.get("own")))
+        return durs
+
     # ------------------------------------------------------------------ the grid
 
     def snap(self, t, unit):
@@ -526,6 +555,62 @@ class Variant:
                                  f"{floor:.0f} s floor: the story needs another beat, not padding")
         log(f"refit: {total:.1f} s → {now:.1f} s (floor {floor:.0f} s)")
         return g
+
+    # ------------------------------------------------------------------ pace: split the long holds
+
+    def split_long(self, g):
+        """A clip held past `max_shot` (default 2.6 s) becomes two or three cuts of the SAME take,
+        consecutive in time, alternating wide and a 1.22x punch-in — the jump-in a human editor
+        makes. Scored against the platform, our 9-14 s holds were the single largest loss
+        (rubric B1-B3: 3.4-4.0 of 10); the gate now fails 5 s with nothing new. Untouched: shots
+        marked `hero`, photos, Live Photos landing on their still, the loop shot, and anything with
+        its own zoom work (kb/punch/zoom/behind/cutout). The voice keeps its seconds: a line stays
+        on the first piece and plays across the cut. In a beat grid the cuts land on half-beats."""
+        mx = self.cfg.get("max_shot", 2.6)
+        if not mx:
+            return g
+        mx = float(mx)
+        new_shots, new_g, remap = [], [], {}
+        for r in g:
+            s = self.shots[r["i"]]
+            src = s.get("src") or ""
+            splittable = (r["dur"] > mx * 1.15 and src and not is_photo(src) and not s.get("hero")
+                          and not s.get("loop_to_first") and s.get("tail") is None
+                          and not any(s.get(k) for k in ("kb", "punch", "zoom", "behind", "cutout", "map",
+                                                         "freeze", "subs")))
+            k = math.ceil(r["dur"] / mx) if splittable else 1
+            bounds = [r["t0"] + r["dur"] * j / k for j in range(k + 1)]
+            if self.beats_mode and k > 1:
+                half = self.beat / 2
+                inner = [self.beat0 + round((b - self.beat0) / half) * half for b in bounds[1:-1]]
+                bounds = [r["t0"]] + inner + [r["t1"]]
+                if any(b1 - b0 < 0.5 for b0, b1 in zip(bounds, bounds[1:])):
+                    bounds, k = [r["t0"], r["t1"]], 1
+            remap[r["i"]] = len(new_shots)
+            spd = float(s.get("speed", 1) or 1)
+            for j in range(k):
+                piece = dict(s)
+                row = {"i": len(new_shots), "t0": round(bounds[j], 4), "t1": round(bounds[j + 1], 4)}
+                row["dur"] = round(row["t1"] - row["t0"], 4)
+                if j:
+                    piece["start"] = round(float(s.get("start", 0) or 0) + (bounds[j] - r["t0"]) * spd, 3)
+                    piece["audio"] = {"continue": True}
+                    piece.pop("line", None)
+                    piece.pop("says", None)
+                    if j % 2:
+                        piece["zoom"] = 1.22
+                    piece["_split_of"] = r["i"]
+                else:
+                    for key in ("line", "voice_at", "voice_dur", "beat"):
+                        if key in r:
+                            row[key] = r[key]
+                new_shots.append(piece)
+                new_g.append(row)
+        if len(new_g) != len(g):
+            log(f"pace: {len(g)} shots → {len(new_g)} (holds over {mx:g} s split into cuts of the same take)")
+            self._seg_remap = remap
+            self.shots = new_shots
+        return new_g
 
     # ------------------------------------------------------------------ the loop shot
 
@@ -657,14 +742,17 @@ class Variant:
                 seg = self.loop_shot(g)
             else:
                 seg = {k: val for k, val in s.items()
-                       if k not in ("beats", "dur", "line", "audio", "loop_to_first", "note", "id")}
+                       if k not in ("beats", "dur", "line", "audio", "loop_to_first", "note", "id", "_split_of")}
             seg["dur"] = round(r["dur"], 6)
             if s.get("id"):
                 seg["_id"] = s["id"]
             segs.append(seg)
         caps = []
+        remap = getattr(self, "_seg_remap", None)
         for c in self.cfg.get("captions", []):
             c = dict(c)
+            if remap and isinstance(c.get("seg"), int) and c["seg"] >= 0 and c["seg"] in remap:
+                c["seg"] = remap[c["seg"]]
             if c.get("seg") == 0 and float(c.get("lead", 0.15)) <= 0.05 and "instant" not in c:
                 c["instant"] = True          # the hook is on screen from frame 1
             caps.append(c)
@@ -672,7 +760,7 @@ class Variant:
                 "fps": self.cfg.get("fps", 30), "crf": self.cfg.get("crf", 22),
                 "look": self.cfg.get("look", "clean"), "grain": self.cfg.get("grain", 0.006),
                 "loop": self.loop,
-                "fade_out": 0.0 if self.loop else self.cfg.get("fade_out", 0.45),
+                "fade_out": 0.0 if self.loop else self.cfg.get("fade_out", 0.2),   # no fade to black
                 "audio_fade_out": 0.0 if self.loop else self.cfg.get("audio_fade_out", 1.2),
                 "duck": bool(self.voice_cfg),
                 "segments": segs, "captions": caps, "audio": []}
@@ -867,6 +955,7 @@ def build(v: Variant, a):
         v.progress("voice")
         log("voice")
         durs, voice_info = v.make_voice(texts)
+        durs = v.own_lines(vs_data, durs)
     elif lines:
         vs_data, texts = lines
         # a plan without generating anything: estimate each line from its words
@@ -875,6 +964,7 @@ def build(v: Variant, a):
     g = v.grid(durs)
     if not a.plan:
         g = v.refit(g, durs)     # narrated or not: a beat-cut variant can come out short too
+    g = v.split_long(g)          # after the length is settled: the pace, never the length, changes
     total = v.plan(g)
     if a.plan:
         if lines:

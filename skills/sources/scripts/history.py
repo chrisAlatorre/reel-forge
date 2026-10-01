@@ -14,6 +14,9 @@ Both live here:
         --platform tiktok --duration 24 --hook question --close payoff --voice warm-narrator \\
         --music "slow piano, trending" --narration --published 2026-09-21
     uv run history.py result h-004 --views 12400 --saves 310 --likes 980 --comments 22
+    uv run history.py result h-004 --retention "0:100,3:68,10:47,20:31" --avg-watch 11.2 \\
+        --score "<file>.watch/score.json"                # the curve the app shows, and the rubric
+    uv run history.py calibrate                        # does the rubric predict this audience?
     uv run history.py show
     uv run history.py bias --platform tiktok           # the weights for the next proposal
     uv run history.py bias --apply                     # and write the verdict into preferences
@@ -150,6 +153,31 @@ def cmd_result(args) -> int:
         return 1
     results = entry.get("results") or {}
     given = {m: getattr(args, m) for m in METRICS if getattr(args, m) is not None}
+    if getattr(args, "avg_watch", None) is not None:
+        results["avg_watch_s"] = args.avg_watch
+    if getattr(args, "retention", None):
+        curve = []
+        for pair in args.retention.split(","):
+            m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\s*%?\s*", pair)
+            if not m:
+                raise Refused(f"--retention: '{pair}' is not second:percent")
+            curve.append([float(m.group(1)), float(m.group(2))])
+        results["retention"] = sorted(curve)
+    if getattr(args, "score", None):
+        try:
+            sc = json.loads(Path(args.score).expanduser().read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise Refused(f"--score: cannot read it ({e})")
+        results["rubric"] = {"total": sc.get("total"),
+                             "scores": {k: (v.get("score") if isinstance(v, dict) else v)
+                                        for k, v in (sc.get("scores") or {}).items()}}
+    extra = any(k in results for k in ("avg_watch_s", "retention", "rubric"))
+    if not given and extra:
+        results["measured"] = now()
+        entry["results"] = results
+        save(data)
+        print(f"[{entry['id']}] retention/rubric recorded")
+        return 0
     if not given:
         print("Nothing to record: pass at least one of "
               + ", ".join(f"--{m.replace('_', '-')}" for m in METRICS), file=sys.stderr)
@@ -164,6 +192,80 @@ def cmd_result(args) -> int:
     entry["results"] = results
     save(data)
     print(f"[{entry['id']}] " + " · ".join(f"{k} {v:,}" for k, v in given.items()))
+    return 0
+
+
+def _rank(xs):
+    """Ranks with ties averaged: two posts that both scored 7 share a rank."""
+    order = sorted(range(len(xs)), key=lambda i: xs[i])
+    r = [0.0] * len(xs)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and xs[order[j + 1]] == xs[order[i]]:
+            j += 1
+        for k in range(i, j + 1):
+            r[order[k]] = (i + j) / 2
+        i = j + 1
+    return r
+
+
+def _spearman(a, b):
+    ra, rb = _rank(a), _rank(b)
+    n = len(a)
+    ma, mb = sum(ra) / n, sum(rb) / n
+    cov = sum((x - ma) * (y - mb) for x, y in zip(ra, rb))
+    va = sum((x - ma) ** 2 for x in ra) ** 0.5
+    vb = sum((y - mb) ** 2 for y in rb) ** 0.5
+    return cov / (va * vb) if va and vb else 0.0
+
+
+def _kept_at(curve, t):
+    """The share still watching at second t, read off the user's retention points."""
+    pts = sorted(curve)
+    for (t0, p0), (t1, p1) in zip(pts, pts[1:]):
+        if t0 <= t <= t1:
+            return p0 + (p1 - p0) * (t - t0) / ((t1 - t0) or 1)
+    return pts[-1][1] if pts and t > pts[-1][0] else None
+
+
+def cmd_calibrate(args) -> int:
+    """The rubric is a proxy; the retention curve is the real thing. With enough posts that carry
+    both, say which criteria actually moved what this user's audience watched, and where people
+    leave. Three posts are not a study: below `--min` it says so and stops."""
+    data = load()
+    rows = [e for e in data["entries"] if (e.get("results") or {}).get("rubric")]
+    outcome = []
+    for e in rows:
+        r = e["results"]
+        y = r.get("watch_pct")
+        if y is None and r.get("avg_watch_s") and e.get("duration_s"):
+            y = 100.0 * r["avg_watch_s"] / e["duration_s"]
+        if y is None and r.get("retention"):
+            y = _kept_at(r["retention"], 3.0)
+        if y is not None:
+            outcome.append((e, float(y)))
+    if len(outcome) < args.min:
+        print(f"{len(outcome)} post(s) with both a rubric score and a watch number; {args.min} are needed "
+              "before the numbers mean anything. Keep logging: `history.py result <id> --score … "
+              "--retention … --watch-pct …`.")
+        return 0
+    ys = [y for _, y in outcome]
+    tot = [float(e["results"]["rubric"]["total"] or 0) for e, _ in outcome]
+    print(f"{len(outcome)} posts. Rubric total vs what was watched: Spearman {_spearman(tot, ys):+.2f}")
+    keys = sorted({k for e, _ in outcome for k in e["results"]["rubric"]["scores"]})
+    cors = []
+    for k in keys:
+        xs = [float(e["results"]["rubric"]["scores"].get(k) or 0) for e, _ in outcome]
+        cors.append((k, _spearman(xs, ys)))
+    for k, c in sorted(cors, key=lambda kc: -abs(kc[1])):
+        print(f"  {k:3} {c:+.2f}" + ("   ← moves this audience" if c >= 0.5 else
+                                      "   ← no sign it matters here" if abs(c) < 0.15 else ""))
+    drops = [r for e, _ in outcome for r in [e["results"].get("retention")] if r]
+    if drops:
+        lost3 = [100 - (_kept_at(c, 3.0) or 100) for c in drops]
+        print(f"  lost in the first 3 s: median {median(lost3):.0f} % — that is the hook's grade, "
+              "whatever the rubric said")
     return 0
 
 
@@ -450,7 +552,15 @@ def main() -> int:
         s.add_argument(f"--{metric.replace('_', '-')}", type=float if metric == "watch_pct" else int,
                        dest=metric, help=f"{metric.replace('_', ' ')} as the user reports it")
     s.add_argument("--days", type=int, help="days after publishing that these numbers are from")
+    s.add_argument("--retention", help="the retention curve the app shows, as second:percent pairs "
+                                       "(\"0:100,3:72,10:51,30:28\")")
+    s.add_argument("--avg-watch", type=float, dest="avg_watch", help="average watch time, seconds")
+    s.add_argument("--score", help="the rubric's score.json for the uploaded file (watch.py + rubric.md)")
     s.set_defaults(func=cmd_result)
+
+    s = sub.add_parser("calibrate", help="does the rubric predict what people actually watched?")
+    s.add_argument("--min", type=int, default=4, help="entries needed before saying anything")
+    s.set_defaults(func=cmd_calibrate)
 
     s = sub.add_parser("show", help="what has been published")
     s.add_argument("--limit", type=int, default=20)

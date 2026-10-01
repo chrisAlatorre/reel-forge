@@ -8,6 +8,33 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.13.0
+
+The three gaps the 0.12 scoring found, closed in code rather than in advice.
+
+### Added
+
+- **Long holds split themselves.** `variant.py` cuts any clip held past `max_shot` (2.6 s) into
+  consecutive pieces of the same take, alternating wide and a 1.22x punch-in (`zoom`, a new segment
+  key), on half-beats in a beat grid. The voice keeps its seconds and captions tied to a shot follow
+  it. `hero` shots, photos, Lives landing on their still and shots with their own zoom work are left
+  alone. A 46 s variant with 9 s holds went from failing `renewal` to a 2.9 s longest wait.
+- **`place_facts.py`**: prices, hours, how-to and mistakes for the places a catalog names, each with
+  its source and the date it was checked, briefed to the directors. The trend-researcher has a second
+  job, `place facts`. It is separate from `facts.py`: that is what the user said happened; this is what
+  the world says about a place.
+- **The user's own voice on a line**: `"own": "<recording>"` on a voice-script line replaces the
+  synthetic read with the recording (silence trimmed, levelled), and the grid takes its real length.
+- **`history.py` retention and calibration**: `result` takes the app's retention curve, the average
+  watch time and the rubric's `score.json`; `calibrate` ranks which criteria actually move the user's
+  audience once there are enough posts, and how much is lost in the first 3 s.
+- **A closed loop before delivery**: a variant under 65 on the rubric, or under 5 on promise, open loop
+  or payoff, goes back to its builder with the criteria and seconds, and is scored again.
+
+### Changed
+
+- `variant.py` defaults `fade_out` to 0.2 (was 0.45): no fade to black.
+
 ## 0.12.0
 
 Scored against the platform. 28 of the most-watched travel TikToks (destination guides, itineraries,

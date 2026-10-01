@@ -34,7 +34,8 @@ Spec summary:
     {"src": "clip.mov", "dur": 2.4, "start": 3.0, "speed": 0.5, "flash": true, "subs": true},
     {"src": "live/UUID.live.mov", "start": 0.2, "end": 2.1, "speed": 0.7, "dur": 3.4,
      "tail": "still", "still": "photos/UUID.jpg"},   # a Live Photo: the movement, then the still
-    {"src": "walk.mov", "dur": 3.0, "start": 1.0, "stabilize": true}   # deshake a handheld clip
+    {"src": "walk.mov", "dur": 3.0, "start": 1.0, "stabilize": true},  # deshake a handheld clip
+    {"src": "walk.mov", "dur": 1.5, "start": 4.0, "zoom": 1.22}        # a punch-in: a tighter framing
   ],
   "captions": [{"t0": 0.0, "t1": 2.0, "text": "...", "style": "clean", "pos": "low",
                 "instant": true},                    # already up on its first frame: for the hook
@@ -948,7 +949,7 @@ def main():
                 frame = apply_look(frame, LOOKS["clean"], vig, 0, rng)
             else:
                 # zoom: a slow Ken Burns (kb) plus an entry "punch" that settles with an ease-out
-                z = 1 + kb * (i / max(1, n - 1))
+                z = float(s.get("zoom", 1.0)) * (1 + kb * (i / max(1, n - 1)))
                 if punch:
                     e = min(1.0, (i / fps) / 0.22)
                     z += punch * (1 - e) ** 3

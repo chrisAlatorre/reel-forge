@@ -243,6 +243,12 @@ to state which market it looked at, so nobody assumes the wrong one.
 **Never invent "trending" songs or BPM.** If the agent couldn't measure it, the concept ships without
 beat cutting. Full detail in `/reel-trends`.
 
+**Place facts, in the same step.** One more `trend-researcher`, job `place facts`: for the places the
+catalog names most (`place_facts.py --project DIR places`), what a viewer can use — prices, hours, how
+to get there, the mistake everyone makes — each with its source, into `place_facts.py add`. The
+directors read `place_facts.py brief`. Without it, a list or a guide has nothing to say but "place ·
+date", and that scored lowest of everything on the rubric.
+
 ## Step 5 — Material analysis (parallel agents)
 
 Split the material per the scaling formula.
@@ -426,6 +432,17 @@ concept's folder **only the upload-ready videos sit loose**; everything else goe
   which voice each narrated variant used, which sound to add in the app, the suggested hashtags (3-5, in
   the output language) and, if there is narration without an embedded voice, the script with its
   timings.
+
+**The closed loop.** Before anything is delivered, the story-doctor's post pass scores every variant
+with `watch.py` and `references/rubric.md`. A variant under 65, or under 5 on promise, open loop or
+payoff, goes back to its builder with the criteria and seconds to fix, and is scored again — at most
+twice; if it still cannot reach it with the material, it ships with its score and the reason in the
+README. Report the round's scores in the summary.
+
+**After publishing.** When the user posts one, `history.py log`, and when they share the app's numbers
+or a screenshot of the retention curve, `history.py result <id> --retention … --avg-watch … --score
+<file>.watch/score.json`. `history.py calibrate` then says which criteria actually move this user's
+audience — the rubric is a proxy, the curve is the truth.
 
 Close with a 5-8 line summary: which concepts there are, how they differ, **the range of durations the
 round came out at** (if everything landed inside a 10 s band, say so — that is the template talking, not

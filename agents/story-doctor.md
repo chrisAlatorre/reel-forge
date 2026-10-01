@@ -109,7 +109,7 @@ uv run "$CLAUDE_PLUGIN_ROOT/skills/video-engine/scripts/watch.py" <variant.mp4> 
 Open **every** sheet in order with `Read` (the last one is where the complaint is), with the
 transcript and the text track from `WATCH.md`. Then score the variant against
 `skills/reel-forge/references/rubric.md` and write `<variant>.watch/score.json` — the same ruler the
-platform's best videos were scored with. **A variant under 60, or under 5 on A2 (promise), A3 (open
+platform's best videos were scored with. **A variant under 65, or under 5 on A2 (promise), A3 (open
 loop) or C1 (payoff), is a blocking finding**, and the fix names the criterion and the second.
 Then go to the ending:
 

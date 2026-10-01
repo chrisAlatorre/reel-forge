@@ -656,6 +656,55 @@ def watch_covers_every_second_and_every_shot(tmp):
     assert (tmp / "w.watch" / "sheet-01.jpg").exists()
 
 
+@test
+def a_long_hold_becomes_cuts_of_the_same_take(tmp):
+    """Our 9-14 s holds were the rubric's biggest loss; the builder splits them, the voice keeps its
+    seconds and a caption tied to the shot follows it."""
+    ff("-f", "lavfi", "-i", "testsrc2=size=320x568:rate=30", "-t", "12", "-pix_fmt", "yuv420p", tmp / "c.mp4")
+    v = {"name": "t-A", "delivery": str(tmp / "out"), "grid": "seconds", "grade": "none",
+         "shots": [{"src": "c.mp4", "start": 0, "dur": 2.0, "audio": False},
+                   {"src": "c.mp4", "start": 2, "dur": 8.0, "audio": False},
+                   {"src": "c.mp4", "start": 0, "dur": 6.0, "hero": True, "audio": False}],
+         "captions": [{"seg": 2, "text": "hero"}]}
+    (tmp / "variant.json").write_text(json.dumps(v))
+    r = uv(ENGINE / "variant.py", tmp / "variant.json", "--spec", cwd=tmp)
+    assert r.returncode == 0, (r.stdout + r.stderr)[-800:]
+    spec = json.loads((tmp / "spec.json").read_text())
+    durs = [round(x["dur"], 2) for x in spec["segments"]]
+    assert len(durs) == 6 and abs(sum(durs) - 16.0) < 0.01, durs
+    assert spec["segments"][2].get("zoom") == 1.22 and spec["segments"][2]["start"] == 4.0, spec["segments"][2]
+    assert spec["segments"][-1]["dur"] == 6.0, "a hero shot is never split"
+    assert spec["captions"][0]["seg"] == 5, spec["captions"]
+
+
+@test
+def place_facts_need_a_source_and_brief_the_directors(tmp):
+    (tmp / "workspace").mkdir()
+    pf = SOURCES / "place_facts.py"
+    r = uv(pf, "--project", tmp, "add", "A tower", "Ticket US$41", "--kind", "price", "--source", "nope")
+    assert r.returncode != 0
+    r = uv(pf, "--project", tmp, "add", "A tower", "Ticket US$41", "--kind", "price",
+           "--source", "https://example.org/tickets", "--checked", "2026-09-30")
+    assert r.returncode == 0, r.stderr
+    b = uv(pf, "--project", tmp, "brief").stdout
+    assert "US$41" in b and "pf-001" in b, b
+
+
+@test
+def calibrate_waits_for_enough_posts_then_ranks_the_criteria(tmp):
+    env = {**os.environ, "REEL_FORGE_CONFIG_DIR": str(tmp), "REEL_FORGE_CONFIG": str(tmp)}
+    h = SOURCES / "history.py"
+    for i in range(4):
+        uv(h, "log", "--project", "t", "--format", "list", "--platform", "tiktok", "--duration", "40", env=env)
+        sc = tmp / f"s{i}.json"
+        sc.write_text(json.dumps({"total": 50 + i * 5, "scores": {"A1": {"score": 3 + i}, "E1": {"score": 5}}}))
+        r = uv(h, "result", f"h-00{i + 1}", "--score", sc, "--retention", f"0:100,3:{50 + i * 8},20:30",
+               "--watch-pct", str(20 + i * 5), env=env)
+        assert r.returncode == 0, r.stderr
+    out = uv(h, "calibrate", env=env).stdout
+    assert "A1  +1.00" in out and "lost in the first 3 s" in out, out
+
+
 # --------------------------------------------------------------------------- runner
 
 def main():

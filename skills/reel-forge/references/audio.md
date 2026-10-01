@@ -80,6 +80,10 @@ turns into noise.
 
 ## Narration
 
+**A line in the user's own voice** beats any synthetic one for a reaction or a punchline: on the
+voice-script line, `"own": "voice/memo.m4a"` (relative to `variant.json`) replaces that line's wav with
+the recording — silence trimmed, levelled with the rest — and the subtitles still come from the text.
+
 The references that scored highest on voice spoke **to one friend**: first person, from 0.0 s, at
 speed, with an opinion or an aside every few seconds. A narration that reads like a diary in the
 third person, or starts at 2 s, lost those points even with a good voice. Write the script that way

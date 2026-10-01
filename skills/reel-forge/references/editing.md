@@ -97,7 +97,8 @@ checks (`renewal`, `pace`, `hook`):
   voice line. A good long take is split into two or three framings of the same clip (a punch-in,
   a different `focus`) instead of held. A take whose length IS the point (a reveal in real time, a
   line of dialogue that has to play whole) is marked `"hero": true` on its segment, and the gate
-  lets it through.
+  lets it through. `variant.py` does the split by itself: past `max_shot` (2.6 s) a clip becomes
+  consecutive pieces of the same take, alternating wide and a `zoom` 1.22 punch-in.
 - **The cut lands on sound.** A beat when there is music, a hit of natural sound (a laugh, a splash,
   a glass) when there is not. A reveal that arrives between beats reads as late.
 

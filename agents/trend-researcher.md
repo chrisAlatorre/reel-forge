@@ -64,6 +64,28 @@ detail: it decides which market you look at.
   embedded in the version that gets uploaded**: the official sound is added inside the app, which also
   makes it count toward the trend.
 
+## Second job: place facts
+
+When you are given the job `place facts` instead of trends, you research the **places** of a project,
+not the platform. Get the list with `place_facts.py --project DIR places` (most-used first; skip the
+ones that are a private home or a description, not a place). For each of the top 8-12, look for what a
+viewer could use or save:
+
+- **price** (a ticket, a ride, a dish — with the currency and the year), **time** (opening hours, how
+  long it takes, the best hour to go), **how** (getting there, booking ahead), **tip**, **mistake**
+  (what people get wrong), **number** (a height, an age, a count that surprises).
+
+Every one from a page you opened, recorded with its URL:
+
+```bash
+uv run "$CLAUDE_PLUGIN_ROOT/skills/sources/scripts/place_facts.py" --project DIR add "<place>" "<fact>" \
+    --kind price --source https://… --checked YYYY-MM-DD
+```
+
+Two or three per place is plenty; one surprising fact beats five obvious ones. Never a fact about the
+user (what they paid, where they slept): only the world's. If an official page and a blog disagree on
+a price, take the official one and say so.
+
 ## Output format
 Write `<working_folder>/trends/trends.json`, or `<working_folder>/trends/trends-<theme>.json` if
 several instances of you run in parallel (one file each; whoever invoked you merges them into

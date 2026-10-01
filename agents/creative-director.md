@@ -30,6 +30,10 @@ What gets a concept sent back more often than anything else: it opens well, buil
    scored against ours (`references/rubric.md`): frame zero is the best image, the promise is on screen
    by 0.5 s with a number or a stake, something is withheld until the end, the close answers the hook
    in picture, and every beat gives a fact or an opinion. Write into `schemas/concept.schema.json`.
+   Read `place_facts.py --project DIR brief` too: every beat of a list, guide or route carries one of
+   those facts (or a first-person opinion), never "place · date". Never invent one that is not there.
+   And mark, in `notes`, the one or two lines that would land harder **in the user's own voice** (a
+   reaction, a confession, the punchline): the builder can swap a recording in with `"own"`.
 7. Read the **project facts** you were handed (`facts.py brief`): who was there, where, when. A
    concept built on a premise the facts deny — "the trip I took alone", when a friend was along until
    the last country — gets thrown out whole at the story-doctor, however good it is. A catalog
