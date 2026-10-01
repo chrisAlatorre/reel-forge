@@ -62,7 +62,7 @@ builder's included. Then:
 ## Review
 
 0. **Score it like the platform would.** `watch.py <file>` and open every sheet, then score against
-   `references/rubric.md` into `<file>.watch/score.json`. The same rubric scored 28 top travel videos
+   `references/rubric.md` into `resources/<file>.watch/score.json` (watch.py puts it in the concept's resources/ by itself). The same rubric scored 28 top travel videos
    (47-76) and our first renders (41-65); the list of what cost points is your checklist of fixes.
    Anything under 5 in a hook or payoff criterion is fixed before delivery, not reported.
 1. **Measurements first.** The gate covers black frames, audio gaps, peaks, track count and audio

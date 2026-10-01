@@ -8,6 +8,16 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.13.2
+
+### Fixed
+
+- `build.js`: the Fix agent returns only the variants it touched, and they replaced the whole list —
+  the run's summary lost every variant that did not need fixing. They are merged by letter now, and a
+  rescore keeps the earlier verdicts of the variants it did not see.
+- `watch.py` writes its `.watch/` folder into the concept's `resources/` when there is one: the first
+  scored round left analysis folders beside the upload-ready MP4s.
+
 ## 0.13.1
 
 ### Added

@@ -8,7 +8,8 @@
 # ///
 """Watch a whole video, 0 to 100 %, the way a scoring agent needs it — not a strip of five frames.
 
-    uv run watch.py VIDEO.mp4 [VIDEO2.mp4 ...]            # writes VIDEO.watch/ next to each one
+    uv run watch.py VIDEO.mp4 [VIDEO2.mp4 ...]            # writes VIDEO.watch/ next to each one (in
+                                                         # resources/ when the folder has one)
     uv run watch.py VIDEO.mp4 --out refs/ --step 0.5       # frame every 0.5 s (default: by length)
     uv run watch.py VIDEO.mp4 --no-asr                     # skip the transcript
 
@@ -214,7 +215,9 @@ def main():
     ap.add_argument("--no-asr", action="store_true")
     a = ap.parse_args()
     for v in a.videos:
-        out = (a.out or v.parent) / (v.stem + ".watch")
+        # a delivered video's folder holds only upload-ready files: the analysis goes to resources/
+        parent = a.out or (v.parent / "resources" if (v.parent / "resources").is_dir() else v.parent)
+        out = parent / (v.stem + ".watch")
         r = watch(v, out, a.step, not a.no_asr)
         print(f"{v.name}: {r['duration_s']} s, {r['coverage']['frames']} frames "
               f"({'complete' if r['coverage']['complete'] else 'INCOMPLETE'}), {r['shots']} shots → {out}")

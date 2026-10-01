@@ -696,9 +696,10 @@ What this run adds to your method:
   none).
 - Each fix is applicable to that variant's \`variant.json\`: which shot, which second, how long it holds.
   A close that has to be extended is extended **with material**, never by freezing the last frame.
-- **Score every variant with the rubric**: \`uv run "${PLUGIN_ROOT}/skills/video-engine/scripts/watch.py" <mp4>\`,
-  read EVERY sheet, then score against \`${PLUGIN_ROOT}/skills/reel-forge/references/rubric.md\` into
-  \`<mp4 stem>.watch/score.json\` (same folder watch.py made) and return \`rubric_total\` and \`rubric_low\`.
+- **Score every variant with the rubric**: \`uv run "${PLUGIN_ROOT}/skills/video-engine/scripts/watch.py" <mp4> --out "${resourcesDir(concept)}"\`
+  (never beside the MP4: the concept's folder holds only the upload-ready files), read EVERY sheet,
+  then score against \`${PLUGIN_ROOT}/skills/reel-forge/references/rubric.md\` into
+  \`${resourcesDir(concept)}/<mp4 stem>.watch/score.json\` (the folder watch.py made) and return \`rubric_total\` and \`rubric_low\`.
   **Under ${MIN_SCORE}, or under 5 on A2, A3 or C1, is a fix at \`level: "blocks"\`** naming the
   criteria and the seconds, with the change in that variant's \`variant.json\` that raises them (a
   stronger frame zero, a hook with a number or a stake, a beat every 3-4 s, the payoff held at the close).
@@ -911,11 +912,15 @@ them in \`missing\` so the builders know.`,
       const arc = await agent(arcPrompt(concept, out.variants, out.story), {
         label: `Rescore ${concept.id} #${round + 1}`, phase: 'Arc', schema: ARC_REVIEW,
       })
-      reviewed = { ...out, arc, review: { problems: [] } }
+      // a rescore covers what was fixed; keep the earlier verdicts for the variants it did not see
+      const prev = (out.arc && out.arc.per_variant) || []
+      const seen = new Set(((arc && arc.per_variant) || []).map((pv) => pv.letter))
+      const mergedArc = arc ? { ...arc, per_variant: [...prev.filter((pv) => !seen.has(pv.letter)), ...arc.per_variant] } : out.arc
+      reviewed = { ...out, arc: mergedArc, review: { problems: [] } }
       const low = ((arc && arc.per_variant) || []).filter((pv) => typeof pv.rubric_total === 'number' && pv.rubric_total < MIN_SCORE)
       log(`${concept.id}: rescore #${round + 1} — ${((arc && arc.per_variant) || []).map((pv) => `${pv.letter} ${pv.rubric_total ?? '?'}`).join(', ')}`)
       if (!low.length && !((arc && arc.per_variant) || []).some((pv) => (pv.fixes || []).some((f) => f.level === 'blocks'))) {
-        out = { ...out, arc }
+        out = { ...out, arc: mergedArc }
         break
       }
     }
@@ -975,7 +980,11 @@ async function fixOnce(reviewed, concept) {
     })
     return {
       concept: concept.id, title: concept.title, ...reviewed,
-      variants: (repair && repair.variants.length) ? repair.variants : reviewed.variants,
+      // the Fix agent returns only the variants it touched: merge them over the rest, by letter
+      variants: (repair && repair.variants.length)
+        ? reviewed.variants.map((v) => repair.variants.find((r) => r.letter === v.letter) || v)
+          .concat(repair.variants.filter((r) => !reviewed.variants.some((v) => v.letter === r.letter)))
+        : reviewed.variants,
       fixed: true, what_changed: repair && repair.what_changed,
     }
   }

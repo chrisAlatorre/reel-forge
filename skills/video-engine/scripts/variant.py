@@ -58,6 +58,9 @@ behind, cutout, map, end, tail, still...) and they pass straight to the spec. A 
   line            narrated: the index of the voice line spoken over this shot. Its length then
                   comes from the voice (lead + line + tail) and, in a beat grid, the cut is pushed
                   to the next half-beat so it still lands on the rhythm.
+                  With an explicit `dur` the shot cuts there and the line keeps playing over the
+                  shots after it; in a beat grid those may also take `dur` (exact seconds) instead
+                  of `beats`, to put several pictures under one sentence.
   audio           natural sound: {"lufs": -18} (its own track), {"from": SRC, "start": S} (a photo
                   borrowing its scene's ambience), {"continue": true} (the previous piece keeps
                   playing — a boat that should not cut mid-pass), or false (silence).
@@ -460,10 +463,16 @@ class Variant:
                     raise Bad(f"shot {i} carries `line` but there is no voice")
                 vd = float(durs[f"l{s['line']}"])
                 need = (lead0 if i == 0 else lead) + vd + (hold if last else tail) + extra.get(i, 0.0)
-                if self.beats_mode:
+                if s.get("dur") is not None:
+                    # the line runs on across the next cuts (as split_long does): the picture
+                    # changes under one sentence; the shots after it pick up the grid again
+                    t1 = t + float(s["dur"])
+                elif self.beats_mode:
                     t1 = self.snap(t + need, half)
                 else:
                     t1 = t + need
+            elif self.beats_mode and "beats" not in s and s.get("dur") is not None:
+                t1 = t + float(s["dur"]) + extra.get(i, 0.0)   # an exact cut under a running line
             elif self.beats_mode:
                 if "beats" not in s:
                     raise Bad(f"shot {i} needs `beats` in a beat grid (or `line` if narrated)")
