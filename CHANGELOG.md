@@ -8,6 +8,12 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.13.1
+
+### Added
+
+- The rubric loop wired into `workflows/build.js` (`minScore`, `scoreRounds`).
+
 ## 0.13.0
 
 The three gaps the 0.12 scoring found, closed in code rather than in advice.
@@ -28,8 +34,10 @@ The three gaps the 0.12 scoring found, closed in code rather than in advice.
 - **`history.py` retention and calibration**: `result` takes the app's retention curve, the average
   watch time and the rubric's `score.json`; `calibrate` ranks which criteria actually move the user's
   audience once there are enough posts, and how much is lost in the first 3 s.
-- **A closed loop before delivery**: a variant under 65 on the rubric, or under 5 on promise, open loop
-  or payoff, goes back to its builder with the criteria and seconds, and is scored again.
+- **A closed loop before delivery**, in `build.js`: the story-doctor's post pass scores every variant
+  with `watch.py` and the rubric (`rubric_total`, `rubric_low`); under `minScore` (65), or under 5 on
+  promise, open loop or payoff, blocks; Fix applies it and the concept is scored again, up to
+  `scoreRounds` (2) times.
 
 ### Changed
 

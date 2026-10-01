@@ -20,6 +20,8 @@
 //   storyDoctor           default true: the story-doctor passes, before building and after rendering
 //   reviewer              default true
 //   fix                   default true: if the reviewer finds something blocking, it gets fixed
+//   minScore              default 65: a variant under it on references/rubric.md goes back to Fix
+//   scoreRounds           default 2: how many fix-and-rescore rounds before it ships with its score
 //   fresh                 default false. true ignores the run ledger and rebuilds everything.
 //   engine                render engine command (default: the video-engine skill's)
 //   verifier              delivery verifier command (default: the video-engine skill's verify.py)
@@ -110,6 +112,10 @@ const VAR_PER_CONCEPT = Math.max(1, A.variantsPerConcept || 2)
 const REVIEWER = A.reviewer !== false
 const STORY_DOCTOR = A.storyDoctor !== false
 const FIX = A.fix !== false
+// The closed loop (0.13): every rendered variant is scored with references/rubric.md; under the
+// floor it goes back to Fix and is scored again, at most SCORE_ROUNDS times.
+const MIN_SCORE = typeof A.minScore === 'number' ? A.minScore : 65
+const SCORE_ROUNDS = typeof A.scoreRounds === 'number' ? A.scoreRounds : 2
 const FRESH = A.fresh === true
 
 // ────────────────────────────────────────────────── how many agents
@@ -293,6 +299,8 @@ const ARC_REVIEW = {
           duration_fits: { type: 'boolean', description: 'the length matches the story it is telling, neither padded nor truncated' },
           verdict: { type: 'string', enum: ['ship', 'rework', 'reject'] },
           ends_on: { type: 'string', description: 'what the last frame actually is, from looking at the last 0.6 s frame by frame' },
+          rubric_total: { type: 'number', description: 'references/rubric.md total (0-100), scored from watch.py with every sheet read' },
+          rubric_low: { type: 'array', items: { type: 'string' }, description: 'criteria under 5, e.g. "B2 4: nothing new 18-24 s"' },
           fixes: { type: 'array', items: FIX_ITEM, description: 'each one applicable to this variant’s variant.json' },
         },
         required: ['letter', 'develops', 'lands', 'duration_fits', 'verdict'],
@@ -688,6 +696,12 @@ What this run adds to your method:
   none).
 - Each fix is applicable to that variant's \`variant.json\`: which shot, which second, how long it holds.
   A close that has to be extended is extended **with material**, never by freezing the last frame.
+- **Score every variant with the rubric**: \`uv run "${PLUGIN_ROOT}/skills/video-engine/scripts/watch.py" <mp4>\`,
+  read EVERY sheet, then score against \`${PLUGIN_ROOT}/skills/reel-forge/references/rubric.md\` into
+  \`<mp4 stem>.watch/score.json\` (same folder watch.py made) and return \`rubric_total\` and \`rubric_low\`.
+  **Under ${MIN_SCORE}, or under 5 on A2, A3 or C1, is a fix at \`level: "blocks"\`** naming the
+  criteria and the seconds, with the change in that variant's \`variant.json\` that raises them (a
+  stronger frame zero, a hook with a number or a stake, a beat every 3-4 s, the payoff held at the close).
 - Do not re-render anything and do not edit anybody's \`variant.json\`: the Fix stage applies what you and
   the reviewer found, in one pass, so two agents never correct the same variant in opposite directions.
 
@@ -765,6 +779,7 @@ Return the corrected variants, with their new paths, counts and verify results.`
 
 // ───────────────────────────────────────────────────────────── the run
 
+log(`rubric floor ${MIN_SCORE}, up to ${SCORE_ROUNDS} fix-and-rescore rounds per concept`)
 log(`${concepts.length} concepts · ${PEAK} variants, one agent each · delivery ${VERSION} · language ${LANG}`)
 
 // ── Resume. Before building anything: what already exists, rendered and verified?
@@ -884,8 +899,32 @@ them in \`missing\` so the builders know.`,
     return { ...built, arc, review }
   },
 
-  // 5. Fixing. Paid for only when something blocks — and a variant that fails the gate always blocks.
-  async (reviewed, concept) => {
+  // 5. Fixing, then scoring again: the closed loop. Paid for only when something blocks — a variant
+  //    that fails the gate, or scores under the rubric floor, always blocks.
+  async (reviewed0, concept) => {
+    let reviewed = reviewed0
+    let out = null
+    for (let round = 0; round <= SCORE_ROUNDS; round++) {
+      out = await fixOnce(reviewed, concept)
+      if (!out.fixed || round === SCORE_ROUNDS || !STORY_DOCTOR) break
+      // re-score only what was fixed, with the same post pass
+      const arc = await agent(arcPrompt(concept, out.variants, out.story), {
+        label: `Rescore ${concept.id} #${round + 1}`, phase: 'Arc', schema: ARC_REVIEW,
+      })
+      reviewed = { ...out, arc, review: { problems: [] } }
+      const low = ((arc && arc.per_variant) || []).filter((pv) => typeof pv.rubric_total === 'number' && pv.rubric_total < MIN_SCORE)
+      log(`${concept.id}: rescore #${round + 1} — ${((arc && arc.per_variant) || []).map((pv) => `${pv.letter} ${pv.rubric_total ?? '?'}`).join(', ')}`)
+      if (!low.length && !((arc && arc.per_variant) || []).some((pv) => (pv.fixes || []).some((f) => f.level === 'blocks'))) {
+        out = { ...out, arc }
+        break
+      }
+    }
+    return out
+  },
+)
+
+async function fixOnce(reviewed, concept) {
+  {
     const fromReview = ((reviewed.review && reviewed.review.problems) || [])
       .filter((p) => p.severity === 'blocks')
       .map((p) => ({ ...p, from: 'the reviewer' }))
@@ -913,7 +952,18 @@ them in \`missing\` so the builders know.`,
         how_to_fix: 'read the verifier report, fix it inside variant.json, re-render and re-run the gate',
         from: 'the gate',
       }))
-    const blockers = [...fromArc, ...fromReview, ...failedGate]
+    const fromScore = ((reviewed.arc && reviewed.arc.per_variant) || [])
+      .filter((pv) => typeof pv.rubric_total === 'number' && pv.rubric_total < MIN_SCORE
+        && !(pv.fixes || []).some((f) => f.level === 'blocks'))
+      .map((pv) => ({
+        variant: pv.letter,
+        severity: 'blocks',
+        what: `it scores ${pv.rubric_total} on references/rubric.md, under the ${MIN_SCORE} floor${(pv.rubric_low || []).length ? `: ${pv.rubric_low.join('; ')}` : ''}`,
+        where: 'its <mp4>.watch/score.json',
+        how_to_fix: 'raise the low criteria inside variant.json: frame zero at its peak, a hook with a number or a stake by 0.5 s, something new every 3-4 s, the payoff held 1.5-2 s at the close',
+        from: 'the rubric',
+      }))
+    const blockers = [...fromArc, ...fromReview, ...failedGate, ...fromScore]
 
     if (!FIX || !blockers.length) {
       return { concept: concept.id, title: concept.title, ...reviewed, fixed: false }
@@ -928,8 +978,8 @@ them in \`missing\` so the builders know.`,
       variants: (repair && repair.variants.length) ? repair.variants : reviewed.variants,
       fixed: true, what_changed: repair && repair.what_changed,
     }
-  },
-)
+  }
+}
 
 const ok = results.filter(Boolean)
 const failed = concepts.filter((_, i) => !results[i]).map((c) => c.id)
