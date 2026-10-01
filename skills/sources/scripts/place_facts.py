@@ -16,7 +16,7 @@ a date — prices go stale, so every fact carries when it was checked.
 
     <project>/workspace/place_facts.json
 
-    uv run place_facts.py --project DIR add "Skydeck Chicago" "Adult ticket US$41" \\
+    uv run place_facts.py --project DIR add "Tokyo Tower" "Main deck ¥1,200 adults" \\
         --kind price --source https://… --checked 2026-09-30
     uv run place_facts.py --project DIR show
     uv run place_facts.py --project DIR brief            # the block for a director's prompt
