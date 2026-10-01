@@ -705,6 +705,50 @@ def calibrate_waits_for_enough_posts_then_ranks_the_criteria(tmp):
     assert "A1  +1.00" in out and "lost in the first 3 s" in out, out
 
 
+@test
+def shots_are_matched_before_the_grade_and_a_photo_hold_is_split(tmp):
+    """Blind scorers: colour and exposure jumped between cuts, and photos held under the voice."""
+    import numpy as np
+    import grade
+    dark = np.full((200, 120, 3), 25, np.uint8)
+    bright = np.full((200, 120, 3), 200, np.uint8)
+    pd, pb = grade.balance_params(dark), grade.balance_params(bright)
+    assert pd[3] < 1.0 and pb[3] > 1.0, (pd, pb)                     # lift the dark, settle the bright
+    warm = np.dstack([np.full((200, 120), 180), np.full((200, 120), 120), np.full((200, 120), 80)]).astype(np.uint8)
+    pw = grade.balance_params(warm)
+    assert pw[0] < 1.0 < pw[2], pw                                   # half way toward neutral
+    import cv2
+    cv2.imwrite(str(tmp / "p.jpg"), np.full((1920, 1080, 3), 120, np.uint8))
+    v = {"name": "t-A", "delivery": str(tmp / "out"), "grid": "seconds",
+         "shots": [{"src": "p.jpg", "dur": 7.0, "kb": 0.05, "audio": False}]}
+    (tmp / "variant.json").write_text(json.dumps(v))
+    r = uv(ENGINE / "variant.py", tmp / "variant.json", "--spec", cwd=tmp)
+    assert r.returncode == 0, (r.stdout + r.stderr)[-800:]
+    segs = json.loads((tmp / "spec.json").read_text())["segments"]
+    assert len(segs) == 3 and segs[1]["zoom"] == 1.22, segs
+
+
+@test
+def the_card_text_is_one_style_and_the_voice_reads_the_lexicon(tmp):
+    import ast
+    src = (ENGINE / "render.py").read_text()
+    fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "unify_text")
+    ns = {"SUBTITLE_SOURCES": ("sync", "subs", "voice", "clip")}
+    exec(compile(ast.Module([fn], []), "render.unify_text", "exec"), ns)
+    caps = [{"t0": 0, "t1": 2, "text": "hook", "style": "box", "source": "spec"},
+            {"t0": 3, "t1": 4, "text": "card", "style": "serif", "source": "cut"},
+            {"t0": 3, "t1": 4, "text": "sub", "style": "clean", "source": "voice"},
+            {"t0": 5, "t1": 6, "text": "pin", "style": "pin", "source": "spec"}]
+    out = ns["unify_text"](caps)
+    assert [c["style"] for c in out] == ["box", "box", "clean", "pin"], out
+    import variant
+    (tmp / "c.jpg").write_bytes(b"")
+    v = variant.Variant.__new__(variant.Variant)
+    v.cfg, v.dir = {}, tmp
+    said, used = v.spoken(["Caminé por el downtown de noche"], "es-MX")
+    assert "dauntáun" in said[0] and "downtown" in {k.lower() for k in used}, said
+
+
 # --------------------------------------------------------------------------- runner
 
 def main():

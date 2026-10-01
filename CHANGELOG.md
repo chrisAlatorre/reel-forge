@@ -8,6 +8,34 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.14.0
+
+A second, blind scoring of the first rubric-built round (55-69, against 75 for the best reference)
+found what was still costing points. Fixed in the engine where it could be, in the rules where not.
+
+### Added
+
+- **Shots matched before the grade** (`"match": true`, default): per shot, a partial grey-world white
+  balance (half way, ±10 %) and an exposure gamma toward a common median, night shots toward a darker
+  target and only lifted. Baked into the same `.cube` as the grade for video; numpy for photos.
+- **Pronunciation lexicon** for the voice: `skills/voices/pronounce.json` (common English travel words
+  for a Spanish voice) < `~/.config/reel-forge/pronounce.json` < `<project>/pronounce.json`. Only the
+  audio changes; subtitles keep the written word. After the voice is made every line is transcribed and
+  the names and numbers that did not come back are listed (`voice/pronunciation-check.json`, README).
+- **One text system per video**: subtitles plus one card style (`card_style`, or the hook's); captions
+  can opt out with `keep_style`. White subtitles get a thin dark edge so they never read grey.
+- Gate: `picture_with_voice` fails a non-hero take under the narration longer than 4 s;
+  `pace_curve` warns when every shot is about as long as the next.
+- `variant.py` also splits long photos and Live Photo stills (the movement whole, then the still in
+  alternating framings).
+- Rules for directors, chief editor, story-doctor and builder: no filler, never spoil the close in the
+  hook, the person doing something in every list item, one text system.
+
+### Fixed
+
+- A Live Photo's still was not graded when its movement was graded while decoding: the cut from the
+  motion to the photo jumped in colour.
+
 ## 0.13.2
 
 ### Fixed

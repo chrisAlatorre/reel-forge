@@ -33,6 +33,8 @@ Criteria:
 | `ending`       | *warns*: with `"loop": true` in the spec, that the last frame does not land on the first; otherwise: it ends on a dry cut — picture still moving, sound at full level, no fade, no closer, last shot under 0.6 s |
 | `renewal`      | a stretch longer than `--max-stale` (5 s) with no new shot, text or voice line — unless the shot is marked `"hero"` |
 | `pace`         | *warns*: the average shot is longer than `--max-mean-shot` (3 s) |
+| `pace_curve`   | *warns*: every shot about as long as the next (sd/mean of the lengths under 0.3) |
+| `picture_with_voice` | the narration runs over one non-hero take longer than `--max-voice-hold` (4 s) |
 | `hook`         | *warns*: nothing on screen or said in the first second, or an opening text over 8 words |
 | `preview_size` | the review copy weighs more than `--max-preview-mb` |
 
@@ -493,6 +495,8 @@ def main():
     # the user asked for.
     ap.add_argument("--max-stale", type=float, default=5.0,
                     help="longest stretch with nothing new (shot, text, voice line) before `renewal` fails")
+    ap.add_argument("--max-voice-hold", type=float, default=4.0,
+                    help="`picture_with_voice` fails when one non-hero take runs under the narration longer")
     ap.add_argument("--max-mean-shot", type=float, default=3.0,
                     help="`pace` warns when the average shot is longer than this")
     ap.add_argument("--max-mb", type=float, default=280.0, help="ceiling for the delivered file")
@@ -839,8 +843,32 @@ def main():
                f"ceiling is {a.max_stale:g} s. Split the take into two framings, put a text or a sound "
                f"beat in it, or mark it \"hero\" if holding it IS the point") if stale > a.max_stale else
               f"something new at least every {a.max_stale:g} s (longest wait {stale:.1f} s)")
+        # The picture has to move WITH the voice: blind scorers found stretches where the narration
+        # kept going over the same take for 5-7 s. Voice lines and texts do not count here, cuts do.
+        voiced = timeline.get("voice") or []
+        still_v, at_v = 0.0, 0.0
+        for sh in shots:
+            if sh.get("hero"):
+                continue
+            talk = sum(max(0.0, min(sh["t1"], float(w[1])) - max(sh["t0"], float(w[0]))) for w in voiced)
+            if talk > 0.6 * sh["dur"] and sh["dur"] > still_v:
+                still_v, at_v = sh["dur"], sh["t0"]
+        if voiced:
+            check(report, "picture_with_voice", still_v <= a.max_voice_hold,
+                  (f"the voice runs over one take for {still_v:.1f} s from {at_v:.2f} s; every new line "
+                   f"needs a new picture (ceiling {a.max_voice_hold:g} s, or mark the take hero)")
+                  if still_v > a.max_voice_hold else
+                  f"the picture changes under the voice (longest narrated take {still_v:.1f} s)")
         durs = [x["dur"] for x in shots]
         mean = sum(durs) / len(durs)
+        # A pace that never changes reads as a slideshow, however fast: the references alternated a
+        # burst, a held beat and a burst again. Coefficient of variation of the shot lengths.
+        if len(durs) >= 6:
+            sd = (sum((d - mean) ** 2 for d in durs) / len(durs)) ** 0.5
+            cv = sd / mean if mean else 0.0
+            warn(report, "pace_curve", cv >= 0.3,
+                 f"shot lengths vary {cv:.2f} (sd/mean)" + ("" if cv >= 0.3 else
+                 " — every shot about as long as the last: put a burst of short cuts and one held beat"))
         thirds = [sum(1 for x in shots if v_dur * i / 3 <= x["t0"] < v_dur * (i + 1) / 3) for i in range(3)]
         warn(report, "pace", mean <= a.max_mean_shot,
              f"{len(shots)} shots, mean {mean:.1f} s, longest {max(durs):.1f} s, cuts per third {thirds}"
@@ -863,7 +891,7 @@ def main():
             if report["ending"]["status"] == "pass":
                 report["ending"]["status"] = "warn"
     else:
-        for k in ("renewal", "pace", "hook"):
+        for k in ("renewal", "pace", "hook", "picture_with_voice", "pace_curve"):
             skip(report, k, "no timeline with shots: re-render, or pass --spec")
 
     # 10. weight: the delivery and the review copy

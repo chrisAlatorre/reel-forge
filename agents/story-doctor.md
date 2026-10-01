@@ -123,6 +123,12 @@ ffmpeg -v error -sseof -0.6 -i <variant.mp4> -vf "fps=10,scale=216:384,tile=6x1"
 
 What you are hunting for, all of it seen in production:
 
+- **A hook that spoils the close** ("…and the #1 is free" at 3 s): blocking — the open loop is gone.
+- **Filler**: two shots of the same scene from the same angle in a row, a dark or shaky frame kept
+  because it exists, a list item that is weaker than everything around it. Name the shot to drop.
+- **Empty items in a list**: a place with nobody doing anything, when the catalog has a take of the
+  user doing something there.
+
 - **The ending on a cut with motion still in it**: the last frame is mid-pan or mid-gesture. That is the
   single thing that reads most as "it got cut off". Ask for a held frame, a settle, or a different last
   shot from the catalog.

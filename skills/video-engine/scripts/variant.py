@@ -314,6 +314,69 @@ class Variant:
             raise Bad(f"{vs} has no lines")
         return data, [(l["text"] if isinstance(l, dict) else str(l)).strip() for l in lines]
 
+    def spoken(self, texts, lang):
+        """The text the VOICE reads: the written line with the pronunciation lexicon applied
+        (plugin default < ~/.config/reel-forge < the project). Scored blind, Valentino read "Loop" as
+        "lupapié" and spelled English names out; the subtitles keep the written word."""
+        lex = {}
+        key = (lang or "es")[:2]
+        proj = self.cfg.get("project") or os.environ.get("REEL_FORGE_PROJECT")
+        for f in (PLUGIN / "skills/voices/pronounce.json",
+                  Path(os.path.expanduser(os.environ.get("REEL_FORGE_CONFIG", "~/.config/reel-forge"))) / "pronounce.json",
+                  (self.path(proj) / "pronounce.json") if proj else None):
+            try:
+                d = json.loads(Path(f).read_text(encoding="utf-8")) if f else {}
+            except (OSError, ValueError):
+                continue
+            lex.update(d.get(key, {}) if isinstance(d.get(key), dict) else {k: v for k, v in d.items()
+                                                                                if not k.startswith("_") and isinstance(v, str)})
+        if not lex:
+            return texts, {}
+        pats = sorted(lex, key=len, reverse=True)
+        rx = re.compile(r"(?<![\w])(" + "|".join(re.escape(p) for p in pats) + r")(?![\w])", re.I)
+        low = {k.lower(): v for k, v in lex.items()}
+        out, used = [], {}
+        for t in texts:
+            def sub(m):
+                used[m.group(0)] = low[m.group(0).lower()]
+                return low[m.group(0).lower()]
+            out.append(rx.sub(sub, t))
+        if used:
+            log("pronunciation: " + ", ".join(f"{k}→{v}" for k, v in used.items()))
+        return out, used
+
+    def check_pronunciation(self, texts, lang):
+        """After the voice exists: transcribe every line and list the written words that did not come
+        back — usually a name the voice mangled. A warning in the README, not a failure (ASR is noisy
+        on foreign names too); the fix is a pronounce.json entry and a re-voice of that variant."""
+        wavs = [self.voice_dir / f"l{i}.wav" for i in range(len(texts))]
+        wavs = [w for w in wavs if w.exists()]
+        if not wavs:
+            return []
+        r = subprocess.run(["uv", "run", TRANSCRIBE, *map(str, wavs), "--print", "--language", (lang or "es")[:2]],
+                           capture_output=True, text=True)
+        try:
+            data = json.loads(r.stdout)
+        except json.JSONDecodeError:
+            return []
+        data = data if isinstance(data, list) else [data]
+        norm = lambda w: re.sub(r"[^\wáéíóúüñ]", "", w.lower())
+        import difflib
+        missed = []
+        for t, d in zip(texts, data):
+            heard = [norm(w) for seg in d.get("raw", []) for w in seg.get("text", "").split()]
+            for w in t.split():
+                n = norm(w)
+                if len(n) < 4 or not (w[:1].isupper() or any(c.isdigit() for c in w)):
+                    continue                     # names and numbers are what goes wrong
+                if not difflib.get_close_matches(n, heard, n=1, cutoff=0.7):
+                    missed.append(w.strip(".,;:¿?¡!«»\"'"))
+        if missed:
+            self.warnings.append("the voice may have mangled: " + ", ".join(dict.fromkeys(missed)) +
+                                 " — add them to <project>/pronounce.json and re-voice (delete voice/)")
+        atomic_json(self.voice_dir / "pronunciation-check.json", {"missed": missed})
+        return missed
+
     def make_voice(self, texts):
         """l{i}.wav + durations.json in voice/. CapCut's voice first when it is the resolved
         default; the local engine otherwise, capped so no line outruns the gate's window."""
@@ -325,8 +388,9 @@ class Variant:
         self.voice_dir.mkdir(parents=True, exist_ok=True)
         lines_f = self.tmp / "lines.json"
         self.tmp.mkdir(parents=True, exist_ok=True)
-        lines_f.write_text(json.dumps(texts, ensure_ascii=False), encoding="utf-8")
         lang = v.get("language") or self.cfg.get("language") or "es-MX"
+        said, _ = self.spoken(texts, lang)
+        lines_f.write_text(json.dumps(said, ensure_ascii=False), encoding="utf-8")
         engine = v.get("engine", "auto")
         why = None
         if engine == "auto":
@@ -583,11 +647,13 @@ class Variant:
         for r in g:
             s = self.shots[r["i"]]
             src = s.get("src") or ""
-            splittable = (r["dur"] > mx * 1.15 and src and not is_photo(src) and not s.get("hero")
-                          and not s.get("loop_to_first") and s.get("tail") is None
-                          and not any(s.get(k) for k in ("kb", "punch", "zoom", "behind", "cutout", "map",
-                                                         "freeze", "subs")))
+            stillish = bool(src) and (is_photo(src) or bool(s.get("still")))
+            own_motion = ("zoom", "behind", "cutout", "map", "freeze", "subs") + (() if stillish else ("kb", "punch"))
+            splittable = (r["dur"] > mx * 1.15 and src and not s.get("hero")
+                          and not s.get("loop_to_first")
+                          and not any(s.get(k) for k in own_motion))
             k = math.ceil(r["dur"] / mx) if splittable else 1
+            live_still = splittable and s.get("still") and s.get("tail") in (None, "still") and not is_photo(src)
             bounds = [r["t0"] + r["dur"] * j / k for j in range(k + 1)]
             if self.beats_mode and k > 1:
                 half = self.beat / 2
@@ -597,11 +663,34 @@ class Variant:
                     bounds, k = [r["t0"], r["t1"]], 1
             remap[r["i"]] = len(new_shots)
             spd = float(s.get("speed", 1) or 1)
+            if live_still:
+                # a Live Photo: its movement first, whole, then the still in framings of its own
+                mv = (float(s["end"]) - float(s.get("start", 0) or 0)) / spd if s.get("end") is not None else mx
+                mv = min(max(0.8, mv), r["dur"] - 0.8)
+                rest = r["dur"] - mv
+                ks = max(1, math.ceil(rest / mx))
+                bounds = [r["t0"], r["t0"] + mv] + [r["t0"] + mv + rest * j / ks for j in range(1, ks + 1)]
+                if self.beats_mode:
+                    half = self.beat / 2
+                    bounds = [bounds[0]] + [self.beat0 + round((b - self.beat0) / half) * half for b in bounds[1:-1]] + [r["t1"]]
+                if any(b1 - b0 < 0.5 for b0, b1 in zip(bounds, bounds[1:])):
+                    bounds = [r["t0"], r["t1"]]
+                k = len(bounds) - 1
             for j in range(k):
                 piece = dict(s)
                 row = {"i": len(new_shots), "t0": round(bounds[j], 4), "t1": round(bounds[j + 1], 4)}
                 row["dur"] = round(row["t1"] - row["t0"], 4)
-                if j:
+                if j and (live_still or is_photo(src)):
+                    still = s.get("still") if live_still else src
+                    piece = {kk: vv for kk, vv in s.items() if kk in ("focus", "fit", "grade", "grade_strength", "tags", "id")}
+                    if live_still and s.get("still_focus"):
+                        piece["focus"] = s["still_focus"]
+                    piece["src"] = still
+                    piece["audio"] = {"continue": True}
+                    piece["zoom"] = 1.22 if j % 2 else 1.0
+                    piece["kb"] = 0.04
+                    piece["_split_of"] = r["i"]
+                elif j:
                     piece["start"] = round(float(s.get("start", 0) or 0) + (bounds[j] - r["t0"]) * spd, 3)
                     piece["audio"] = {"continue": True}
                     piece.pop("line", None)
@@ -610,6 +699,9 @@ class Variant:
                         piece["zoom"] = 1.22
                     piece["_split_of"] = r["i"]
                 else:
+                    if live_still and k > 1:
+                        piece.pop("still", None)
+                        piece["tail"] = "hold"
                     for key in ("line", "voice_at", "voice_dur", "beat"):
                         if key in r:
                             row[key] = r[key]
@@ -794,6 +886,9 @@ class Variant:
         # colour by scene, shot by shot (grade.py): on unless the variant says "none"
         spec["grade"] = self.cfg.get("grade", "auto")
         spec["grade_strength"] = float(self.cfg.get("grade_strength", 0.85))
+        spec["match"] = self.cfg.get("match", True) is not False   # shots matched before the grade
+        if self.cfg.get("card_style"):
+            spec["card_style"] = self.cfg["card_style"]
         return spec
 
     # ------------------------------------------------------------------ the concept's README
@@ -963,8 +1058,11 @@ def build(v: Variant, a):
         vs_data, texts = lines
         v.progress("voice")
         log("voice")
+        fresh = not (v.voice_dir / "durations.json").exists()
         durs, voice_info = v.make_voice(texts)
         durs = v.own_lines(vs_data, durs)
+        if fresh or not (v.voice_dir / "pronunciation-check.json").exists():
+            v.check_pronunciation(texts, (v.voice_cfg.get("language") or "es"))
     elif lines:
         vs_data, texts = lines
         # a plan without generating anything: estimate each line from its words

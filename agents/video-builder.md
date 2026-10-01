@@ -131,6 +131,12 @@ gate now measures them (`renewal` fails, `pace` and `hook` warn — detail in `r
   `variant.json`) into consecutive pieces of the same take, alternating wide and a 1.22x punch-in, on
   half-beats in a beat grid. It leaves alone `hero` shots, photos, Lives landing on their still and
   anything with its own zoom work. Choose `start` windows knowing the take will play through.
+- **Matched shots, one text system, names said right.** Leave `"match": true` and `"grade": "auto"`;
+  give the hook, cards and labels ONE style (`card_style` in variant.json, or the hook's); before the
+  voice is generated, add the trip's names to `<project>/pronounce.json` ("Golden Gate": "góulden guéit"),
+  and after it, read `voice/pronunciation-check.json`.
+- **No filler.** Never two shots of the same scene from the same angle in a row; drop a dark or shaky
+  frame rather than keep it; each new narration line gets a new picture (`picture_with_voice`).
 - **The user's own voice.** A voice-script line with `"own": "<recording>"` plays the user's recording
   instead of the synthetic voice (silence trimmed, levelled), and the grid takes its real length. Use
   it when the user gave you recordings; ask for none.

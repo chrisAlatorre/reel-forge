@@ -26,6 +26,7 @@ Spec summary:
                                         # shots get the night one. "auto-shot": each shot its own. A name,
                                         # or "none"
   "grade_strength": 0.85,
+  "match": true,                        # bring every shot to a common exposure and white balance first
   "fade_out": 0.4, "audio_fade_out": 1.2,
   "loop": false,                        # true: it closes on its own first frame (put both fades at 0)
   "bpm": 123.0, "beat0": 0.0,
@@ -321,8 +322,10 @@ def render_text(text, style="clean", size=None, color=None):
                                               align="center", spacing=spacing, stroke_width=4,
                                               stroke_fill=(0, 0, 0, 200))
         im = Image.alpha_composite(im, shadow.filter(ImageFilter.GaussianBlur(9)))
+        # a thin dark edge: over a bright sky the soft shadow alone let white text read as grey
         ImageDraw.Draw(im).multiline_text(pos, txt, font=f, fill=(255, 255, 255, 255), align="center",
-                                          spacing=spacing)
+                                          spacing=spacing, stroke_width=max(2, size // 26),
+                                          stroke_fill=(10, 10, 10, 235))
     else:  # "bold": thick black outline. Always legible, but it reads like an editor from years ago.
         d.multiline_text(pos, txt, font=f, fill=(255, 255, 255, 255), align="center",
                          spacing=spacing, stroke_width=7, stroke_fill=(0, 0, 0, 255))
@@ -347,6 +350,25 @@ def _render_pin(text, size):
     d.ellipse([cx - r * 0.38, cy - r * 0.38, cx + r * 0.38, cy + r * 0.38], fill=(255, 255, 255, 255))
     d.text((cx + r + 16 - bb[0], (H0 - th) // 2 - bb[1]), text, font=f, fill=(255, 255, 255, 255))
     return np.asarray(im).astype(np.float32) / 255
+
+
+SUBTITLE_SOURCES = ("sync", "subs", "voice", "clip")
+
+
+def unify_text(caps, card_style=None):
+    """At most TWO text systems in a video: the subtitles, and one style for everything else (hook,
+    cards, labels). Scored blind, videos that mixed white boxes, an italic serif and subtitles read
+    as a template; the references held one. The card style is the spec's `card_style`, or the one
+    the hook uses. A caption with `"keep_style": true` keeps its own (a `pin` label, say)."""
+    cards = [c for c in caps if c.get("source", "spec") not in SUBTITLE_SOURCES]
+    if not cards:
+        return caps
+    first = min(cards, key=lambda c: c.get("t0", 0))
+    style = card_style or first.get("style", "clean")
+    for c in cards:
+        if not c.get("keep_style") and c.get("style", "clean") != "pin":
+            c["style"] = style
+    return caps
 
 
 def prepare_captions(caps):
@@ -750,11 +772,18 @@ def _tail(frames, n, s, focus):
     if mode == "still" and s.get("still"):
         WM, HM = int(W * MARGIN), int(H * MARGIN)
         photo = cover(load_photo(str(config.path(s["still"]))), WM, HM, s.get("still_focus", focus))
+        if s.get("_graded_in_decode"):
+            # the movie was graded while it decoded; its still was not, and the cut from the
+            # Live's motion to its photo jumped in colour. Same match, same grade.
+            if s.get("_match"):
+                photo = grading.balance(photo, s["_match"])
+            if s.get("_grade"):
+                photo = grading.apply(photo, s["_grade"], float(s.get("grade_strength", GRADE_DEFAULT["strength"])))
         return frames + [photo] * (n - len(frames))
     return frames + [frames[-1]] * (n - len(frames))
 
 
-GRADE_DEFAULT = {"grade": None, "strength": 0.85}   # set from the spec in main()
+GRADE_DEFAULT = {"grade": None, "strength": 0.85, "match": True}   # set from the spec in main()
 
 
 def _graded(frames, s):
@@ -763,16 +792,22 @@ def _graded(frames, s):
     if frames is None or s.get("_graded_in_decode"):
         return frames
     g = s.get("grade", GRADE_DEFAULT["grade"])
-    if not g or g == "none":
+    match = s.get("match", GRADE_DEFAULT["match"])
+    if (not g or g == "none") and not match:
         return frames
     strength = float(s.get("grade_strength", GRADE_DEFAULT["strength"]))
     if g == "auto":
         g = grading.classify(frames[len(frames) // 2], s.get("tags") or ())[0]
-    s["_grade"] = g
+    if g and g != "none":
+        s["_grade"] = g
+    params = grading.balance_params(frames[len(frames) // 2]) if match else None
+    if params:
+        s["_match"] = list(params)
     done, out = {}, []
     for f in frames:                     # a photo is one frame repeated: grade it once
         if id(f) not in done:
-            done[id(f)] = grading.apply(f, g, strength)
+            x = grading.balance(f, params) if params else f
+            done[id(f)] = grading.apply(x, g, strength) if g and g != "none" else x
         out.append(done[id(f)])
     return out
 
@@ -840,17 +875,25 @@ def _segment_base_raw(s, n, fps, src, focus):
             take = max(1, min(n, int((float(s["end"]) - start) / speed * fps)))
         lut = None
         g = s.get("grade", GRADE_DEFAULT["grade"])
-        if g and g != "none":
-            if g == "auto":
+        match = s.get("match", GRADE_DEFAULT["match"])
+        if (g and g != "none") or match:
+            probe = None
+            if g == "auto" or match:
                 # A shot can ask for more than the clip holds (the tail fills the rest): the probe
                 # frame must still be inside the clip, or ffmpeg returns nothing at all.
                 last = max(0.0, _ffprobe(src)["dur"] - 0.1)
                 mid = min(start + (take / fps) * speed / 2, last)
                 probe = video_frames(src, mid, 1, 1, fps)[0]
+            if g == "auto":
                 g = grading.classify(probe, s.get("tags") or ())[0]
-            s["_grade"] = g
+            params = grading.balance_params(probe) if match else None
+            if g and g != "none":
+                s["_grade"] = g
+            if params:
+                s["_match"] = list(params)
             s["_graded_in_decode"] = True
-            lut = str(grading.cube(g, float(s.get("grade_strength", GRADE_DEFAULT["strength"]))))
+            lut = str(grading.cube(g or "none", float(s.get("grade_strength", GRADE_DEFAULT["strength"])),
+                                   match=params))
         raw = video_frames(src, start, take, speed, fps, bool(s.get("stabilize")), lut)[:take]
         fit = (lambda c: fit_with_background(c, WM, HM)) if s.get("fit") == "blur" \
             else (lambda c: cover(c, WM, HM, focus))
@@ -874,6 +917,7 @@ def main():
     fps = spec.get("fps", config.FPS)
     look = LOOKS[spec.get("look", "clean" if spec.get("grade") else "film")]
     GRADE_DEFAULT["strength"] = float(spec.get("grade_strength", 0.85))
+    GRADE_DEFAULT["match"] = spec.get("match", True) is not False
     looks = unify_grades(spec, fps)
     GRADE_DEFAULT["grade"] = "auto" if spec.get("grade") in ("auto", "auto-shot") else spec.get("grade")
     if looks:
@@ -905,6 +949,8 @@ def main():
     for s, g0, g1 in zip(spec["segments"], starts, cuts):
         captions += segment_subtitles(s, g0, g1)
     captions.sort(key=lambda c: c["t0"])
+    if spec.get("unify_text", True):
+        captions = unify_text(captions, spec.get("card_style"))
     pieces = prepare_captions(captions)
 
     out = config.resolve_output(args.out or spec["out"])
@@ -1064,7 +1110,8 @@ def main():
                         "src": Path(str(s.get("src", ""))).name or ("map" if "map" in s else "")},
                        **({"says": says_of(s)} if s.get("says") else {}),
                        **({"hero": True} if s.get("hero") else {}),
-                       **({"grade": s["_grade"]} if s.get("_grade") else {}))
+                       **({"grade": s["_grade"]} if s.get("_grade") else {}),
+                       **({"match": s["_match"]} if s.get("_match") else {}))
                   for i, (s, t0, t1) in enumerate(zip(spec["segments"], starts, cuts))],
         "words": voice_words,
         "captions": [{k: (round(p[k], 3) if isinstance(p.get(k), float) else p.get(k))

@@ -193,19 +193,69 @@ def apply(img: np.ndarray, name: str, strength: float = 0.85) -> np.ndarray:
     return out.astype(np.uint8)
 
 
-def cube(name: str, strength: float = 0.85, size: int = 65) -> Path:
+# ------------------------------------------------------------ matching shots before the grade
+
+DAY_TARGET, NIGHT_TARGET = 0.44, 0.22      # median luma a shot is brought toward
+
+
+def balance_params(img: np.ndarray) -> tuple[float, float, float, float]:
+    """(gain_r, gain_g, gain_b, gamma) that bring one shot toward the others BEFORE the grade.
+
+    Scored blind against the platform, our cuts still "jumped": one phone clip warm and bright,
+    the next cold and a stop darker, and night shots too dark to read. A grade cannot fix that —
+    it pushes every shot the same way from wherever it started. This is the match a colourist
+    does first: a partial grey-world white balance on the mid-tones (half way, at most ±10 %, so a
+    sunset stays a sunset) and an exposure move toward a common median (a gamma, so highlights
+    are not clipped; night shots go toward a lower target and are only ever lifted)."""
+    small = cv2.resize(img, (96, int(96 * img.shape[0] / max(1, img.shape[1]))), interpolation=cv2.INTER_AREA)
+    f = small.reshape(-1, 3).astype(np.float32) / 255.0
+    lum = f @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+    mid = (lum > 0.12) & (lum < 0.88)
+    gains = [1.0, 1.0, 1.0]
+    if mid.sum() > 50:
+        m = f[mid].mean(axis=0)
+        grey = float(m.mean())
+        gains = [float(np.clip(1 + 0.5 * (grey / max(c, 1e-3) - 1), 0.9, 1.1)) for c in m]
+    med = float(np.median(lum))
+    night = med < 0.2
+    target = NIGHT_TARGET if night else DAY_TARGET
+    if 0.02 < med < 0.98:
+        gamma = float(np.log(target) / np.log(med))
+        gamma = float(np.clip(gamma, 0.62, 1.0)) if night else float(np.clip(gamma, 0.8, 1.25))
+    else:
+        gamma = 1.0
+    return (round(gains[0], 2), round(gains[1], 2), round(gains[2], 2), round(gamma, 2))
+
+
+def balance(img: np.ndarray, params) -> np.ndarray:
+    if not params or tuple(params) == (1.0, 1.0, 1.0, 1.0):
+        return img
+    gr, gg, gb, gamma = params
+    x = np.arange(256, dtype=np.float32) / 255.0
+    luts = [np.clip(np.power(np.clip(x * g, 0, 1), gamma) * 255, 0, 255).astype(np.uint8) for g in (gr, gg, gb)]
+    out = np.empty_like(img)
+    for c in range(3):
+        out[..., c] = cv2.LUT(img[..., c], luts[c])
+    return out
+
+
+def cube(name: str, strength: float = 0.85, size: int = 65, match=None) -> Path:
     """The grade as a 3D LUT (.cube) for ffmpeg's lut3d, cached. Video is graded while it decodes
-    (in C, threaded): grading it frame by frame in numpy added ~3 s per second of footage."""
+    (in C, threaded): grading it frame by frame in numpy added ~3 s per second of footage.
+    `match`: balance_params() of the shot, applied before the grade inside the same LUT."""
     import os
     d = Path(os.path.expanduser(os.environ.get("REEL_FORGE_CACHE", "~/.cache/reel-forge"))) / "grades"
     d.mkdir(parents=True, exist_ok=True)
-    out = d / f"{name}-{int(round(strength * 100))}-{size}-r{LUT_REV}.cube"
+    tag = "" if not match else "-m" + "_".join(f"{v:.2f}" for v in match)
+    out = d / f"{name}-{int(round(strength * 100))}-{size}-r{LUT_REV}{tag}.cube"
     if out.exists():
         return out
     g = np.linspace(0, 255, size).round().astype(np.uint8)
     b, gg, r = np.meshgrid(g, g, g, indexing="ij")           # .cube order: red varies fastest
     grid = np.stack([r, gg, b], axis=-1).reshape(1, -1, 3)
-    graded = apply(grid, name, strength).reshape(-1, 3) / 255.0
+    if match:
+        grid = balance(grid, match)
+    graded = (apply(grid, name, strength) if name and name != "none" else grid).reshape(-1, 3) / 255.0
     lines = [f'TITLE "reel-forge {name}"', f"LUT_3D_SIZE {size}"]
     lines += [f"{x:.5f} {y:.5f} {z:.5f}" for x, y, z in graded]
     tmp = out.with_suffix(".tmp")

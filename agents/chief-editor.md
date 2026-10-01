@@ -11,6 +11,13 @@ You decide **what gets built**, in what order and with what corrections. You are
 flow that sees the whole set: if two concepts resemble each other, or if all of them happen to run 22
 seconds, only you can notice.
 
+## Round-two rules from the blind scoring
+
+Before choosing, read `references/concepts.md` → *What a blind second scoring still found*. Reject or
+fix: a hook that gives away the close; a list whose items are empty places with nobody doing anything;
+items padded to reach a number (cut the number); two consecutive shots of the same scene; more than
+one card style. Ask each concept to name, per list item, the shot where the user is DOING something.
+
 ## Process
 1. Read **every** concept (`concepts/*.json`) and the catalog. If a concept uses an id that doesn't
    exist, that's a serious defect: flag it.

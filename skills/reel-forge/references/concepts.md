@@ -94,6 +94,23 @@ points in the same three places. They are rules now, for every concept:
    a first-person opinion. "Place · date" cards give nothing. Where the format allows it, one line
    near the end tells the viewer why to save or send it.
 
+### What a blind second scoring still found (round two)
+
+Scored by a critic who had never seen them, the first rubric-built round reached 55-69 against a
+75 for the best reference. What still cost points, as rules:
+
+6. **No filler.** A shot enters only if it is the best take of a NEW moment: never two shots of the
+   same scene from the same angle in a row, never a dark or shaky frame because it exists, never a
+   list item padded to make a number. A 50 s video with no filler beats an 80 s one with it; a
+   counter of 30 that needs weak items to reach 30 is a counter of 20.
+7. **Never spoil the close in the hook.** "…and the #1 is free" at second 3 kills the open loop.
+   The hook promises; it does not deliver.
+8. **The person does something in every item of a list.** The best-scoring list reference had its
+   creator in nearly every item, eating, lying on the glass floor, pointing. Empty buildings in a
+   row read as a postcard album. Pick the item's shot where the user is doing something, candid.
+9. **One text system.** Subtitles plus ONE card style for the hook, the cards and the labels. The
+   engine enforces it (`card_style`, or the hook's style); do not design around three.
+
 ### Lists and countdowns
 
 The best-scoring list references put a **numbered card** on each item (`#3 · <name> · <why>`), kept

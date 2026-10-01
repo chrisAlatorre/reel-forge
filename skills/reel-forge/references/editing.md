@@ -130,6 +130,17 @@ checks (`renewal`, `pace`, `hook`):
 
 ## Look: one per video
 
+**Shots are matched before they are graded** (`"match": true`, the default): each shot's mid-frame
+sets a partial white balance (half way to neutral, ±10 % at most) and an exposure move toward a common
+median (a gamma; night shots toward a darker target and only lifted). Blind scorers saw cuts jump a
+stop in brightness and from warm to cold; a grade alone cannot fix that because it pushes every shot
+the same way from wherever it started. A Live Photo's still now gets the same match and grade as its
+movement.
+
+**The picture moves with the voice.** The gate fails a non-hero take that runs under the narration
+for more than 4 s (`picture_with_voice`), and warns when every shot is about as long as the next
+(`pace_curve`). `variant.py` splits long photos and Live stills too, alternating framings.
+
 `"grade": "auto"` picks **one** grade for the whole video from what its shots show (by length), and one
 for its night shots if it has any. Per-shot grades (`"auto-shot"`) made our cuts jump from cold grey
 to warm orange; the references that scored best held one look across 20-30 locations. Force a name

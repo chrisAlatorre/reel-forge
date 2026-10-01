@@ -80,6 +80,13 @@ turns into noise.
 
 ## Narration
 
+**Pronunciation.** The voice reads the line through a lexicon — `skills/voices/pronounce.json`
+(common English travel words for a Spanish voice), then `~/.config/reel-forge/pronounce.json`, then
+`<project>/pronounce.json` for the trip's own names ("Times Square": "táims skuér"). The subtitles keep the
+written word. After the voice is made, every line is transcribed and the names and numbers that did
+not come back are listed in the README (`voice/pronunciation-check.json`): add them to the project's
+lexicon and re-voice that variant (delete its `voice/`).
+
 **A line in the user's own voice** beats any synthetic one for a reaction or a punchline: on the
 voice-script line, `"own": "voice/memo.m4a"` (relative to `variant.json`) replaces that line's wav with
 the recording — silence trimmed, levelled with the rest — and the subtitles still come from the text.
