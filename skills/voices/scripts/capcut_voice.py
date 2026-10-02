@@ -632,8 +632,30 @@ def set_text(line: str, voice: str = DEFAULT_VOICE):
         print("· the project has no text clip: building a new project", flush=True)
         globals()["TR_OVERRIDE"] = new_project(voice, line)
         return
-    cliclick(f"c:{clip['center'][0]},{clip['center'][1]}")
-    time.sleep(1.2)
+    # Selecting the text clip can land on something else: with many stacked voice tracks, or after
+    # another batch left an AUDIO clip selected, the right panel shows the audio's properties and
+    # there is no 'Texto' tab at all — three rounds of 30 variants failed exactly there. Click it
+    # again, a bit inside its left edge, after clearing the selection; if the tab still does not
+    # appear, the project is in a state no click fixes: build a fresh one with a clean text clip.
+    for attempt in range(3):
+        if attempt:
+            cliclick("kp:esc"); time.sleep(0.4)
+            nodes = ax_nodes()
+            clip = next((n for n in nodes if n["desc"].startswith(AX95["clip_prefix"])), clip)
+            x = clip["center"][0] - max(0, (clip.get("size") or [0, 0])[0] // 2 - 12)
+            cliclick(f"c:{x},{clip['center'][1]}")
+        else:
+            cliclick(f"c:{clip['center'][0]},{clip['center'][1]}")
+        time.sleep(1.2)
+        if ax_find(AX95["text_tab"], ax_nodes()):
+            break
+    else:
+        if REBUILDING:
+            die("the text clip is on the timeline but selecting it never shows the 'Texto' tab. Click "
+                "the text clip by hand once and run this again: the batch resumes.", EXIT_UI)
+        print("· selecting the text clip shows no 'Texto' tab: building a new project", flush=True)
+        globals()["TR_OVERRIDE"] = new_project(voice, line)
+        return
     ax_click("text_tab", 1.5, what="the right panel's 'Texto' tab")
     ax_click("text_box", 0.8, what="the script box")
     cliclick("kd:cmd", "t:a", "ku:cmd"); time.sleep(0.5)

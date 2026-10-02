@@ -8,6 +8,15 @@ followed by `claude plugin update reel-forge`. Claude Code flags a pending updat
 but it never updates this plugin on its own unless auto-update is turned on for the marketplace. How to
 publish a version and how it reaches people: [`docs/updating.md`](docs/updating.md).
 
+## 0.14.1
+
+### Fixed
+
+- CapCut narration failed three times in a row on a busy round: selecting the text clip landed on an
+  audio clip (stacked voice tracks, or a selection another batch left behind), the right panel had no
+  'Texto' tab and the batch died. `capcut_voice.py` now clears the selection and clicks again inside
+  the clip's edge, and if the tab still does not show, builds a fresh project with a clean text clip.
+
 ## 0.14.0
 
 A second, blind scoring of the first rubric-built round (55-69, against 75 for the best reference)
